@@ -1,0 +1,116 @@
+# generated: 2025-12-10
+# project: backend service golang boilerplate
+# project_key: golang-api-hexagonal
+# tracking_system: file-system
+# story_location: docs/sprint-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - drafted: Story file created in stories folder
+#   - ready-for-dev: Draft approved and story context created
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - completed: Retrospective has been done
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically drafts next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2025-12-10
+project: backend service golang boilerplate
+project_key: golang-api-hexagonal
+tracking_system: file-system
+story_location: docs/sprint-artifacts
+
+development_status:
+  # Epic 1: Project Foundation & DX Setup (9 FRs)
+  epic-1: backlog
+  1-1-initialize-go-module-structure: backlog
+  1-2-create-makefile-docker-compose: backlog
+  1-3-setup-environment-configuration: backlog
+  1-4-implement-graceful-shutdown: backlog
+  1-5-add-linting-ci-configuration: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: Configuration & Environment (5 FRs)
+  epic-2: backlog
+  2-1-implement-environment-variable-loading: backlog
+  2-2-add-optional-config-file-support: backlog
+  2-3-implement-config-validation-with-fail-fast: backlog
+  2-4-create-typed-config-struct: backlog
+  2-5-provide-clear-config-error-messages: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: HTTP API Core (8 FRs)
+  epic-3: backlog
+  3-1-setup-chi-router-with-versioned-api: backlog
+  3-2-implement-request-id-middleware: backlog
+  3-3-add-http-request-logging-middleware: backlog
+  3-4-implement-panic-recovery-middleware: backlog
+  3-5-add-opentelemetry-trace-propagation: backlog
+  3-6-create-handler-registration-pattern: backlog
+  3-7-implement-response-envelope-pattern: backlog
+  3-8-create-error-to-http-status-mapping: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Database & Persistence (7 FRs)
+  epic-4: backlog
+  4-1-setup-postgresql-connection-with-pgx: backlog
+  4-2-handle-database-connection-timeouts: backlog
+  4-3-configure-sqlc-for-type-safe-queries: backlog
+  4-4-implement-database-migrations-up: backlog
+  4-5-implement-database-migrations-down: backlog
+  4-6-add-repository-code-generation: backlog
+  4-7-add-database-readiness-check: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Observability Suite (9 FRs)
+  epic-5: backlog
+  5-1-implement-liveness-endpoint: backlog
+  5-2-implement-readiness-endpoint: backlog
+  5-3-return-503-on-dependency-failure: backlog
+  5-4-expose-prometheus-metrics-endpoint: backlog
+  5-5-capture-http-request-metrics: backlog
+  5-6-implement-structured-json-logging-prod: backlog
+  5-7-implement-human-readable-logging-dev: backlog
+  5-8-add-context-fields-to-logs: backlog
+  5-9-create-opentelemetry-spans: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Extension Interfaces (6 FRs)
+  epic-6: backlog
+  6-1-define-logger-interface: backlog
+  6-2-define-cache-interface: backlog
+  6-3-define-ratelimiter-interface: backlog
+  6-4-define-eventpublisher-interface: backlog
+  6-5-define-secretprovider-interface: backlog
+  6-6-document-custom-provider-implementation: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: Sample Module (Note) (12 FRs)
+  epic-7: backlog
+  7-1-create-note-domain-entity: backlog
+  7-2-create-note-sql-migration: backlog
+  7-3-create-note-repository-with-sqlc: backlog
+  7-4-create-note-usecase: backlog
+  7-5-create-note-http-handler: backlog
+  7-6-create-note-unit-tests: backlog
+  7-7-create-note-integration-test: backlog
+  7-8-create-architecture-md: backlog
+  7-9-create-agents-md: backlog
+  7-10-document-copy-pattern-for-new-modules: backlog
+  epic-7-retrospective: optional
