@@ -38,13 +38,13 @@ story_location: docs/sprint-artifacts
 
 development_status:
   # Epic 1: Project Foundation & DX Setup (9 FRs)
-  epic-1: in-progress
+  epic-1: done
   1-1-initialize-go-module-structure: done
   1-2-create-makefile-docker-compose: done
   1-3-setup-environment-configuration: done
   1-4-implement-graceful-shutdown: done
   1-5-add-linting-ci-configuration: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   # Epic 2: Configuration & Environment (5 FRs)
   epic-2: backlog
