@@ -1,0 +1,21 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - cyclop
+
+linters-settings:
+  cyclop:
+    max-complexity: 15
+
+issues:
+  exclude-dirs:
+    - vendor
