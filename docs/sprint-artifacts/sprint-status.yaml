@@ -47,8 +47,8 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 2: Configuration & Environment (5 FRs)
-  epic-2: backlog
-  2-1-implement-environment-variable-loading: backlog
+  epic-2: in-progress
+  2-1-implement-environment-variable-loading: done
   2-2-add-optional-config-file-support: backlog
   2-3-implement-config-validation-with-fail-fast: backlog
   2-4-create-typed-config-struct: backlog
