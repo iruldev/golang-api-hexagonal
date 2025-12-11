@@ -46,6 +46,11 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	// Validate config - fail fast on invalid configuration
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("config validation failed: %w", err)
+	}
+
 	return &cfg, nil
 }
 

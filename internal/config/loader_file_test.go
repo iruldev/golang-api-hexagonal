@@ -27,6 +27,8 @@ app:
 db:
   host: db.example.com
   port: 5432
+  user: postgres
+  name: testdb
 `)
 	t.Setenv("APP_CONFIG_FILE", tmpFile)
 
@@ -36,6 +38,8 @@ db:
 	assert.Equal(t, "test-from-yaml", cfg.App.Name)
 	assert.Equal(t, "db.example.com", cfg.Database.Host)
 	assert.Equal(t, 5432, cfg.Database.Port)
+	assert.Equal(t, "postgres", cfg.Database.User)
+	assert.Equal(t, "testdb", cfg.Database.Name)
 }
 
 func TestLoad_FromJSONFile(t *testing.T) {
@@ -45,7 +49,10 @@ func TestLoad_FromJSONFile(t *testing.T) {
     "name": "test-from-json"
   },
   "db": {
-    "host": "json-db.example.com"
+    "host": "json-db.example.com",
+    "port": 5432,
+    "user": "postgres",
+    "name": "testdb"
   }
 }`)
 	t.Setenv("APP_CONFIG_FILE", tmpFile)
@@ -64,6 +71,9 @@ app:
   name: from-file
 db:
   host: file-db.example.com
+  port: 5432
+  user: postgres
+  name: testdb
 `)
 	t.Setenv("APP_CONFIG_FILE", tmpFile)
 	t.Setenv("APP_HTTP_PORT", "9090")         // Override!
@@ -80,6 +90,9 @@ func TestLoad_NoConfigFile(t *testing.T) {
 	// No APP_CONFIG_FILE set, only env vars
 	t.Setenv("APP_HTTP_PORT", "8080")
 	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("DB_PORT", "5432")
+	t.Setenv("DB_USER", "postgres")
+	t.Setenv("DB_NAME", "testdb")
 
 	cfg, err := Load()
 	require.NoError(t, err)

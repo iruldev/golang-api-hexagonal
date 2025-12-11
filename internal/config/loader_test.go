@@ -59,9 +59,12 @@ func TestLoad_FromEnvVars(t *testing.T) {
 }
 
 func TestLoad_PartialEnvVars(t *testing.T) {
-	// Arrange: Set only required env vars
+	// Arrange: Set all required env vars with minimal config
 	t.Setenv("APP_HTTP_PORT", "8080")
 	t.Setenv("DB_HOST", "db.example.com")
+	t.Setenv("DB_PORT", "5432")
+	t.Setenv("DB_USER", "postgres")
+	t.Setenv("DB_NAME", "testdb")
 
 	// Act
 	cfg, err := Load()
@@ -71,23 +74,21 @@ func TestLoad_PartialEnvVars(t *testing.T) {
 	assert.Equal(t, 8080, cfg.App.HTTPPort)
 	assert.Equal(t, "db.example.com", cfg.Database.Host)
 
-	// Unset values should be zero values
+	// Unset optional values should be zero values
 	assert.Equal(t, "", cfg.App.Name)
-	assert.Equal(t, 0, cfg.Database.Port)
+	assert.Equal(t, 0, cfg.Database.MaxOpenConns)
 }
 
-func TestLoad_EmptyEnv(t *testing.T) {
-	// Arrange: No env vars set (use default test isolation)
-	// Note: t.Setenv not called, so OS env vars may leak
-	// This test verifies Load() doesn't fail on empty config
+func TestLoad_EmptyEnv_FailsValidation(t *testing.T) {
+	// Arrange: No env vars set - should fail validation
+	// Clear any env vars that might be set
+	// Note: t.Setenv creates isolated env for this test
 
 	// Act
 	cfg, err := Load()
 
-	// Assert
-	require.NoError(t, err)
-	assert.NotNil(t, cfg)
-	// All values should be zero values
-	assert.Equal(t, 0, cfg.App.HTTPPort)
-	assert.Equal(t, "", cfg.Database.Host)
+	// Assert: Validation should fail with missing required fields
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.Contains(t, err.Error(), "config validation failed")
 }
