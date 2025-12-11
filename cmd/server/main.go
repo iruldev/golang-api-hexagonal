@@ -2,10 +2,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
@@ -46,6 +48,15 @@ func main() {
 	if err := <-done; err != nil {
 		log.Printf("Shutdown error: %v", err)
 		os.Exit(1)
+	}
+
+	// Shutdown tracer provider to flush remaining spans (Story 3.5)
+	if httpx.TracerShutdown != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := httpx.TracerShutdown(ctx); err != nil {
+			log.Printf("Tracer shutdown error: %v", err)
+		}
 	}
 
 	log.Println("Server shutdown complete")

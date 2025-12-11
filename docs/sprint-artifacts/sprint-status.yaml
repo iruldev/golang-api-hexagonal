@@ -56,16 +56,16 @@ development_status:
   epic-2-retrospective: done
 
   # Epic 3: HTTP API Core (8 FRs)
-  epic-3: in-progress
+  epic-3: done
   3-1-setup-chi-router-with-versioned-api: done
-  3-2-implement-request-id-middleware: review
-  3-3-add-http-request-logging-middleware: backlog
-  3-4-implement-panic-recovery-middleware: backlog
-  3-5-add-opentelemetry-trace-propagation: backlog
-  3-6-create-handler-registration-pattern: backlog
-  3-7-implement-response-envelope-pattern: backlog
-  3-8-create-error-to-http-status-mapping: backlog
-  epic-3-retrospective: optional
+  3-2-implement-request-id-middleware: done
+  3-3-add-http-request-logging-middleware: done
+  3-4-implement-panic-recovery-middleware: done
+  3-5-add-opentelemetry-trace-propagation: done
+  3-6-create-handler-registration-pattern: done
+  3-7-implement-response-envelope-pattern: done
+  3-8-create-error-to-http-status-mapping: done
+  epic-3-retrospective: done
 
   # Epic 4: Database & Persistence (7 FRs)
   epic-4: backlog
