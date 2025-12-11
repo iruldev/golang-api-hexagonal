@@ -47,13 +47,13 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 2: Configuration & Environment (5 FRs)
-  epic-2: in-progress
+  epic-2: done
   2-1-implement-environment-variable-loading: done
   2-2-add-optional-config-file-support: done
   2-3-implement-config-validation-with-fail-fast: done
   2-4-create-typed-config-struct: done
   2-5-provide-clear-config-error-messages: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   # Epic 3: HTTP API Core (8 FRs)
   epic-3: backlog
