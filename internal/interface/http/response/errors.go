@@ -23,4 +23,7 @@ const (
 
 	// ErrInternalServer indicates an internal server error (HTTP 500).
 	ErrInternalServer = "ERR_INTERNAL_SERVER"
+
+	// ErrTimeout indicates a gateway timeout (HTTP 504).
+	ErrTimeout = "ERR_TIMEOUT"
 )

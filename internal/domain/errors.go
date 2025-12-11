@@ -29,6 +29,10 @@ var (
 	// ErrInternal indicates an internal server error.
 	// Maps to HTTP 500 Internal Server Error.
 	ErrInternal = errors.New("internal error")
+
+	// ErrTimeout indicates an operation timed out.
+	// Maps to HTTP 504 Gateway Timeout.
+	ErrTimeout = errors.New("operation timed out")
 )
 
 // WrapError wraps an error with a domain error type.

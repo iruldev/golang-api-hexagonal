@@ -31,6 +31,8 @@ type DatabaseConfig struct {
 	MaxOpenConns    int           `koanf:"max_open_conns"`
 	MaxIdleConns    int           `koanf:"max_idle_conns"`
 	ConnMaxLifetime time.Duration `koanf:"conn_max_lifetime"`
+	ConnTimeout     time.Duration `koanf:"conn_timeout"`  // connection timeout (default: 10s)
+	QueryTimeout    time.Duration `koanf:"query_timeout"` // query timeout (default: 30s)
 }
 
 // DSN returns the PostgreSQL connection string.

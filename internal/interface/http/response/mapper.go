@@ -27,6 +27,8 @@ func MapError(err error) (status int, code string) {
 		return http.StatusConflict, ErrConflict
 	case errors.Is(err, domain.ErrInternal):
 		return http.StatusInternalServerError, ErrInternalServer
+	case errors.Is(err, domain.ErrTimeout):
+		return http.StatusGatewayTimeout, ErrTimeout
 	default:
 		// Unknown errors are treated as internal server errors
 		return http.StatusInternalServerError, ErrInternalServer
