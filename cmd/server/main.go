@@ -9,6 +9,7 @@ import (
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
+	httpx "github.com/iruldev/golang-api-hexagonal/internal/interface/http"
 )
 
 func main() {
@@ -22,9 +23,12 @@ func main() {
 	// Use typed config instead of raw os.Getenv
 	port := fmt.Sprintf("%d", cfg.App.HTTPPort)
 
+	// Create chi router with versioned API routes (Story 3.1)
+	router := httpx.NewRouter(cfg)
+
 	server := &http.Server{
 		Addr:    ":" + port,
-		Handler: nil, // Router will be added in Story 3.x
+		Handler: router,
 	}
 
 	// Start server in goroutine
