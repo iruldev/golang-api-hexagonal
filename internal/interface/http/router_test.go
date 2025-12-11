@@ -25,8 +25,16 @@ func testConfig() *config.Config {
 	}
 }
 
+// testRouterDeps returns RouterDeps for testing (without DB checker).
+func testRouterDeps() httpx.RouterDeps {
+	return httpx.RouterDeps{
+		Config:    testConfig(),
+		DBChecker: nil,
+	}
+}
+
 func TestHealthEndpoint(t *testing.T) {
-	router := httpx.NewRouter(testConfig())
+	router := httpx.NewRouter(testRouterDeps())
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
 	rec := httptest.NewRecorder()
@@ -50,7 +58,7 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestHealthEndpoint_MethodNotAllowed(t *testing.T) {
-	router := httpx.NewRouter(testConfig())
+	router := httpx.NewRouter(testRouterDeps())
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/health", nil)
 	rec := httptest.NewRecorder()
@@ -61,7 +69,7 @@ func TestHealthEndpoint_MethodNotAllowed(t *testing.T) {
 }
 
 func TestNonExistentRoute(t *testing.T) {
-	router := httpx.NewRouter(testConfig())
+	router := httpx.NewRouter(testRouterDeps())
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/nonexistent", nil)
 	rec := httptest.NewRecorder()
@@ -72,13 +80,13 @@ func TestNonExistentRoute(t *testing.T) {
 }
 
 func TestAPIVersionPrefix(t *testing.T) {
-	router := httpx.NewRouter(testConfig())
+	router := httpx.NewRouter(testRouterDeps())
 
-	// Health endpoint without version prefix should 404
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	// /healthz exists at root level now (Story 4.7)
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, http.StatusOK, rec.Code)
 }

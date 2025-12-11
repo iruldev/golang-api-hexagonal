@@ -27,6 +27,8 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	pool, err := postgres.NewPool(ctx, cfg)
 	cancel()
+
+	var dbChecker *postgres.PoolHealthChecker
 	if err != nil {
 		// Log warning but don't fail - database may be optional for some routes
 		log.Printf("Warning: Database connection failed: %v", err)
@@ -35,13 +37,18 @@ func main() {
 		log.Printf("Database connected: %s@%s:%d/%s (max_conns=%d)",
 			cfg.Database.User, cfg.Database.Host, cfg.Database.Port, cfg.Database.Name,
 			cfg.Database.MaxOpenConns)
+		// Create DB health checker for readiness probe (Story 4.7)
+		dbChecker = postgres.NewPoolHealthChecker(pool)
 	}
 
 	// Use typed config instead of raw os.Getenv
 	port := fmt.Sprintf("%d", cfg.App.HTTPPort)
 
 	// Create chi router with versioned API routes (Story 3.1)
-	router := httpx.NewRouter(cfg)
+	router := httpx.NewRouter(httpx.RouterDeps{
+		Config:    cfg,
+		DBChecker: dbChecker,
+	})
 
 	server := &http.Server{
 		Addr:    ":" + port,

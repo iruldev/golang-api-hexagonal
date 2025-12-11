@@ -72,11 +72,13 @@ development_status:
   4-1-setup-postgresql-connection-with-pgx: done
   4-2-handle-database-connection-timeouts: done
   4-3-configure-sqlc-for-type-safe-queries: done
-  4-4-implement-database-migrations-up: backlog
-  4-5-implement-database-migrations-down: backlog
-  4-6-add-repository-code-generation: backlog
-  4-7-add-database-readiness-check: backlog
-  epic-4-retrospective: optional
+  4-4-implement-database-migrations-up: done
+  4-5-implement-database-migrations-down: done
+  4-6-add-repository-code-generation: done
+  4-7-add-database-readiness-check: done
+  epic-4-retrospective: done
+
+epic-4: complete
 
   # Epic 5: Observability Suite (9 FRs)
   epic-5: backlog

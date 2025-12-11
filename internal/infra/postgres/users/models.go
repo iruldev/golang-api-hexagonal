@@ -2,11 +2,20 @@
 // versions:
 //   sqlc v1.26.0
 
-package sqlc
+package users
 
 import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type Note struct {
+	ID        pgtype.UUID        `json:"id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	Title     string             `json:"title"`
+	Content   pgtype.Text        `json:"content"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
 
 type User struct {
 	ID        pgtype.UUID        `json:"id"`

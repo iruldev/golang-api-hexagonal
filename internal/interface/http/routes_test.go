@@ -117,7 +117,7 @@ func TestRegisterRoutes_APIv1Prefix(t *testing.T) {
 func TestNewRouter_MiddlewareApplied(t *testing.T) {
 	cfg := testConfig()
 
-	router := NewRouter(cfg)
+	router := NewRouter(RouterDeps{Config: cfg, DBChecker: nil})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
 	rr := httptest.NewRecorder()
@@ -139,7 +139,7 @@ func TestNewRouter_MiddlewareApplied(t *testing.T) {
 // TestNewRouter_RequestIDMiddleware verifies that RequestID middleware generates unique IDs.
 func TestNewRouter_RequestIDMiddleware(t *testing.T) {
 	cfg := testConfig()
-	router := NewRouter(cfg)
+	router := NewRouter(RouterDeps{Config: cfg, DBChecker: nil})
 
 	// First request
 	req1 := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
@@ -162,7 +162,7 @@ func TestNewRouter_RequestIDMiddleware(t *testing.T) {
 // TestNewRouter_ExistingRequestID verifies that middleware uses existing X-Request-ID if provided.
 func TestNewRouter_ExistingRequestID(t *testing.T) {
 	cfg := testConfig()
-	router := NewRouter(cfg)
+	router := NewRouter(RouterDeps{Config: cfg, DBChecker: nil})
 
 	existingID := "my-custom-request-id"
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)

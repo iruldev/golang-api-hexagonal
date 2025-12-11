@@ -1,5 +1,5 @@
--- db/schema/001_users.sql
--- Example users table schema for sqlc code generation
+-- 000001_create_users_table.up.sql
+-- Creates the users table
 
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

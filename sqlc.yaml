@@ -1,12 +1,27 @@
 version: "2"
 sql:
+  # Users queries
   - engine: "postgresql"
-    queries: "db/queries"
-    schema: "db/schema"
+    queries: "db/queries/users.sql"
+    schema: "db/migrations"
     gen:
       go:
-        package: "sqlc"
-        out: "internal/infra/postgres/sqlc"
+        package: "users"
+        out: "internal/infra/postgres/users"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_prepared_queries: true
+        emit_interface: true
+        emit_empty_slices: true
+
+  # Note queries (Story 4.6)
+  - engine: "postgresql"
+    queries: "db/queries/note.sql"
+    schema: "db/migrations"
+    gen:
+      go:
+        package: "note"
+        out: "internal/infra/postgres/note"
         sql_package: "pgx/v5"
         emit_json_tags: true
         emit_prepared_queries: true

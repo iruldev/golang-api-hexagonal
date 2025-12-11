@@ -26,4 +26,7 @@ const (
 
 	// ErrTimeout indicates a gateway timeout (HTTP 504).
 	ErrTimeout = "ERR_TIMEOUT"
+
+	// ErrServiceUnavailable indicates service is unavailable (HTTP 503).
+	ErrServiceUnavailable = "ERR_SERVICE_UNAVAILABLE"
 )
