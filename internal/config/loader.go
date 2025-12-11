@@ -1,9 +1,15 @@
 package config
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/knadh/koanf/parsers/json"
+	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/env"
+	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
 )
 
@@ -15,16 +21,20 @@ var envPrefixes = map[string]string{
 	"LOG_":  "log",
 }
 
-// Load loads configuration from environment variables.
-// Environment variables are mapped using prefixes:
-//   - APP_ -> app.* (e.g., APP_HTTP_PORT -> app.http_port)
-//   - DB_ -> db.* (e.g., DB_HOST -> db.host)
-//   - OTEL_ -> otel.* (e.g., OTEL_SERVICE_NAME -> otel.service_name)
-//   - LOG_ -> log.* (e.g., LOG_LEVEL -> log.level)
+// Load loads configuration from optional file and environment variables.
+// If APP_CONFIG_FILE is set, loads from that file first.
+// Environment variables always override file values.
 func Load() (*Config, error) {
 	k := koanf.New(".")
 
-	// Load env vars for each prefix
+	// Step 1: Load from config file if specified
+	if configFile := os.Getenv("APP_CONFIG_FILE"); configFile != "" {
+		if err := loadFromFile(k, configFile); err != nil {
+			return nil, fmt.Errorf("failed to load config file %s: %w", configFile, err)
+		}
+	}
+
+	// Step 2: Load env vars (overrides file values)
 	for prefix, path := range envPrefixes {
 		if err := loadEnvPrefix(k, prefix, path); err != nil {
 			return nil, err
@@ -37,6 +47,28 @@ func Load() (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// loadFromFile loads configuration from a YAML or JSON file.
+func loadFromFile(k *koanf.Koanf, path string) error {
+	// Check file exists first for clearer error message
+	if _, err := os.Stat(path); err != nil {
+		return err
+	}
+
+	ext := filepath.Ext(path)
+	var parser koanf.Parser
+
+	switch ext {
+	case ".yaml", ".yml":
+		parser = yaml.Parser()
+	case ".json":
+		parser = json.Parser()
+	default:
+		return fmt.Errorf("unsupported config file format: %s", ext)
+	}
+
+	return k.Load(file.Provider(path), parser)
 }
 
 // loadEnvPrefix loads environment variables with the given prefix.
