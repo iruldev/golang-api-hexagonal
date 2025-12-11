@@ -96,14 +96,14 @@ epic-4: complete
 epic-5: complete
 
   # Epic 6: Extension Interfaces (6 FRs)
-  epic-6: backlog
-  6-1-define-logger-interface: backlog
-  6-2-define-cache-interface: backlog
-  6-3-define-ratelimiter-interface: backlog
-  6-4-define-eventpublisher-interface: backlog
-  6-5-define-secretprovider-interface: backlog
-  6-6-document-custom-provider-implementation: backlog
-  epic-6-retrospective: optional
+  epic-6: done
+  6-1-define-logger-interface: done
+  6-2-define-cache-interface: done
+  6-3-define-ratelimiter-interface: done
+  6-4-define-eventpublisher-interface: done
+  6-5-define-secretprovider-interface: done
+  6-6-document-custom-provider-implementation: done
+  epic-6-retrospective: done
 
   # Epic 7: Sample Module (Note) (12 FRs)
   epic-7: backlog

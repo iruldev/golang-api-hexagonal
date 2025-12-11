@@ -409,3 +409,200 @@ golang-api-hexagonal/
 - Comprehensive patterns
 
 **Future:** Diagrams, ADR history
+
+---
+
+## Extension Interfaces
+
+The `runtimeutil` and `observability` packages provide pluggable interfaces for external services. These allow swapping implementations without changing application code.
+
+### Logger Interface
+
+**Location:** `internal/observability/logger_interface.go`
+
+```go
+type Logger interface {
+    Debug(msg string, fields ...Field)
+    Info(msg string, fields ...Field)
+    Warn(msg string, fields ...Field)
+    Error(msg string, fields ...Field)
+    With(fields ...Field) Logger
+    Sync() error
+}
+```
+
+**Default:** `ZapLogger` wraps zap.Logger  
+**Testing:** `NopLogger` discards all output
+
+---
+
+### Cache Interface
+
+**Location:** `internal/runtimeutil/cache.go`
+
+```go
+type Cache interface {
+    Get(ctx context.Context, key string) ([]byte, error)
+    Set(ctx context.Context, key string, value []byte, ttl time.Duration) error
+    Delete(ctx context.Context, key string) error
+    Exists(ctx context.Context, key string) (bool, error)
+}
+```
+
+**Default:** `NopCache` (always misses)
+
+**Redis Example:**
+```go
+type RedisCache struct {
+    client *redis.Client
+}
+
+func (c *RedisCache) Get(ctx context.Context, key string) ([]byte, error) {
+    val, err := c.client.Get(ctx, key).Bytes()
+    if err == redis.Nil {
+        return nil, runtimeutil.ErrCacheMiss
+    }
+    return val, err
+}
+```
+
+---
+
+### RateLimiter Interface
+
+**Location:** `internal/runtimeutil/ratelimiter.go`
+
+```go
+type RateLimiter interface {
+    Allow(ctx context.Context, key string) (bool, error)
+    Limit(ctx context.Context, key string, rate Rate) error
+}
+
+type Rate struct {
+    Limit  int
+    Period time.Duration
+}
+```
+
+**Default:** `NopRateLimiter` (always allows)
+
+**Middleware Usage:**
+```go
+func RateLimitMiddleware(limiter runtimeutil.RateLimiter) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            allowed, _ := limiter.Allow(r.Context(), r.RemoteAddr)
+            if !allowed {
+                http.Error(w, "rate limited", http.StatusTooManyRequests)
+                return
+            }
+            next.ServeHTTP(w, r)
+        })
+    }
+}
+```
+
+---
+
+### EventPublisher Interface
+
+**Location:** `internal/runtimeutil/events.go`
+
+```go
+type EventPublisher interface {
+    Publish(ctx context.Context, topic string, event Event) error
+    PublishAsync(ctx context.Context, topic string, event Event) error
+}
+
+type Event struct {
+    ID        string
+    Type      string
+    Payload   json.RawMessage
+    Timestamp time.Time
+}
+```
+
+**Default:** `NopEventPublisher` (discards events)
+
+**Kafka Example:**
+```go
+type KafkaPublisher struct {
+    producer *kafka.Producer
+}
+
+func (p *KafkaPublisher) Publish(ctx context.Context, topic string, event Event) error {
+    data, _ := json.Marshal(event)
+    return p.producer.Produce(ctx, topic, data)
+}
+```
+
+---
+
+### SecretProvider Interface
+
+**Location:** `internal/runtimeutil/secrets.go`
+
+```go
+type SecretProvider interface {
+    GetSecret(ctx context.Context, key string) (string, error)
+    GetSecretWithTTL(ctx context.Context, key string) (Secret, error)
+}
+
+type Secret struct {
+    Value     string
+    ExpiresAt time.Time
+}
+```
+
+**Default:** `EnvSecretProvider` (reads from environment)
+
+**Vault Example:**
+```go
+type VaultProvider struct {
+    client *vault.Client
+}
+
+func (p *VaultProvider) GetSecret(ctx context.Context, key string) (string, error) {
+    secret, err := p.client.Logical().Read(ctx, "secret/data/"+key)
+    if err != nil || secret == nil {
+        return "", runtimeutil.ErrSecretNotFound
+    }
+    return secret.Data["value"].(string), nil
+}
+```
+
+---
+
+### Registration Pattern
+
+Wire up providers in `cmd/server/main.go`:
+
+```go
+func main() {
+    // Default providers (local development)
+    logger := observability.NewZapLogger(zapLogger)
+    cache := runtimeutil.NewNopCache()
+    rateLimiter := runtimeutil.NewNopRateLimiter()
+    publisher := runtimeutil.NewNopEventPublisher()
+    secrets := runtimeutil.NewEnvSecretProvider()
+    
+    // Production: swap with real implementations
+    // cache = redis.NewRedisCache(redisClient)
+    // rateLimiter = redis.NewRedisRateLimiter(redisClient)
+    // publisher = kafka.NewKafkaPublisher(kafkaProducer)
+    // secrets = vault.NewVaultProvider(vaultClient)
+    
+    // Inject into router/handlers
+    deps := http.RouterDeps{
+        Logger: logger,
+        Cache:  cache,
+        // ...
+    }
+}
+```
+
+**Pattern Benefits:**
+- **Testability:** Use Nop implementations in tests
+- **Flexibility:** Swap backends without code changes
+- **Separation:** Interface in `runtimeutil`, implementation in `infra`
+
