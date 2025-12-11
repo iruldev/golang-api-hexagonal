@@ -37,9 +37,12 @@ migrate-up:
 migrate-down:
 	@echo "TODO: Add migration command in Story 4.x"
 
-# Code generation (placeholder for sqlc)
+# Code generation (Story 4.3: sqlc)
 gen:
-	@echo "TODO: Add sqlc generate in Story 4.x"
+	sqlc generate
+
+sqlc-check:
+	sqlc compile
 
 # Cleanup
 clean:

@@ -71,7 +71,7 @@ development_status:
   epic-4: in-progress
   4-1-setup-postgresql-connection-with-pgx: done
   4-2-handle-database-connection-timeouts: done
-  4-3-configure-sqlc-for-type-safe-queries: ready-for-dev
+  4-3-configure-sqlc-for-type-safe-queries: done
   4-4-implement-database-migrations-up: backlog
   4-5-implement-database-migrations-down: backlog
   4-6-add-repository-code-generation: backlog
