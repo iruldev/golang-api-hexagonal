@@ -1,6 +1,9 @@
 package config
 
-import "time"
+import (
+	"strconv"
+	"time"
+)
 
 // Config holds all application configuration.
 type Config struct {
@@ -28,6 +31,16 @@ type DatabaseConfig struct {
 	MaxOpenConns    int           `koanf:"max_open_conns"`
 	MaxIdleConns    int           `koanf:"max_idle_conns"`
 	ConnMaxLifetime time.Duration `koanf:"conn_max_lifetime"`
+}
+
+// DSN returns the PostgreSQL connection string.
+func (c *DatabaseConfig) DSN() string {
+	sslMode := c.SSLMode
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+	return "postgres://" + c.User + ":" + c.Password + "@" + c.Host + ":" +
+		strconv.Itoa(c.Port) + "/" + c.Name + "?sslmode=" + sslMode
 }
 
 // ObservabilityConfig holds OpenTelemetry settings.

@@ -11,6 +11,7 @@ import (
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
 	httpx "github.com/iruldev/golang-api-hexagonal/internal/interface/http"
 )
 
@@ -20,6 +21,20 @@ func main() {
 	if err != nil {
 		// Exit code 1 with clear error message (Story 2.5)
 		log.Fatalf("Configuration error: %v", err)
+	}
+
+	// Initialize database connection pool (Story 4.1)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	pool, err := postgres.NewPool(ctx, cfg)
+	cancel()
+	if err != nil {
+		// Log warning but don't fail - database may be optional for some routes
+		log.Printf("Warning: Database connection failed: %v", err)
+	} else {
+		defer pool.Close()
+		log.Printf("Database connected: %s@%s:%d/%s (max_conns=%d)",
+			cfg.Database.User, cfg.Database.Host, cfg.Database.Port, cfg.Database.Name,
+			cfg.Database.MaxOpenConns)
 	}
 
 	// Use typed config instead of raw os.Getenv
