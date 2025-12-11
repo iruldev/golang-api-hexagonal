@@ -81,17 +81,19 @@ development_status:
 epic-4: complete
 
   # Epic 5: Observability Suite (9 FRs)
-  epic-5: backlog
-  5-1-implement-liveness-endpoint: backlog
-  5-2-implement-readiness-endpoint: backlog
-  5-3-return-503-on-dependency-failure: backlog
-  5-4-expose-prometheus-metrics-endpoint: backlog
-  5-5-capture-http-request-metrics: backlog
-  5-6-implement-structured-json-logging-prod: backlog
-  5-7-implement-human-readable-logging-dev: backlog
-  5-8-add-context-fields-to-logs: backlog
-  5-9-create-opentelemetry-spans: backlog
-  epic-5-retrospective: optional
+  epic-5: in-progress
+  5-1-implement-liveness-endpoint: done  # Already implemented in Story 4.7
+  5-2-implement-readiness-endpoint: done  # Already implemented in Story 4.7
+  5-3-return-503-on-dependency-failure: done  # Already implemented in Story 4.7
+  5-4-expose-prometheus-metrics-endpoint: done
+  5-5-capture-http-request-metrics: done
+  5-6-implement-structured-json-logging-prod: done  # Already implemented in Story 3.3
+  5-7-implement-human-readable-logging-dev: done  # Already implemented in Story 3.3
+  5-8-add-context-fields-to-logs: done
+  5-9-create-opentelemetry-spans: done  # Already implemented in Story 3.5
+  epic-5-retrospective: done
+
+epic-5: complete
 
   # Epic 6: Extension Interfaces (6 FRs)
   epic-6: backlog

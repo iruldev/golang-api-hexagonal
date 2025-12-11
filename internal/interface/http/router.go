@@ -6,6 +6,8 @@ import (
 	"log"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/handlers"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
@@ -56,12 +58,16 @@ func NewRouter(deps RouterDeps) chi.Router {
 	// Global middleware (order matters!)
 	r.Use(middleware.Recovery(logger)) // Story 3.4 - FIRST to catch all panics
 	r.Use(middleware.RequestID)        // Story 3.2
+	r.Use(middleware.Metrics)          // Story 5.5 - HTTP metrics
 	r.Use(middleware.Otel("api"))      // Story 3.5 - OTEL tracing
 	r.Use(middleware.Logging(logger))  // Story 3.3
 
 	// Kubernetes health check endpoints at root level (Story 4.7)
 	r.Get("/healthz", handlers.HealthHandler)
 	r.Handle("/readyz", handlers.NewReadyzHandler(deps.DBChecker))
+
+	// Prometheus metrics endpoint (Story 5.4)
+	r.Handle("/metrics", promhttp.Handler())
 
 	// API v1 routes - delegate to routes.go (Story 3.6)
 	r.Route("/api/v1", RegisterRoutes)
