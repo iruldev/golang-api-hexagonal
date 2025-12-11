@@ -2,19 +2,25 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
+	"github.com/iruldev/golang-api-hexagonal/internal/config"
 )
 
 func main() {
-	// Load port from environment (Story 1.3 config preparation)
-	port := os.Getenv("APP_HTTP_PORT")
-	if port == "" {
-		port = "8080"
+	// Load and validate configuration (Epic 2: Configuration & Environment)
+	cfg, err := config.Load()
+	if err != nil {
+		// Exit code 1 with clear error message (Story 2.5)
+		log.Fatalf("Configuration error: %v", err)
 	}
+
+	// Use typed config instead of raw os.Getenv
+	port := fmt.Sprintf("%d", cfg.App.HTTPPort)
 
 	server := &http.Server{
 		Addr:    ":" + port,
