@@ -12,6 +12,7 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/redis"
 	httpx "github.com/iruldev/golang-api-hexagonal/internal/interface/http"
 )
 
@@ -41,13 +42,28 @@ func main() {
 		dbChecker = postgres.NewPoolHealthChecker(pool)
 	}
 
+	// Initialize Redis connection pool (Story 8.1)
+	var redisChecker *redis.Client
+	redisClient, err := redis.NewClient(cfg.Redis)
+	if err != nil {
+		// Log warning but don't fail - Redis may be optional for some routes
+		log.Printf("Warning: Redis connection failed: %v", err)
+	} else {
+		defer redisClient.Close()
+		log.Printf("Redis connected: %s:%d (pool_size=%d)",
+			cfg.Redis.Host, cfg.Redis.Port, cfg.Redis.PoolSize)
+		// Use Redis client as health checker for readiness probe
+		redisChecker = redisClient
+	}
+
 	// Use typed config instead of raw os.Getenv
 	port := fmt.Sprintf("%d", cfg.App.HTTPPort)
 
 	// Create chi router with versioned API routes (Story 3.1)
 	router := httpx.NewRouter(httpx.RouterDeps{
-		Config:    cfg,
-		DBChecker: dbChecker,
+		Config:       cfg,
+		DBChecker:    dbChecker,
+		RedisChecker: redisChecker,
 	})
 
 	server := &http.Server{

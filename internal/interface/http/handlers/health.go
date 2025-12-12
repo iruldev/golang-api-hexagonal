@@ -26,16 +26,23 @@ type DBHealthChecker interface {
 
 // ReadyzHandler handles readiness probe requests.
 type ReadyzHandler struct {
-	dbChecker DBHealthChecker
+	dbChecker    DBHealthChecker
+	redisChecker DBHealthChecker
 }
 
-// NewReadyzHandler creates a new ReadyzHandler with optional DB checker.
+// NewReadyzHandler creates a new ReadyzHandler with optional checkers.
 func NewReadyzHandler(dbChecker DBHealthChecker) *ReadyzHandler {
 	return &ReadyzHandler{dbChecker: dbChecker}
 }
 
+// WithRedis adds Redis health checker to the readiness handler.
+func (h *ReadyzHandler) WithRedis(redisChecker DBHealthChecker) *ReadyzHandler {
+	h.redisChecker = redisChecker
+	return h
+}
+
 // ServeHTTP handles the readiness check request.
-// Returns 200 if service is ready, 503 if database is unavailable.
+// Returns 200 if service is ready, 503 if any dependency is unavailable.
 func (h *ReadyzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -43,6 +50,14 @@ func (h *ReadyzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.dbChecker != nil {
 		if err := h.dbChecker.Ping(ctx); err != nil {
 			response.Error(w, http.StatusServiceUnavailable, response.ErrServiceUnavailable, "database unavailable")
+			return
+		}
+	}
+
+	// Check Redis if available
+	if h.redisChecker != nil {
+		if err := h.redisChecker.Ping(ctx); err != nil {
+			response.Error(w, http.StatusServiceUnavailable, response.ErrServiceUnavailable, "redis unavailable")
 			return
 		}
 	}

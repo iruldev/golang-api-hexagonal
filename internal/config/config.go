@@ -9,6 +9,7 @@ import (
 type Config struct {
 	App           AppConfig           `koanf:"app"`
 	Database      DatabaseConfig      `koanf:"db"`
+	Redis         RedisConfig         `koanf:"redis"`
 	Observability ObservabilityConfig `koanf:"otel"`
 	Log           LogConfig           `koanf:"log"`
 }
@@ -55,4 +56,17 @@ type ObservabilityConfig struct {
 type LogConfig struct {
 	Level  string `koanf:"level"`
 	Format string `koanf:"format"` // json, console
+}
+
+// RedisConfig holds Redis connection settings.
+type RedisConfig struct {
+	Host         string        `koanf:"host"`
+	Port         int           `koanf:"port"`
+	Password     string        `koanf:"password"`
+	DB           int           `koanf:"db"`
+	PoolSize     int           `koanf:"pool_size"`
+	MinIdleConns int           `koanf:"min_idle_conns"`
+	DialTimeout  time.Duration `koanf:"dial_timeout"`
+	ReadTimeout  time.Duration `koanf:"read_timeout"`
+	WriteTimeout time.Duration `koanf:"write_timeout"`
 }

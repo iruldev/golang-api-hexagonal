@@ -19,6 +19,22 @@ services:
     networks:
       - app-network
 
+  redis:
+    image: redis:7-alpine
+    container_name: golang-api-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
   jaeger:
     image: jaegertracing/all-in-one:1.53
     container_name: golang-api-jaeger
@@ -38,3 +54,4 @@ networks:
 
 volumes:
   postgres_data:
+  redis_data:

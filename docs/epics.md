@@ -1018,7 +1018,475 @@ So that I can create new domains quickly.
 
 ---
 
+# V2 Epics - Platform Evolution
+
+## V2 Overview
+
+V2 extends the golden template foundation with platform hardening, reliability patterns, security guardrails, and enhanced developer experience.
+
+### V2 Functional Requirements
+
+**Platform Hardening (FR57-FR64)**
+- FR57: System connects to Redis with connection pooling
+- FR58: System processes background jobs via asynq
+- FR59: Developer can create async jobs following documented patterns
+- FR60: System exposes job metrics (duration, failures, retries)
+- FR61: Integration tests use testcontainers instead of docker-compose
+- FR62: System exposes Prometheus metrics with preconfigured dashboards
+- FR63: Developer can import Grafana dashboard template
+- FR64: Developer can copy async job patterns for new domains
+
+**Async & Reliability (FR65-FR70)**
+- FR65: System supports fire-and-forget job pattern
+- FR66: System supports scheduled job pattern with cron
+- FR67: System supports fanout job pattern
+- FR68: System implements idempotency key pattern for jobs
+- FR69: System exposes dedicated job metrics dashboard
+- FR70: Developer can copy job patterns for new domains
+
+**Security & Guardrails (FR71-FR78)**
+- FR71: System provides auth middleware interface
+- FR72: System implements JWT authentication middleware
+- FR73: System implements API key authentication middleware
+- FR74: System supports RBAC with Admin/Service/User roles
+- FR75: System implements in-memory rate limiter
+- FR76: System supports Redis-backed rate limiter
+- FR77: System provides feature flag interface with env provider
+- FR78: Developer can integrate org SSO/IDP via hooks
+
+**DX & Operability (FR79-FR84)**
+- FR79: Developer can initialize new service via CLI (`bplat init service`)
+- FR80: Developer can generate module via CLI (`bplat generate module`)
+- FR81: System ships with Prometheus alerting rules template
+- FR82: System includes runbook documentation template
+- FR83: README and AGENTS.md document V2 features
+- FR84: CLI follows AGENTS.md patterns for code generation
+
+---
+
+## Epic 8: Platform Hardening (v1.1)
+
+Strengthen the Three Pillars foundation with Redis, full testcontainers, and production-ready observability dashboards.
+**FRs covered:** FR57, FR58, FR59, FR60, FR61, FR62, FR63, FR64
+
+### Story 8.1: Implement Redis Connection with Connection Pooling
+
+As a developer,
+I want the system to connect to Redis with proper connection pooling,
+So that I can use Redis for caching and job queues.
+
+**Acceptance Criteria:**
+
+**Given** valid `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` environment variables
+**When** the application starts
+**Then** Redis connection pool is established
+**And** connection is validated at startup
+**And** `/readyz` includes Redis health check
+
+### Story 8.2: Setup asynq Worker Infrastructure
+
+As a developer,
+I want asynq worker infrastructure ready to use,
+So that I can process background jobs reliably.
+
+**Acceptance Criteria:**
+
+**Given** `internal/worker/` package exists
+**When** I review the code
+**Then** asynq client and server are configured
+**And** worker starts as separate process or goroutine
+**And** graceful shutdown is handled
+
+### Story 8.3: Create Sample Async Job (Note Archive)
+
+As a developer,
+I want an example async job implementation,
+So that I can understand job patterns.
+
+**Acceptance Criteria:**
+
+**Given** `internal/worker/tasks/note_archive.go` exists
+**When** I review the code
+**Then** job payload is typed and validated
+**And** job handler follows error handling patterns
+**And** job can be enqueued from usecase layer
+
+### Story 8.4: Add Job Observability (Metrics + Logging)
+
+As a SRE,
+I want job execution metrics and structured logging,
+So that I can monitor background job health.
+
+**Acceptance Criteria:**
+
+**Given** asynq worker is running
+**When** jobs are processed
+**Then** metrics include: `job_processed_total`, `job_failed_total`, `job_duration_seconds`
+**And** logs include: job_type, job_id, duration, status
+
+### Story 8.5: Migrate Integration Tests to Testcontainers
+
+As a developer,
+I want integration tests to use testcontainers,
+So that tests are self-contained and CI-friendly.
+
+**Acceptance Criteria:**
+
+**Given** `internal/testing/containers.go` exists
+**When** I run `make test`
+**Then** PostgreSQL container starts automatically
+**And** Redis container starts if needed
+**And** containers are cleaned up after tests
+
+### Story 8.6: Add Prometheus to docker-compose
+
+As a developer,
+I want Prometheus running in local development,
+So that I can develop and test metrics.
+
+**Acceptance Criteria:**
+
+**Given** `docker-compose.yaml` is updated
+**When** I run `make dev`
+**Then** Prometheus starts on port 9090
+**And** Prometheus scrapes application `/metrics`
+**And** basic scrape config is provided
+
+### Story 8.7: Create Grafana Dashboard Template
+
+As a SRE,
+I want a Grafana dashboard template for the service,
+So that I can visualize metrics immediately.
+
+**Acceptance Criteria:**
+
+**Given** `deploy/grafana/dashboards/service.json` exists
+**When** I import to Grafana
+**Then** dashboard shows HTTP golden signals (latency, traffic, errors, saturation)
+**And** dashboard shows DB latency and connection pool
+**And** dashboard shows job queue depth and processing rate
+
+### Story 8.8: Document Async Job Patterns
+
+As a developer,
+I want documentation on async job best practices,
+So that I can implement jobs correctly.
+
+**Acceptance Criteria:**
+
+**Given** ARCHITECTURE.md is updated
+**When** I read the async jobs section
+**Then** job lifecycle is documented
+**And** retry and DLQ patterns are explained
+**And** idempotency recommendations are included
+
+---
+
+## Epic 9: Async & Reliability Platform
+
+Extend async capabilities with multiple job patterns, idempotency, and dedicated observability.
+**FRs covered:** FR65, FR66, FR67, FR68, FR69, FR70
+
+### Story 9.1: Implement Fire-and-Forget Job Pattern
+
+As a developer,
+I want a fire-and-forget job pattern,
+So that I can offload non-critical work quickly.
+
+**Acceptance Criteria:**
+
+**Given** `internal/worker/patterns/fireandforget.go` exists
+**When** I enqueue a fire-and-forget job
+**Then** job is processed asynchronously
+**And** caller doesn't wait for completion
+**And** failure doesn't affect caller
+
+### Story 9.2: Implement Scheduled Job Pattern with Cron
+
+As a developer,
+I want to schedule jobs with cron expressions,
+So that I can run periodic tasks.
+
+**Acceptance Criteria:**
+
+**Given** asynq scheduler is configured
+**When** I define a scheduled job with cron expression
+**Then** job runs at specified intervals
+**And** scheduler handles timezone correctly (UTC)
+**And** missed jobs are handled according to policy
+
+### Story 9.3: Implement Fanout Job Pattern
+
+As a developer,
+I want a fanout pattern for broadcasting to multiple handlers,
+So that I can implement event-driven workflows.
+
+**Acceptance Criteria:**
+
+**Given** `internal/worker/patterns/fanout.go` exists
+**When** I publish a fanout event
+**Then** multiple handlers receive the event
+**And** each handler processes independently
+**And** failure in one handler doesn't affect others
+
+### Story 9.4: Add Idempotency Key Pattern
+
+As a developer,
+I want job idempotency built-in,
+So that duplicate jobs don't cause data corruption.
+
+**Acceptance Criteria:**
+
+**Given** `internal/worker/idempotency/` package exists
+**When** I enqueue a job with idempotency key
+**Then** duplicate job with same key is deduplicated
+**And** deduplication window is configurable
+**And** Redis is used for key storage
+
+### Story 9.5: Create Dedicated Job Metrics Dashboard
+
+As a SRE,
+I want a dedicated job metrics dashboard,
+So that I can monitor async processing health.
+
+**Acceptance Criteria:**
+
+**Given** `deploy/grafana/dashboards/jobs.json` exists
+**When** I import to Grafana
+**Then** dashboard shows queue depth per task type
+**And** dashboard shows processing rate and latency
+**And** dashboard shows retry and failure rates
+
+### Story 9.6: Document Copy Job Pattern for New Domain
+
+As a developer,
+I want documentation on adding new job types,
+So that I can extend async capabilities consistently.
+
+**Acceptance Criteria:**
+
+**Given** AGENTS.md is updated
+**When** I read the async patterns section
+**Then** step-by-step guide exists for new job types
+**And** checklist ensures all components are created
+**And** example copy commands are provided
+
+---
+
+## Epic 10: Security & Guardrails
+
+Implement authentication, authorization, rate limiting, and feature flags as security baseline.
+**FRs covered:** FR71, FR72, FR73, FR74, FR75, FR76, FR77, FR78
+
+### Story 10.1: Define Auth Middleware Interface
+
+As a developer,
+I want an auth middleware interface,
+So that I can plug in different auth providers.
+
+**Acceptance Criteria:**
+
+**Given** `internal/interface/http/middleware/auth.go` exists
+**When** I review the interface
+**Then** interface defines: Authenticate(r) (Claims, error)
+**And** Claims struct includes: UserID, Roles, Permissions
+**And** interface is documented with usage examples
+
+### Story 10.2: Implement JWT Auth Middleware
+
+As a developer,
+I want JWT authentication middleware,
+So that I can validate JWT tokens.
+
+**Acceptance Criteria:**
+
+**Given** `internal/interface/http/middleware/jwt.go` exists
+**When** request has valid JWT in Authorization header
+**Then** claims are extracted and added to context
+**And** invalid token returns 401
+**And** expired token returns 401 with specific error
+
+### Story 10.3: Implement API Key Auth Middleware
+
+As a developer,
+I want API key authentication middleware,
+So that I can support service-to-service auth.
+
+**Acceptance Criteria:**
+
+**Given** `internal/interface/http/middleware/apikey.go` exists
+**When** request has valid API key in X-API-Key header
+**Then** service identity is added to context
+**And** invalid key returns 401
+**And** key lookup is pluggable (env, DB, external)
+
+### Story 10.4: Create RBAC Permission Model
+
+As a developer,
+I want RBAC with Admin/Service/User roles,
+So that I can control access to endpoints.
+
+**Acceptance Criteria:**
+
+**Given** `internal/domain/auth/rbac.go` exists
+**When** I review the code
+**Then** roles: Admin, Service, User are defined
+**And** middleware can check role requirements
+**And** permission denied returns 403
+
+### Story 10.5: Implement Rate Limiter with In-Memory Store
+
+As a developer,
+I want in-memory rate limiting,
+So that I can protect endpoints from abuse.
+
+**Acceptance Criteria:**
+
+**Given** `internal/interface/http/middleware/ratelimit.go` exists
+**When** rate limit is exceeded
+**Then** response is 429 with Retry-After header
+**And** limits are configurable per endpoint
+**And** token bucket algorithm is used
+
+### Story 10.6: Add Redis-backed Rate Limiter Option
+
+As a developer,
+I want Redis-backed rate limiting,
+So that limits work across multiple instances.
+
+**Acceptance Criteria:**
+
+**Given** Redis connection is available
+**When** rate limiter is configured with Redis backend
+**Then** limits are shared across instances
+**And** Lua script ensures atomic operations
+**And** fallback to in-memory on Redis failure
+
+### Story 10.7: Create Feature Flag Interface and Env Provider
+
+As a developer,
+I want feature flags with env-based provider,
+So that I can toggle features without deploy.
+
+**Acceptance Criteria:**
+
+**Given** `internal/runtimeutil/featureflags.go` exists
+**When** I check feature flag
+**Then** interface: IsEnabled(flag, context) bool
+**And** env provider reads from `FF_*` environment variables
+**And** interface supports future providers (LaunchDarkly, etc.)
+
+### Story 10.8: Document Auth/RBAC Integration Guide
+
+As a developer,
+I want documentation on integrating org SSO,
+So that I can connect to existing identity systems.
+
+**Acceptance Criteria:**
+
+**Given** ARCHITECTURE.md is updated
+**When** I read the security section
+**Then** auth middleware architecture is documented
+**And** SSO/IDP integration points are explained
+**And** example for OAuth2/OIDC is provided
+
+---
+
+## Epic 11: DX & Operability
+
+Enhance developer experience with CLI generator and operational readiness tools.
+**FRs covered:** FR79, FR80, FR81, FR82, FR83, FR84
+
+### Story 11.1: Create CLI Tool Structure (bplat)
+
+As a developer,
+I want a CLI tool for boilerplate operations,
+So that I can scaffold code quickly.
+
+**Acceptance Criteria:**
+
+**Given** `cmd/bplat/main.go` exists
+**When** I run `bplat --help`
+**Then** available commands are listed
+**And** version command shows current version
+**And** CLI follows cobra/urfave convention
+
+### Story 11.2: Implement `bplat init service` Command
+
+As a developer,
+I want to initialize a new service from template,
+So that I can start new projects quickly.
+
+**Acceptance Criteria:**
+
+**Given** I run `bplat init service myservice`
+**When** command completes
+**Then** new directory with complete structure is created
+**And** go.mod is updated with correct module name
+**And** README is customized with service name
+
+### Story 11.3: Implement `bplat generate module` Command
+
+As a developer,
+I want to generate new domain module,
+So that I can add features following patterns.
+
+**Acceptance Criteria:**
+
+**Given** I run `bplat generate module payment`
+**When** command completes
+**Then** domain/usecase/infra/interface layers are created
+**And** migration template is created
+**And** sqlc query file is created
+**And** test files with templates are created
+
+### Story 11.4: Create Prometheus Alerting Rules Template
+
+As a SRE,
+I want alerting rules template for the service,
+So that I can detect issues early.
+
+**Acceptance Criteria:**
+
+**Given** `deploy/prometheus/alerts.yaml` exists
+**When** I review the rules
+**Then** alerts include: HighErrorRate, HighLatency, ServiceDown
+**And** alerts include: DBConnectionExhausted, JobQueueBacklog
+**And** severity levels are defined (warning, critical)
+
+### Story 11.5: Create Runbook Documentation Template
+
+As a SRE,
+I want runbook documentation template,
+So that I can respond to incidents consistently.
+
+**Acceptance Criteria:**
+
+**Given** `docs/runbook/` directory exists
+**When** I review the templates
+**Then** template for each alert is provided
+**And** template includes: symptoms, diagnosis, remediation
+**And** escalation path is documented
+
+### Story 11.6: Update README and AGENTS.md with V2 Features
+
+As a developer,
+I want documentation updated with V2 features,
+So that I can use new capabilities correctly.
+
+**Acceptance Criteria:**
+
+**Given** README.md and AGENTS.md are updated
+**When** I review the documents
+**Then** V2 features are documented
+**And** migration from V1 is explained
+**And** CLI usage is documented
+
+---
+
 ## Summary
+
+### V1 Epics (Foundation)
 
 | Epic | Title | Stories | FRs |
 |------|-------|---------|-----|
@@ -1029,4 +1497,22 @@ So that I can create new domains quickly.
 | 5 | Observability Suite | 9 | 9 |
 | 6 | Extension Interfaces | 6 | 6 |
 | 7 | Sample Module (Note) | 10 | 12 |
-| **Total** | | **50** | **56** |
+| **V1 Total** | | **50** | **56** |
+
+### V2 Epics (Platform Evolution)
+
+| Epic | Title | Stories | FRs |
+|------|-------|---------|-----|
+| 8 | Platform Hardening (v1.1) | 8 | 8 |
+| 9 | Async & Reliability Platform | 6 | 6 |
+| 10 | Security & Guardrails | 8 | 8 |
+| 11 | DX & Operability | 6 | 6 |
+| **V2 Total** | | **28** | **28** |
+
+### Grand Total
+
+| Version | Stories | FRs |
+|---------|---------|-----|
+| V1 | 50 | 56 |
+| V2 | 28 | 28 |
+| **Total** | **78** | **84** |

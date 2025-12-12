@@ -35,6 +35,7 @@ func (c *Config) Validate() error {
 
 	errs = append(errs, c.validateDatabase()...)
 	errs = append(errs, c.validateApp()...)
+	errs = append(errs, c.validateRedis()...)
 
 	if len(errs) > 0 {
 		return &ValidationError{Errors: errs}
@@ -81,6 +82,34 @@ func (c *Config) validateApp() []string {
 	// App.Env validation (optional but if set, must be valid)
 	if c.App.Env != "" && !validAppEnvs[c.App.Env] {
 		errs = append(errs, "APP_ENV must be one of: development, staging, production")
+	}
+
+	return errs
+}
+
+// validateRedis checks Redis configuration (Story 8.1).
+// Note: Redis is optional - validation only runs if REDIS_HOST is set.
+// When REDIS_HOST is set, the port must be valid.
+func (c *Config) validateRedis() []string {
+	var errs []string
+
+	// Redis is optional - only validate if host is configured
+	if c.Redis.Host == "" {
+		return errs // Skip validation if Redis not configured
+	}
+
+	// If Redis is configured, port must be valid
+	if c.Redis.Port < 0 || c.Redis.Port > 65535 {
+		errs = append(errs, "REDIS_PORT must be between 0 and 65535")
+	}
+	if c.Redis.DB < 0 || c.Redis.DB > 15 {
+		errs = append(errs, "REDIS_DB must be between 0 and 15")
+	}
+	if c.Redis.PoolSize < 0 {
+		errs = append(errs, "REDIS_POOL_SIZE must be >= 0")
+	}
+	if c.Redis.MinIdleConns < 0 {
+		errs = append(errs, "REDIS_MIN_IDLE_CONNS must be >= 0")
 	}
 
 	return errs

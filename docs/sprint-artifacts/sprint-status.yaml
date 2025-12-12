@@ -114,3 +114,51 @@ development_status:
   7-9-create-agents-md: done
   7-10-document-copy-pattern-for-new-modules: done
   epic-7-retrospective: done
+
+  # =============================================================================
+  # V2 EPICS - Platform Evolution
+  # =============================================================================
+
+  # Epic 8: Platform Hardening (v1.1) (8 FRs)
+  epic-8: in-progress
+  8-1-implement-redis-connection-with-connection-pooling: done
+  8-2-setup-asynq-worker-infrastructure: backlog
+  8-3-create-sample-async-job-note-archive: backlog
+  8-4-add-job-observability-metrics-logging: backlog
+  8-5-migrate-integration-tests-to-testcontainers: backlog
+  8-6-add-prometheus-to-docker-compose: backlog
+  8-7-create-grafana-dashboard-template: backlog
+  8-8-document-async-job-patterns: backlog
+  epic-8-retrospective: optional
+
+  # Epic 9: Async & Reliability Platform (6 FRs)
+  epic-9: backlog
+  9-1-implement-fire-and-forget-job-pattern: backlog
+  9-2-implement-scheduled-job-pattern-with-cron: backlog
+  9-3-implement-fanout-job-pattern: backlog
+  9-4-add-idempotency-key-pattern: backlog
+  9-5-create-dedicated-job-metrics-dashboard: backlog
+  9-6-document-copy-job-pattern-for-new-domain: backlog
+  epic-9-retrospective: optional
+
+  # Epic 10: Security & Guardrails (8 FRs)
+  epic-10: backlog
+  10-1-define-auth-middleware-interface: backlog
+  10-2-implement-jwt-auth-middleware: backlog
+  10-3-implement-api-key-auth-middleware: backlog
+  10-4-create-rbac-permission-model: backlog
+  10-5-implement-rate-limiter-with-in-memory-store: backlog
+  10-6-add-redis-backed-rate-limiter-option: backlog
+  10-7-create-feature-flag-interface-and-env-provider: backlog
+  10-8-document-auth-rbac-integration-guide: backlog
+  epic-10-retrospective: optional
+
+  # Epic 11: DX & Operability (6 FRs)
+  epic-11: backlog
+  11-1-create-cli-tool-structure-bplat: backlog
+  11-2-implement-bplat-init-service-command: backlog
+  11-3-implement-bplat-generate-module-command: backlog
+  11-4-create-prometheus-alerting-rules-template: backlog
+  11-5-create-runbook-documentation-template: backlog
+  11-6-update-readme-and-agents-md-with-v2-features: backlog
+  epic-11-retrospective: optional

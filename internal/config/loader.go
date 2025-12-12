@@ -15,10 +15,11 @@ import (
 
 // envPrefixes maps environment variable prefixes to config paths.
 var envPrefixes = map[string]string{
-	"APP_":  "app",
-	"DB_":   "db",
-	"OTEL_": "otel",
-	"LOG_":  "log",
+	"APP_":   "app",
+	"DB_":    "db",
+	"REDIS_": "redis",
+	"OTEL_":  "otel",
+	"LOG_":   "log",
 }
 
 // Load loads configuration from optional file and environment variables.

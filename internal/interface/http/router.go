@@ -19,8 +19,9 @@ var TracerShutdown func(context.Context) error
 
 // RouterDeps holds dependencies for the router.
 type RouterDeps struct {
-	Config    *config.Config
-	DBChecker handlers.DBHealthChecker // Optional, can be nil
+	Config       *config.Config
+	DBChecker    handlers.DBHealthChecker // Optional, can be nil
+	RedisChecker handlers.DBHealthChecker // Optional, can be nil
 }
 
 // NewRouter creates a new chi router with versioned API routes.
@@ -64,7 +65,11 @@ func NewRouter(deps RouterDeps) chi.Router {
 
 	// Kubernetes health check endpoints at root level (Story 4.7)
 	r.Get("/healthz", handlers.HealthHandler)
-	r.Handle("/readyz", handlers.NewReadyzHandler(deps.DBChecker))
+	readyzHandler := handlers.NewReadyzHandler(deps.DBChecker)
+	if deps.RedisChecker != nil {
+		readyzHandler = readyzHandler.WithRedis(deps.RedisChecker)
+	}
+	r.Handle("/readyz", readyzHandler)
 
 	// Prometheus metrics endpoint (Story 5.4)
 	r.Handle("/metrics", promhttp.Handler())
