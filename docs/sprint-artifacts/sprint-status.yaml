@@ -127,7 +127,7 @@ development_status:
   8-4-add-job-observability-metrics-logging: done
   8-5-migrate-integration-tests-to-testcontainers: done
   8-6-add-prometheus-to-docker-compose: done
-  8-7-create-grafana-dashboard-template: ready-for-dev
+  8-7-create-grafana-dashboard-template: done
   8-8-document-async-job-patterns: backlog
   epic-8-retrospective: optional
 
