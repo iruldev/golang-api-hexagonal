@@ -120,7 +120,7 @@ development_status:
   # =============================================================================
 
   # Epic 8: Platform Hardening (v1.1) (8 FRs)
-  epic-8: in-progress
+  epic-8: done
   8-1-implement-redis-connection-with-connection-pooling: done
   8-2-setup-asynq-worker-infrastructure: done
   8-3-create-sample-async-job-note-archive: done
@@ -129,7 +129,7 @@ development_status:
   8-6-add-prometheus-to-docker-compose: done
   8-7-create-grafana-dashboard-template: done
   8-8-document-async-job-patterns: done
-  epic-8-retrospective: optional
+  epic-8-retrospective: done
 
   # Epic 9: Async & Reliability Platform (6 FRs)
   epic-9: backlog
