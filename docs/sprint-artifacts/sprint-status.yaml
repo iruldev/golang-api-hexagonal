@@ -123,7 +123,7 @@ development_status:
   epic-8: in-progress
   8-1-implement-redis-connection-with-connection-pooling: done
   8-2-setup-asynq-worker-infrastructure: done
-  8-3-create-sample-async-job-note-archive: backlog
+  8-3-create-sample-async-job-note-archive: done
   8-4-add-job-observability-metrics-logging: backlog
   8-5-migrate-integration-tests-to-testcontainers: backlog
   8-6-add-prometheus-to-docker-compose: backlog

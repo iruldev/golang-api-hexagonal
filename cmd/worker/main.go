@@ -15,6 +15,7 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
 	"github.com/iruldev/golang-api-hexagonal/internal/observability"
 	"github.com/iruldev/golang-api-hexagonal/internal/worker"
+	"github.com/iruldev/golang-api-hexagonal/internal/worker/tasks"
 )
 
 func main() {
@@ -50,8 +51,9 @@ func main() {
 		worker.LoggingMiddleware(logger),
 	)
 
-	// Register task handlers (will be added in Story 8.3)
-	// srv.HandleFunc(tasks.TypeNoteArchive, tasks.HandleNoteArchive)
+	// Register task handlers
+	noteArchiveHandler := tasks.NewNoteArchiveHandler(logger)
+	srv.HandleFunc(tasks.TypeNoteArchive, noteArchiveHandler.Handle)
 
 	// Graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
