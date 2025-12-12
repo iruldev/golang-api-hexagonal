@@ -75,3 +75,9 @@ clean:
 .PHONY: worker
 worker:
 	go run ./cmd/worker/main.go
+
+# Scheduler (Story 9.2) - Periodic job scheduler
+.PHONY: scheduler
+scheduler:
+	go run ./cmd/scheduler/main.go
+

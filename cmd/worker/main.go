@@ -56,6 +56,10 @@ func main() {
 	noteArchiveHandler := tasks.NewNoteArchiveHandler(logger)
 	srv.HandleFunc(tasks.TypeNoteArchive, noteArchiveHandler.Handle)
 
+	// Register cleanup handler for scheduled tasks
+	cleanupHandler := tasks.NewCleanupOldNotesHandler(logger)
+	srv.HandleFunc(tasks.TypeCleanupOldNotes, cleanupHandler.Handle)
+
 	// Graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	sigs := make(chan os.Signal, 1)

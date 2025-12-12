@@ -217,6 +217,149 @@ patterns.FireAndForget(ctx, client, logger, task)
 
 ---
 
+## Scheduled Job Pattern
+
+The Scheduled Job pattern is for periodic tasks that run on a cron schedule:
+- **Scheduler** enqueues tasks on schedule (separate process from worker)
+- **Worker** processes the enqueued tasks
+- Uses standard 5-field cron expressions
+- All times are in **UTC**
+
+### When to Use Scheduled Jobs
+
+| Scenario | Use Scheduled? | Reasoning |
+|----------|---------------|-----------|
+| Daily database cleanup | ✅ Yes | Predictable timing, runs once per day |
+| Weekly report generation | ✅ Yes | Business-driven schedule |
+| Hourly health checks | ✅ Yes | Regular intervals |
+| Cache invalidation | ✅ Yes | Periodic refresh |
+| Real-time event response | ❌ No | Use Fire-and-Forget |
+| User-triggered actions | ❌ No | Use standard enqueue |
+
+### Scheduler Architecture
+
+```
+                    ┌─────────────┐
+                    │   Redis     │
+                    │   (Queue)   │
+                    └─────────────┘
+                          ▲
+              Enqueue     │     Dequeue
+              on cron     │     & Process
+         ┌────────────────┴────────────────┐
+         │                                 │
+┌────────┴────────┐              ┌─────────┴────────┐
+│    Scheduler    │              │      Worker      │
+│cmd/scheduler    │              │  cmd/worker      │
+│                 │              │                  │
+│ Cron: 0 0 * * * │              │ Handle:          │
+│ → Enqueue task  │              │ cleanup:old_notes│
+└─────────────────┘              └──────────────────┘
+```
+
+**Key:** Scheduler and Worker are SEPARATE processes. Scheduler enqueues, Worker processes.
+
+### Cron Expression Format
+
+Asynq uses standard 5-field cron expressions:
+
+```
+┌───────────── minute (0-59)
+│ ┌───────────── hour (0-23)
+│ │ ┌───────────── day of month (1-31)
+│ │ │ ┌───────────── month (1-12)
+│ │ │ │ ┌───────────── day of week (0-6, Sun=0)
+│ │ │ │ │
+* * * * *
+```
+
+**Common Examples:**
+
+| Schedule | Expression | Description |
+|----------|------------|-------------|
+| Every minute | `* * * * *` | Runs every minute |
+| Every hour | `0 * * * *` | Runs at minute 0 of every hour |
+| Daily at midnight | `0 0 * * *` | Runs at 00:00 UTC |
+| Every Monday 9am | `0 9 * * 1` | Runs Monday at 09:00 UTC |
+| First of month | `0 0 1 * *` | Runs at midnight on 1st |
+| Every 5 minutes | `*/5 * * * *` | Runs every 5 minutes |
+| Weekdays 6pm | `0 18 * * 1-5` | Runs Mon-Fri at 18:00 UTC |
+
+### Usage
+
+```go
+import (
+    "github.com/iruldev/golang-api-hexagonal/internal/worker/patterns"
+    "github.com/iruldev/golang-api-hexagonal/internal/worker/tasks"
+)
+
+// Define scheduled jobs
+jobs := []patterns.ScheduledJob{
+    {
+        Cronspec:    "0 0 * * *",  // Daily at midnight UTC
+        Task:        cleanupTask,
+        Description: "Daily cleanup of old notes",
+    },
+    {
+        Cronspec:    "0 * * * *",  // Every hour
+        Task:        healthTask,
+        Description: "Hourly health check",
+    },
+}
+
+// Register with scheduler
+entryIDs, err := patterns.RegisterScheduledJobs(scheduler, jobs, logger)
+```
+
+### Timezone Handling
+
+- Scheduler runs in **UTC** by default
+- All cron expressions are evaluated in UTC
+- Set explicitly in scheduler options:
+
+```go
+loc, _ := time.LoadLocation("UTC")
+scheduler := asynq.NewScheduler(redisOpt, &asynq.SchedulerOpts{
+    Location: loc,
+})
+```
+
+### Missed Job Behavior
+
+Asynq's default behavior:
+- **Does NOT catch up:** Missed executions are skipped
+- **Jobs persist:** Scheduler state survives restarts
+- **Unique tasks:** Use `asynq.Unique(duration)` to prevent duplicates
+
+For critical scheduled jobs:
+- Consider shorter intervals with idempotency
+- Use Asynq's task uniqueness feature
+
+### Running the Scheduler
+
+```bash
+# Start dependencies (Redis, etc.)
+docker compose up -d
+
+# Terminal 1: Start worker (processes tasks)
+make worker
+
+# Terminal 2: Start scheduler (enqueues tasks on schedule)
+make scheduler
+```
+
+### Key Files
+
+| Component | Path |
+|-----------|------|
+| Scheduler entry point | `cmd/scheduler/main.go` |
+| Pattern implementation | `internal/worker/patterns/scheduled.go` |
+| Unit tests | `internal/worker/patterns/scheduled_test.go` |
+| Examples | `internal/worker/patterns/scheduled_example_test.go` |
+| Sample scheduled task | `internal/worker/tasks/cleanup_old_notes.go` |
+
+---
+
 ## Task Handler Patterns
 
 ### Task Type Naming Convention

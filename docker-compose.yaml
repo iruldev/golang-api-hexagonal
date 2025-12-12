@@ -98,6 +98,19 @@ services:
     depends_on:
       - prometheus
 
+# =============================================================================
+# APPLICATION SERVICES (run on host, not in containers)
+# =============================================================================
+# The following services are run on the host using `make` commands:
+#
+# API Server:     make dev          # HTTP API at localhost:8080
+# Worker:         make worker       # Background job processor
+# Scheduler:      make scheduler    # Periodic job scheduler (cron)
+#
+# The scheduler uses the same Redis instance as the worker and enqueues tasks
+# according to cron expressions. Worker processes those tasks.
+# =============================================================================
+
 networks:
   app-network:
     driver: bridge
@@ -107,3 +120,4 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+
