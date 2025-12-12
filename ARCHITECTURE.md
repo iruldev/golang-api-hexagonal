@@ -126,6 +126,59 @@ infra/
 
 ---
 
+## Entry Points
+
+The application provides multiple entry points in `cmd/`:
+
+```
+cmd/
+├── api/
+│   └── main.go      # HTTP API server
+└── worker/
+    └── main.go      # Background job worker
+```
+
+> **IMPORTANT:** The Worker is a **secondary entry point**, NOT a fifth architectural layer. Task handlers in the worker follow the same hexagonal architecture: they call usecases, which use repositories.
+
+### HTTP API (`cmd/api/`)
+
+The primary entry point serving HTTP requests via chi router.
+
+### Background Worker (`cmd/worker/`)
+
+Processes async jobs using Asynq. See [docs/async-jobs.md](docs/async-jobs.md) for comprehensive async job documentation.
+
+---
+
+## Worker Infrastructure (`internal/worker/`)
+
+Infrastructure for background job processing using Asynq and Redis.
+
+```
+internal/worker/
+├── server.go              # Worker server with queue priorities
+├── client.go              # Task enqueueing client
+├── middleware.go          # Recovery, Tracing, Logging middleware
+├── metrics_middleware.go  # Prometheus metrics middleware
+└── tasks/
+    ├── types.go           # Task type constants
+    ├── note_archive.go    # Sample task handler
+    ├── note_archive_test.go
+    └── enqueue.go         # TaskEnqueuer interface
+```
+
+**Responsibilities:**
+- Process background tasks with retry and priority queues
+- Provide middleware for logging, metrics, tracing, and panic recovery
+- Define task handler patterns and conventions
+
+**Key Concepts:**
+- **Queues:** `critical` (weight 6), `default` (weight 3), `low` (weight 1)
+- **Task Types:** Colon-separated naming `{domain}:{action}` (e.g., `note:archive`)
+- **Error Handling:** Use `asynq.SkipRetry` for validation errors
+
+**Dependencies:** Domain layer for interfaces, usecases for business logic
+
 ## Patterns
 
 ### Repository Pattern
