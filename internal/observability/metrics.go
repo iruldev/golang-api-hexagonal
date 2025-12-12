@@ -27,3 +27,25 @@ var (
 		[]string{"method", "path"},
 	)
 )
+
+// Job metrics for monitoring worker performance.
+var (
+	// JobProcessedTotal counts total job executions by task_type, queue, status.
+	JobProcessedTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "job_processed_total",
+			Help: "Total jobs processed",
+		},
+		[]string{"task_type", "queue", "status"},
+	)
+
+	// JobDurationSeconds measures job execution duration in seconds.
+	JobDurationSeconds = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "job_duration_seconds",
+			Help:    "Job duration in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"task_type", "queue"},
+	)
+)

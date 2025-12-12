@@ -44,10 +44,11 @@ func main() {
 	// Create worker server
 	srv := worker.NewServer(redisOpt, cfg.Asynq)
 
-	// Add middleware (order: recovery first, then tracing, then logging)
+	// Add middleware (order: recovery first, then tracing, then metrics, then logging)
 	srv.Use(
 		worker.RecoveryMiddleware(logger),
 		worker.TracingMiddleware(),
+		worker.MetricsMiddleware(),
 		worker.LoggingMiddleware(logger),
 	)
 
