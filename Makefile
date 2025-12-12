@@ -17,7 +17,7 @@ help:
 # Development
 dev:
 	@test -f .env || cp .env.example .env 2>/dev/null || true
-	docker-compose up -d
+	docker compose up -d
 	go run cmd/server/main.go
 
 # Build
@@ -63,5 +63,5 @@ sqlc-check:
 
 # Cleanup
 clean:
-	docker-compose down -v
+	docker compose down -v
 	rm -rf bin/

@@ -81,7 +81,7 @@ workflow_status:
         note: "System-level testability review"
 
       - id: "validate-architecture"
-        status: "recommended"
+        status: "validated-2025-12-12"
         agent: "architect"
         command: "validate-architecture"
         note: "Architecture validation"
@@ -102,7 +102,7 @@ workflow_status:
     name: "Implementation"
     workflows:
       - id: "sprint-planning"
-        status: "required"
+        status: "docs/sprint-artifacts/sprint-status.yaml"
         agent: "sm"
         command: "sprint-planning"
         note: "Creates sprint plan and enters development cycle"
