@@ -1,0 +1,25 @@
+# Prometheus Configuration for Local Development
+# Scrapes the golang-api application metrics
+
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Golang API application and worker metrics
+  # Both server and worker expose metrics on the same /metrics endpoint
+  # Port 8080 must match APP_PORT in .env (default: 8080)
+  - job_name: 'golang-api'
+    static_configs:
+      # host.docker.internal works on macOS/Windows Docker Desktop
+      # For Linux, extra_hosts in docker-compose provides host-gateway mapping
+      - targets: ['host.docker.internal:8080']
+    metrics_path: '/metrics'
+    scheme: 'http'
+
