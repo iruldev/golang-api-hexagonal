@@ -132,8 +132,8 @@ development_status:
   epic-8-retrospective: done
 
   # Epic 9: Async & Reliability Platform (6 FRs)
-  epic-9: backlog
-  9-1-implement-fire-and-forget-job-pattern: backlog
+  epic-9: in-progress
+  9-1-implement-fire-and-forget-job-pattern: done
   9-2-implement-scheduled-job-pattern-with-cron: backlog
   9-3-implement-fanout-job-pattern: backlog
   9-4-add-idempotency-key-pattern: backlog

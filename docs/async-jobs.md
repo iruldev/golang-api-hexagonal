@@ -112,6 +112,111 @@ Weights determine the **probability** that a task from each queue will be proces
 
 ---
 
+## Fire-and-Forget Pattern
+
+The Fire-and-Forget pattern is for non-critical background tasks where the caller:
+- **Doesn't need to wait** for completion
+- **Isn't affected** by task failures
+- Treats work as **best-effort**
+
+### When to Use Fire-and-Forget
+
+| Scenario | Use Fire-and-Forget? | Reasoning |
+|----------|---------------------|-----------|
+| Analytics events | ✅ Yes | Non-critical, caller shouldn't wait |
+| Cleanup tasks | ✅ Yes | Background work |
+| Cache warming | ✅ Yes | Best-effort optimization |
+| Audit logging | ✅ Yes | Not user-facing |
+| Password reset email | ❌ No | Critical - need confirmation |
+| Payment processing | ❌ No | Critical - need result |
+| User-visible notifications | ⚠️ Maybe | Depends on importance |
+
+### Fire-and-Forget vs Standard Enqueue
+
+| Aspect | Fire-and-Forget | Standard Enqueue |
+|--------|-----------------|------------------|
+| Caller blocks? | No (returns immediately) | No (but gets task info) |
+| Error propagation | Errors logged, not returned | Errors returned to caller |
+| Default queue | `low` | Caller specifies |
+| Task info returned | No | Yes (TaskInfo) |
+| Use case | Non-critical work | Important async work |
+
+### Usage
+
+```go
+import (
+    "github.com/iruldev/golang-api-hexagonal/internal/worker/patterns"
+    "github.com/iruldev/golang-api-hexagonal/internal/worker/tasks"
+    "github.com/iruldev/golang-api-hexagonal/internal/worker"
+)
+
+// Basic fire-and-forget (uses low queue by default)
+task, _ := tasks.NewNoteArchiveTask(noteID)
+patterns.FireAndForget(ctx, client, logger, task)
+
+// Override to default queue if more urgent
+patterns.FireAndForget(ctx, client, logger, task, asynq.Queue(worker.QueueDefault))
+
+// With additional options
+patterns.FireAndForget(ctx, client, logger, task,
+    asynq.Queue(worker.QueueLow),
+    asynq.MaxRetry(1),
+)
+```
+
+### Usecase Integration Example
+
+```go
+type NoteUsecase struct {
+    repo     note.Repository
+    enqueuer tasks.TaskEnqueuer  // *worker.Client implements this
+    logger   *zap.Logger
+}
+
+func (u *NoteUsecase) Update(ctx context.Context, noteID uuid.UUID, data UpdateData) error {
+    // 1. Critical business logic (must succeed)
+    if err := u.repo.Update(ctx, noteID, data); err != nil {
+        return err
+    }
+
+    // 2. Fire-and-forget for non-critical follow-up
+    task, err := tasks.NewNoteArchiveTask(noteID)
+    if err != nil {
+        u.logger.Warn("failed to create audit task", zap.Error(err))
+        return nil  // Don't fail main operation
+    }
+
+    // Returns immediately - main operation not blocked
+    patterns.FireAndForget(ctx, u.enqueuer, u.logger, task)
+
+    return nil
+}
+```
+
+### Error Handling
+
+Fire-and-Forget handles errors internally:
+
+1. **Enqueue error:** Logged at ERROR level, not propagated to caller
+2. **Task execution error:** Handled by worker (retry/SkipRetry as configured)
+3. **Context cancellation:** Enqueue may fail, logged
+
+```go
+// Caller is isolated from errors
+patterns.FireAndForget(ctx, client, logger, task)
+// This line executes immediately, regardless of enqueue success
+```
+
+### Key Files
+
+| Component | Path |
+|-----------|------|
+| Pattern implementation | `internal/worker/patterns/fireandforget.go` |
+| Unit tests | `internal/worker/patterns/fireandforget_test.go` |
+| Examples | `internal/worker/patterns/fireandforget_example_test.go` |
+
+---
+
 ## Task Handler Patterns
 
 ### Task Type Naming Convention
