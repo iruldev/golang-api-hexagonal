@@ -18,6 +18,7 @@ var envPrefixes = map[string]string{
 	"APP_":   "app",
 	"DB_":    "db",
 	"REDIS_": "redis",
+	"ASYNQ_": "asynq",
 	"OTEL_":  "otel",
 	"LOG_":   "log",
 }

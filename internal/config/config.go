@@ -10,6 +10,7 @@ type Config struct {
 	App           AppConfig           `koanf:"app"`
 	Database      DatabaseConfig      `koanf:"db"`
 	Redis         RedisConfig         `koanf:"redis"`
+	Asynq         AsynqConfig         `koanf:"asynq"`
 	Observability ObservabilityConfig `koanf:"otel"`
 	Log           LogConfig           `koanf:"log"`
 }
@@ -69,4 +70,11 @@ type RedisConfig struct {
 	DialTimeout  time.Duration `koanf:"dial_timeout"`
 	ReadTimeout  time.Duration `koanf:"read_timeout"`
 	WriteTimeout time.Duration `koanf:"write_timeout"`
+}
+
+// AsynqConfig holds Asynq worker settings.
+type AsynqConfig struct {
+	Concurrency     int           `koanf:"concurrency"`      // default: 10
+	RetryMax        int           `koanf:"retry_max"`        // default: 3
+	ShutdownTimeout time.Duration `koanf:"shutdown_timeout"` // default: 30s
 }

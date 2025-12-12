@@ -65,3 +65,8 @@ sqlc-check:
 clean:
 	docker compose down -v
 	rm -rf bin/
+
+# Worker (Story 8.2)
+.PHONY: worker
+worker:
+	go run ./cmd/worker/main.go

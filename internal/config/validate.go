@@ -36,6 +36,7 @@ func (c *Config) Validate() error {
 	errs = append(errs, c.validateDatabase()...)
 	errs = append(errs, c.validateApp()...)
 	errs = append(errs, c.validateRedis()...)
+	errs = append(errs, c.validateAsynq()...)
 
 	if len(errs) > 0 {
 		return &ValidationError{Errors: errs}
@@ -110,6 +111,21 @@ func (c *Config) validateRedis() []string {
 	}
 	if c.Redis.MinIdleConns < 0 {
 		errs = append(errs, "REDIS_MIN_IDLE_CONNS must be >= 0")
+	}
+
+	return errs
+}
+
+// validateAsynq checks Asynq worker configuration (Story 8.2).
+// Asynq is optional - validation only runs if any Asynq config is set.
+func (c *Config) validateAsynq() []string {
+	var errs []string
+
+	if c.Asynq.Concurrency < 0 {
+		errs = append(errs, "ASYNQ_CONCURRENCY must be >= 0")
+	}
+	if c.Asynq.ShutdownTimeout < 0 {
+		errs = append(errs, "ASYNQ_SHUTDOWN_TIMEOUT must be >= 0")
 	}
 
 	return errs
