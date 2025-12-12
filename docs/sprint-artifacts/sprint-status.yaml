@@ -106,15 +106,15 @@ epic-5: complete
   epic-6-retrospective: done
 
   # Epic 7: Sample Module (Note) (12 FRs)
-  epic-7: backlog
-  7-1-create-note-domain-entity: backlog
-  7-2-create-note-sql-migration: backlog
-  7-3-create-note-repository-with-sqlc: backlog
-  7-4-create-note-usecase: backlog
-  7-5-create-note-http-handler: backlog
-  7-6-create-note-unit-tests: backlog
-  7-7-create-note-integration-test: backlog
-  7-8-create-architecture-md: backlog
-  7-9-create-agents-md: backlog
-  7-10-document-copy-pattern-for-new-modules: backlog
-  epic-7-retrospective: optional
+  epic-7: in-progress
+  7-1-create-note-domain-entity: done
+  7-2-create-note-sql-migration: done
+  7-3-create-note-repository-with-sqlc: done
+  7-4-create-note-usecase: done
+  7-5-create-note-http-handler: done
+  7-6-create-note-unit-tests: done
+  7-7-create-note-integration-test: done
+  7-8-create-architecture-md: done
+  7-9-create-agents-md: done
+  7-10-document-copy-pattern-for-new-modules: done
+  epic-7-retrospective: done
