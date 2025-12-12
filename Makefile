@@ -1,10 +1,11 @@
-.PHONY: help dev build test lint clean migrate-up migrate-down migrate-down-all migrate-create gen sqlc-check
+.PHONY: help dev build test test-integration lint clean migrate-up migrate-down migrate-down-all migrate-create gen sqlc-check
 
 # Help (default target)
 help:
 	@echo "Available targets:"
 	@echo "  dev            - Start dependencies and run app"
 	@echo "  test           - Run tests with coverage"
+	@echo "  test-integration - Run integration tests (requires Docker)"
 	@echo "  lint           - Run golangci-lint"
 	@echo "  build          - Build binary to bin/"
 	@echo "  clean          - Stop containers and clean build"
@@ -27,6 +28,10 @@ build:
 # Testing
 test:
 	go test -v -cover -race ./...
+
+# Integration tests (requires Docker)
+test-integration:
+	go test -v -tags=integration ./...
 
 # Linting
 lint:
