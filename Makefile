@@ -90,3 +90,20 @@ worker:
 scheduler:
 	go run ./cmd/scheduler/main.go
 
+# CLI Tool (Story 11.1) - bplat boilerplate generator
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+BUILD_DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
+BPLAT_LDFLAGS := -ldflags "\
+	-X 'github.com/iruldev/golang-api-hexagonal/cmd/bplat/cmd.Version=$(VERSION)' \
+	-X 'github.com/iruldev/golang-api-hexagonal/cmd/bplat/cmd.BuildDate=$(BUILD_DATE)' \
+	-X 'github.com/iruldev/golang-api-hexagonal/cmd/bplat/cmd.GitCommit=$(GIT_COMMIT)'"
+
+.PHONY: build-bplat
+build-bplat: ## Build bplat CLI tool
+	go build $(BPLAT_LDFLAGS) -o bin/bplat ./cmd/bplat
+
+.PHONY: install-bplat
+install-bplat: ## Install bplat CLI tool to GOPATH/bin
+	go install $(BPLAT_LDFLAGS) ./cmd/bplat

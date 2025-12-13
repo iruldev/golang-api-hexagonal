@@ -36,7 +36,11 @@ go build ./...
 ## Project Structure
 
 ```
-├── cmd/server/         # Application entry point
+├── cmd/
+│   ├── server/         # Main application entry point
+│   ├── worker/         # Background job worker
+│   ├── scheduler/      # Cron job scheduler
+│   └── bplat/          # CLI tool for scaffolding
 ├── internal/
 │   ├── app/            # Application wiring
 │   ├── config/         # Configuration
@@ -51,6 +55,22 @@ go build ./...
 │   └── queries/        # sqlc queries
 └── docs/               # Documentation
 ```
+
+## CLI Tool (bplat)
+
+The `bplat` CLI tool provides code scaffolding utilities:
+
+```bash
+# Build CLI tool
+make build-bplat
+
+# Check version
+./bin/bplat version
+
+# View help
+./bin/bplat --help
+```
+
 
 ## Adding New Modules
 

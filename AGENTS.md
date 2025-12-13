@@ -973,6 +973,86 @@ sed -i '' 's/NoteID/YourFieldID/g' internal/worker/tasks/{name}.go
 
 ---
 
+## 🛠️ CLI Tool (bplat)
+
+The `bplat` CLI tool provides code scaffolding utilities for the boilerplate. Located in `cmd/bplat/`.
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `bplat version` | Print version, build date, git commit, and Go version |
+| `bplat --help` | List all available commands |
+
+### Building and Installing
+
+```bash
+# Build to bin/ directory with version info
+make build-bplat
+
+# Install to GOPATH/bin
+make install-bplat
+```
+
+### Version Information
+
+The CLI uses ldflags for build-time version injection:
+
+```bash
+# Output example:
+bplat version v1.0.0
+Build date: 2025-12-14T00:00:00Z
+Git commit: abc1234
+Go version: go1.24.10
+```
+
+### CLI Structure Pattern
+
+Follow this pattern when adding new commands:
+
+```
+cmd/bplat/
+├── main.go           # Entry point, calls cmd.Execute()
+└── cmd/
+    ├── root.go       # Root command with Execute() function
+    ├── root_test.go  # Root command tests
+    ├── version.go    # Version command
+    └── version_test.go
+```
+
+### Adding New Commands
+
+1. Create `cmd/bplat/cmd/{name}.go` with cobra command
+2. Register command in `root.go` via `init()`: `rootCmd.AddCommand({name}Cmd)`
+3. Use `cmd.OutOrStdout()` for testable output
+4. Create `cmd/bplat/cmd/{name}_test.go` with table-driven tests
+
+### Command Implementation Pattern
+
+```go
+package cmd
+
+import (
+    "fmt"
+    "github.com/spf13/cobra"
+)
+
+var exampleCmd = &cobra.Command{
+    Use:   "example",
+    Short: "Short description",
+    Long:  `Longer description with usage details.`,
+    Run: func(cmd *cobra.Command, args []string) {
+        fmt.Fprintln(cmd.OutOrStdout(), "Output here")
+    },
+}
+
+func init() {
+    rootCmd.AddCommand(exampleCmd)
+}
+```
+
+---
+
 ## 📋 Checklist for Code Review
 
 Before submitting code, verify:

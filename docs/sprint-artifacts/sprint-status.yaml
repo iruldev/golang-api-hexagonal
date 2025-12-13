@@ -154,8 +154,8 @@ development_status:
   epic-10-retrospective: completed
 
   # Epic 11: DX & Operability (6 FRs)
-  epic-11: backlog
-  11-1-create-cli-tool-structure-bplat: backlog
+  epic-11: in-progress
+  11-1-create-cli-tool-structure-bplat: done
   11-2-implement-bplat-init-service-command: backlog
   11-3-implement-bplat-generate-module-command: backlog
   11-4-create-prometheus-alerting-rules-template: backlog
