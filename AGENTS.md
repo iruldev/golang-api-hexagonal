@@ -973,6 +973,93 @@ sed -i '' 's/NoteID/YourFieldID/g' internal/worker/tasks/{name}.go
 
 ---
 
+## 📊 Prometheus Alerting
+
+The service includes pre-configured Prometheus alerting rules for production monitoring. See `deploy/prometheus/alerts.yaml`.
+
+### Alert Categories
+
+| Category | Alerts | Severity |
+|----------|--------|----------|
+| HTTP Service | HighErrorRate, HighLatency, ServiceDown | warning/critical |
+| Database | DBConnectionExhausted, DBSlowQueries | warning |
+| Job Queue | JobQueueBacklog, JobFailureRate, JobProcessingStalled | warning/critical |
+
+### Available Alerts
+
+| Alert | Condition | Duration | Severity |
+|-------|-----------|----------|----------|
+| `HighErrorRate` | 5xx errors > 5% | 5m | warning |
+| `HighErrorRateCritical` | 5xx errors > 10% | 2m | critical |
+| `HighLatency` | p95 > 500ms | 5m | warning |
+| `HighLatencyCritical` | p95 > 1s | 2m | critical |
+| `ServiceDown` | `up == 0` | 1m | critical |
+| `DBConnectionExhausted` | /readyz failures > 20% | 5m | warning |
+| `DBSlowQueries` | API p95 > 500ms | 5m | warning |
+| `JobQueueBacklog` | Success rate < 90% | 10m | warning |
+| `JobFailureRate` | Failures > 10% | 5m | warning |
+| `JobFailureRateCritical` | Failures > 25% | 2m | critical |
+| `JobProcessingStalled` | No jobs processed (but recent history) | 10m | warning |
+
+### Customizing Alert Thresholds
+
+Edit `deploy/prometheus/alerts.yaml`:
+
+```yaml
+# Change error rate threshold from 5% to 3%
+- alert: HighErrorRate
+  expr: |
+    (
+      sum(rate(http_requests_total{status=~"5.."}[5m]))
+      /
+      sum(rate(http_requests_total[5m]))
+    ) > 0.03   # Changed from 0.05
+  for: 5m
+  labels:
+    severity: warning
+```
+
+### Adding Custom Alerts
+
+Follow the pattern in `deploy/prometheus/alerts.yaml`:
+
+```yaml
+- alert: YourCustomAlert
+  expr: your_metric_query > threshold
+  for: 5m
+  labels:
+    severity: warning
+    service: golang-api-hexagonal
+    component: your-component   # Optional: categorize
+  annotations:
+    summary: "Brief description"
+    description: "Detailed description with {{ $value }} template"
+    runbook_url: "docs/runbook/your-alert.md"
+```
+
+### Loading Alerts in Prometheus
+
+Alerts are loaded via `rule_files` in `deploy/prometheus/prometheus.yml`:
+
+```yaml
+rule_files:
+  - "alerts.yaml"
+```
+
+Prometheus reloads rules on restart or via `/-/reload` endpoint.
+
+### Validating Alert Rules
+
+```bash
+# Using promtool (if available)
+promtool check rules deploy/prometheus/alerts.yaml
+
+# Using yq for YAML validation
+yq '.' deploy/prometheus/alerts.yaml
+```
+
+---
+
 ## 🛠️ CLI Tool (bplat)
 
 The `bplat` CLI tool provides code scaffolding utilities for the boilerplate. Located in `cmd/bplat/`.

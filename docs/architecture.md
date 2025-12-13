@@ -924,3 +924,52 @@ func main() {
 - **Flexibility:** Swap backends without code changes
 - **Separation:** Interface in `runtimeutil`, implementation in `infra`
 
+---
+
+## Prometheus Alerting
+
+The service includes pre-configured alerting rules for production monitoring at `deploy/prometheus/alerts.yaml`.
+
+### Alert Categories
+
+| Category | Purpose | Alerts |
+|----------|---------|--------|
+| HTTP Service | API health | HighErrorRate, HighLatency, ServiceDown |
+| Database | Data layer health | DBConnectionExhausted, DBSlowQueries |
+| Job Queue | Async processing health | JobQueueBacklog, JobFailureRate |
+
+### Customizing Alerts
+
+To modify thresholds, edit `deploy/prometheus/alerts.yaml`:
+
+```yaml
+- alert: HighErrorRate
+  expr: |
+    (sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))) > 0.05
+  for: 5m
+  labels:
+    severity: warning
+```
+
+**Key Fields:**
+- `expr`: PromQL expression defining the condition
+- `for`: Alert duration before firing
+- `labels.severity`: `warning` or `critical`
+- `annotations.runbook_url`: Link to troubleshooting docs
+
+### Severity Guidelines
+
+| Severity | When to Use | Action |
+|----------|-------------|--------|
+| `critical` | Immediate action required | Page on-call |
+| `warning` | Investigate within 24h | Dashboard/ticket |
+
+### Loading Rules
+
+Rules are loaded via `rule_files` in `deploy/prometheus/prometheus.yml`. Prometheus reloads on restart or via `/-/reload` endpoint.
+
+### Documentation References
+
+- [AGENTS.md#Prometheus-Alerting](../AGENTS.md#-prometheus-alerting) - Complete alert list and customization patterns
+- [Prometheus Alerting Rules](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/) - Official documentation
+

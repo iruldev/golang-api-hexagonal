@@ -6,6 +6,10 @@ global:
   scrape_timeout: 10s
   evaluation_interval: 15s
 
+# Alerting rules files
+rule_files:
+  - "alerts.yaml"
+
 scrape_configs:
   # Prometheus self-monitoring
   - job_name: 'prometheus'

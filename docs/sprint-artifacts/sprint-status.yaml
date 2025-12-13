@@ -158,7 +158,7 @@ development_status:
   11-1-create-cli-tool-structure-bplat: done
   11-2-implement-bplat-init-service-command: done
   11-3-implement-bplat-generate-module-command: done
-  11-4-create-prometheus-alerting-rules-template: backlog
+  11-4-create-prometheus-alerting-rules-template: done
   11-5-create-runbook-documentation-template: backlog
   11-6-update-readme-and-agents-md-with-v2-features: backlog
   epic-11-retrospective: optional

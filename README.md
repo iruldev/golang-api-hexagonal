@@ -166,6 +166,24 @@ make sqlc
   - [ ] Run tests: `go test ./...`
   - [ ] Run lint: `golangci-lint run ./...`
 
+## Operability
+
+### Prometheus Alerting
+
+The service includes pre-configured Prometheus alerting rules:
+
+```bash
+# View alerting rules
+cat deploy/prometheus/alerts.yaml
+```
+
+**Included Alerts:**
+- **HTTP Service:** HighErrorRate, HighLatency, ServiceDown
+- **Database:** DBConnectionExhausted, DBSlowQueries
+- **Job Queue:** JobQueueBacklog, JobFailureRate
+
+Rules are automatically loaded by Prometheus. See [AGENTS.md](AGENTS.md#-prometheus-alerting) for customization.
+
 ## License
 
 MIT
