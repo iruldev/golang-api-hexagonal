@@ -1,0 +1,27 @@
+package {{.ModuleName}}
+
+import (
+	"context"
+
+	"github.com/google/uuid"
+)
+
+// Repository defines the {{.EntityName}} repository interface (port).
+// This interface should be implemented by infrastructure adapters.
+type Repository interface {
+	// Create persists a new {{.EntityName}}.
+	Create(ctx context.Context, entity *{{.EntityName}}) error
+
+	// GetByID retrieves a {{.EntityName}} by its ID.
+	// Returns ErrNotFound if not found.
+	GetByID(ctx context.Context, id uuid.UUID) (*{{.EntityName}}, error)
+
+	// Update updates an existing {{.EntityName}}.
+	Update(ctx context.Context, entity *{{.EntityName}}) error
+
+	// Delete removes a {{.EntityName}} by its ID.
+	Delete(ctx context.Context, id uuid.UUID) error
+
+	// List retrieves {{.EntityName}}s with pagination.
+	List(ctx context.Context, limit, offset int) ([]*{{.EntityName}}, error)
+}

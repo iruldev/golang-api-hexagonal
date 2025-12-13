@@ -1,0 +1,29 @@
+package {{.ModuleName}}
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// CreateRequest represents the request body for creating a {{.EntityName}}.
+type CreateRequest struct {
+	// TODO: Add your request fields here
+	// Example:
+	// Name string `json:"name" validate:"required"`
+}
+
+// UpdateRequest represents the request body for updating a {{.EntityName}}.
+type UpdateRequest struct {
+	// TODO: Add your request fields here
+	// Example:
+	// Name string `json:"name" validate:"required"`
+}
+
+// Response represents the response body for a {{.EntityName}}.
+type Response struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	// TODO: Add your response fields here
+}

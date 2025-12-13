@@ -1,0 +1,4 @@
+-- Migration: Drop {{.TableName}} table
+
+DROP TRIGGER IF EXISTS set_{{.TableName}}_updated_at ON {{.TableName}};
+DROP TABLE IF EXISTS {{.TableName}};

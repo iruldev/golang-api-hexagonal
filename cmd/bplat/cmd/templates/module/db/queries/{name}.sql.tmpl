@@ -1,0 +1,36 @@
+-- name: Create{{.EntityName}} :one
+-- Creates a new {{.ModuleName}} and returns it.
+INSERT INTO {{.TableName}} (
+    id
+    -- TODO: Add your columns here
+) VALUES (
+    $1
+    -- TODO: Add your values here
+) RETURNING *;
+
+-- name: Get{{.EntityName}}ByID :one
+-- Retrieves a {{.ModuleName}} by its ID.
+SELECT * FROM {{.TableName}} WHERE id = $1;
+
+-- name: List{{.EntityName}}s :many
+-- Lists {{.ModuleName}}s with pagination.
+SELECT * FROM {{.TableName}}
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: Update{{.EntityName}} :one
+-- Updates a {{.ModuleName}} and returns it.
+UPDATE {{.TableName}} SET
+    updated_at = NOW()
+    -- TODO: Add your columns here
+    -- Example: name = $2
+WHERE id = $1
+RETURNING *;
+
+-- name: Delete{{.EntityName}} :exec
+-- Deletes a {{.ModuleName}} by its ID.
+DELETE FROM {{.TableName}} WHERE id = $1;
+
+-- name: Count{{.EntityName}}s :one
+-- Counts all {{.ModuleName}}s.
+SELECT COUNT(*) FROM {{.TableName}};

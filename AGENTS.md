@@ -983,6 +983,7 @@ The `bplat` CLI tool provides code scaffolding utilities for the boilerplate. Lo
 |---------|-------------|
 | `bplat version` | Print version, build date, git commit, and Go version |
 | `bplat init service <name>` | Initialize a new service with complete project structure |
+| `bplat generate module <name>` | Generate a new domain module with all layers |
 | `bplat --help` | List all available commands |
 
 ### Init Service Command
@@ -1042,6 +1043,74 @@ myservice/
 | Name empty | `len(name) == 0` | "service name is required" |
 | Invalid chars | `^[a-z][a-z0-9_-]*$` | "service name must start with letter and contain only lowercase letters, numbers, hyphens, underscores" |
 | Dir exists | `os.Stat(dir)` | "directory already exists, use --force to overwrite" |
+### Generate Module Command
+
+Generate a new domain module with all hexagonal architecture layers:
+
+```bash
+# Basic usage - creates payment module
+bplat generate module payment
+
+# With custom entity name (default: singularized module name)
+bplat generate module orders --entity Order
+```
+
+#### Flags
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--entity` | `-e` | singularized module name | Custom entity name (PascalCase) |
+
+#### Generated Structure
+
+```
+internal/
+├── domain/payment/
+│   ├── entity.go           # Entity with Validate()
+│   ├── errors.go           # Domain-specific errors
+│   ├── repository.go       # Repository interface
+│   └── entity_test.go      # Entity tests
+├── usecase/payment/
+│   ├── usecase.go          # Business logic
+│   └── usecase_test.go     # Usecase tests
+└── interface/http/payment/
+    ├── handler.go          # HTTP handlers
+    ├── dto.go              # Request/Response DTOs
+    └── handler_test.go     # Handler tests
+
+db/
+├── migrations/
+│   ├── {timestamp}_payment.up.sql    # Create table
+│   └── {timestamp}_payment.down.sql  # Drop table
+└── queries/
+    └── payment.sql         # sqlc queries
+```
+
+#### Template Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `ModuleName` | Lowercase module name | `payment` |
+| `EntityName` | PascalCase entity name | `Payment` |
+| `TableName` | Snake_case plural | `payments` |
+| `Timestamp` | Migration timestamp | `20251214021630` |
+| `ModulePath` | Go module path | `github.com/iruldev/golang-api-hexagonal` |
+
+#### Next Steps After Generation
+
+1. Review and update entity fields in `internal/domain/{name}/entity.go`
+2. Update migration in `db/migrations/{timestamp}_{name}.up.sql`
+3. Update sqlc queries in `db/queries/{name}.sql`
+4. Run: `make sqlc`
+5. Register routes in router
+
+#### Validation Rules
+
+| Rule | Pattern | Error Message |
+|------|---------|---------------|
+| Name empty | `len(name) == 0` | "module name is required" |
+| Invalid chars | `^[a-z][a-z0-9_-]*$` | "module name must start with letter and contain only lowercase letters, numbers, hyphens, underscores" |
+| Already exists | `os.Stat(domain/path)` | "module already exists" |
 
 ### Building and Installing
 

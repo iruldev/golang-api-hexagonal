@@ -1,0 +1,50 @@
+// Package {{.ModuleName}} provides the {{.EntityName}} domain entity and related business logic.
+package {{.ModuleName}}
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// {{.EntityName}} represents a {{.ModuleName}} entity in the system.
+type {{.EntityName}} struct {
+	// ID is the unique identifier.
+	ID uuid.UUID `json:"id" db:"id"`
+
+	// TODO: Add your entity fields here
+	// Example:
+	// Name string `json:"name" db:"name"`
+
+	// CreatedAt is when the entity was created.
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+
+	// UpdatedAt is when the entity was last updated.
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// New{{.EntityName}} creates a new {{.EntityName}} with generated ID and timestamps.
+func New{{.EntityName}}() *{{.EntityName}} {
+	now := time.Now().UTC()
+	return &{{.EntityName}}{
+		ID:        uuid.New(),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+}
+
+// Validate validates the {{.EntityName}} entity.
+// Returns domain-specific errors for invalid data.
+func (e *{{.EntityName}}) Validate() error {
+	if e.ID == uuid.Nil {
+		return ErrInvalidID
+	}
+	// TODO: Add your validation rules here
+	return nil
+}
+
+// Update updates the entity fields.
+// Sets UpdatedAt to current time.
+func (e *{{.EntityName}}) Update() {
+	e.UpdatedAt = time.Now().UTC()
+}

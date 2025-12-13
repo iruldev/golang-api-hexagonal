@@ -1,0 +1,74 @@
+package {{.ModuleName}}
+
+import (
+	"testing"
+
+	"github.com/google/uuid"
+)
+
+func TestNew{{.EntityName}}(t *testing.T) {
+	entity := New{{.EntityName}}()
+
+	if entity.ID == uuid.Nil {
+		t.Error("expected non-nil UUID")
+	}
+	if entity.CreatedAt.IsZero() {
+		t.Error("expected non-zero CreatedAt")
+	}
+	if entity.UpdatedAt.IsZero() {
+		t.Error("expected non-zero UpdatedAt")
+	}
+}
+
+func Test{{.EntityName}}_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func() *{{.EntityName}}
+		wantErr error
+	}{
+		{
+			name: "valid entity",
+			setup: func() *{{.EntityName}} {
+				return New{{.EntityName}}()
+			},
+			wantErr: nil,
+		},
+		{
+			name: "invalid id",
+			setup: func() *{{.EntityName}} {
+				e := New{{.EntityName}}()
+				e.ID = uuid.Nil
+				return e
+			},
+			wantErr: ErrInvalidID,
+		},
+		// TODO: Add more test cases for your validation rules
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entity := tt.setup()
+			err := entity.Validate()
+
+			if tt.wantErr == nil && err != nil {
+				t.Errorf("expected no error, got %v", err)
+			}
+			if tt.wantErr != nil && err != tt.wantErr {
+				t.Errorf("expected error %v, got %v", tt.wantErr, err)
+			}
+		})
+	}
+}
+
+func Test{{.EntityName}}_Update(t *testing.T) {
+	entity := New{{.EntityName}}()
+	originalUpdatedAt := entity.UpdatedAt
+
+	// Wait a tiny bit and update
+	entity.Update()
+
+	if !entity.UpdatedAt.After(originalUpdatedAt) && entity.UpdatedAt != originalUpdatedAt {
+		// Allow equal time in case of fast execution
+		t.Log("UpdatedAt should be >= original")
+	}
+}

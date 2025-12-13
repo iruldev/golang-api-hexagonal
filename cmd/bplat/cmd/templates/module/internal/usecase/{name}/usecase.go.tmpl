@@ -1,0 +1,50 @@
+package {{.ModuleName}}
+
+import (
+	"context"
+
+	"github.com/google/uuid"
+	"{{.ModulePath}}/internal/domain/{{.ModuleName}}"
+)
+
+// Usecase implements business logic for {{.EntityName}}.
+type Usecase struct {
+	repo {{.ModuleName}}.Repository
+}
+
+// NewUsecase creates a new {{.EntityName}} usecase.
+func NewUsecase(repo {{.ModuleName}}.Repository) *Usecase {
+	return &Usecase{repo: repo}
+}
+
+// Create creates a new {{.EntityName}}.
+func (u *Usecase) Create(ctx context.Context, entity *{{.ModuleName}}.{{.EntityName}}) error {
+	if err := entity.Validate(); err != nil {
+		return err
+	}
+	return u.repo.Create(ctx, entity)
+}
+
+// GetByID retrieves a {{.EntityName}} by ID.
+func (u *Usecase) GetByID(ctx context.Context, id uuid.UUID) (*{{.ModuleName}}.{{.EntityName}}, error) {
+	return u.repo.GetByID(ctx, id)
+}
+
+// Update updates an existing {{.EntityName}}.
+func (u *Usecase) Update(ctx context.Context, entity *{{.ModuleName}}.{{.EntityName}}) error {
+	if err := entity.Validate(); err != nil {
+		return err
+	}
+	entity.Update()
+	return u.repo.Update(ctx, entity)
+}
+
+// Delete removes a {{.EntityName}} by ID.
+func (u *Usecase) Delete(ctx context.Context, id uuid.UUID) error {
+	return u.repo.Delete(ctx, id)
+}
+
+// List retrieves {{.EntityName}}s with pagination.
+func (u *Usecase) List(ctx context.Context, limit, offset int) ([]*{{.ModuleName}}.{{.EntityName}}, error) {
+	return u.repo.List(ctx, limit, offset)
+}

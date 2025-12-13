@@ -1,0 +1,160 @@
+package {{.ModuleName}}
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"{{.ModulePath}}/internal/domain/{{.ModuleName}}"
+	usecase "{{.ModulePath}}/internal/usecase/{{.ModuleName}}"
+	"{{.ModulePath}}/internal/interface/http/response"
+)
+
+// Handler handles HTTP requests for {{.EntityName}}.
+type Handler struct {
+	usecase *usecase.Usecase
+}
+
+// NewHandler creates a new {{.EntityName}} HTTP handler.
+func NewHandler(uc *usecase.Usecase) *Handler {
+	return &Handler{usecase: uc}
+}
+
+// RegisterRoutes registers the {{.ModuleName}} routes.
+func (h *Handler) RegisterRoutes(r chi.Router) {
+	r.Route("/{{.ModuleName}}s", func(r chi.Router) {
+		r.Post("/", h.Create)
+		r.Get("/", h.List)
+		r.Get("/{id}", h.GetByID)
+		r.Put("/{id}", h.Update)
+		r.Delete("/{id}", h.Delete)
+	})
+}
+
+// Create handles POST /{{.ModuleName}}s
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+	var req CreateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "ERR_INVALID_JSON", "Invalid request body")
+		return
+	}
+
+	entity := {{.ModuleName}}.New{{.EntityName}}()
+	// TODO: Map request fields to entity
+
+	if err := h.usecase.Create(r.Context(), entity); err != nil {
+		// TODO: Map domain errors to HTTP status codes
+		response.Error(w, http.StatusInternalServerError, "ERR_CREATE_FAILED", err.Error())
+		return
+	}
+
+	response.JSON(w, http.StatusCreated, toResponse(entity))
+}
+
+// GetByID handles GET /{{.ModuleName}}s/{id}
+func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "ERR_INVALID_ID", "Invalid ID format")
+		return
+	}
+
+	entity, err := h.usecase.GetByID(r.Context(), id)
+	if err != nil {
+		if err == {{.ModuleName}}.ErrNotFound {
+			response.Error(w, http.StatusNotFound, "ERR_NOT_FOUND", "{{.EntityName}} not found")
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "ERR_GET_FAILED", err.Error())
+		return
+	}
+
+	response.JSON(w, http.StatusOK, toResponse(entity))
+}
+
+// List handles GET /{{.ModuleName}}s
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+	// TODO: Parse pagination params from query string
+	limit, offset := 20, 0
+
+	entities, err := h.usecase.List(r.Context(), limit, offset)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "ERR_LIST_FAILED", err.Error())
+		return
+	}
+
+	var items []Response
+	for _, e := range entities {
+		items = append(items, toResponse(e))
+	}
+
+	response.JSON(w, http.StatusOK, items)
+}
+
+// Update handles PUT /{{.ModuleName}}s/{id}
+func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "ERR_INVALID_ID", "Invalid ID format")
+		return
+	}
+
+	var req UpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "ERR_INVALID_JSON", "Invalid request body")
+		return
+	}
+
+	entity, err := h.usecase.GetByID(r.Context(), id)
+	if err != nil {
+		if err == {{.ModuleName}}.ErrNotFound {
+			response.Error(w, http.StatusNotFound, "ERR_NOT_FOUND", "{{.EntityName}} not found")
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "ERR_GET_FAILED", err.Error())
+		return
+	}
+
+	// TODO: Map request fields to entity
+
+	if err := h.usecase.Update(r.Context(), entity); err != nil {
+		response.Error(w, http.StatusInternalServerError, "ERR_UPDATE_FAILED", err.Error())
+		return
+	}
+
+	response.JSON(w, http.StatusOK, toResponse(entity))
+}
+
+// Delete handles DELETE /{{.ModuleName}}s/{id}
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "ERR_INVALID_ID", "Invalid ID format")
+		return
+	}
+
+	if err := h.usecase.Delete(r.Context(), id); err != nil {
+		if err == {{.ModuleName}}.ErrNotFound {
+			response.Error(w, http.StatusNotFound, "ERR_NOT_FOUND", "{{.EntityName}} not found")
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "ERR_DELETE_FAILED", err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// toResponse converts domain entity to response DTO.
+func toResponse(e *{{.ModuleName}}.{{.EntityName}}) Response {
+	return Response{
+		ID:        e.ID,
+		CreatedAt: e.CreatedAt,
+		UpdatedAt: e.UpdatedAt,
+		// TODO: Map additional fields
+	}
+}

@@ -1,0 +1,17 @@
+package {{.ModuleName}}
+
+import "errors"
+
+// Domain-specific errors for {{.EntityName}}.
+var (
+	// ErrNotFound is returned when the {{.EntityName}} is not found.
+	ErrNotFound = errors.New("{{.ModuleName}} not found")
+
+	// ErrInvalidID is returned when the ID is invalid.
+	ErrInvalidID = errors.New("invalid {{.ModuleName}} id")
+
+	// ErrValidation is returned when validation fails.
+	ErrValidation = errors.New("{{.ModuleName}} validation failed")
+
+	// TODO: Add your domain-specific errors here
+)

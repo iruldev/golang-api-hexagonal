@@ -1,0 +1,93 @@
+package {{.ModuleName}}
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+)
+
+func TestHandler_Create(t *testing.T) {
+	t.Skip("TODO: Implement handler tests after setting up mock usecase")
+
+	tests := []struct {
+		name       string
+		body       interface{}
+		wantStatus int
+	}{
+		{
+			name:       "success",
+			body:       CreateRequest{},
+			wantStatus: http.StatusCreated,
+		},
+		{
+			name:       "invalid json",
+			body:       "not json",
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			h := NewHandler(nil) // TODO: Use mock usecase
+			r := chi.NewRouter()
+			h.RegisterRoutes(r)
+
+			body, _ := json.Marshal(tt.body)
+			req := httptest.NewRequest(http.MethodPost, "/{{.ModuleName}}s", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+
+			// Act
+			r.ServeHTTP(rec, req)
+
+			// Assert
+			if rec.Code != tt.wantStatus {
+				t.Errorf("expected status %d, got %d", tt.wantStatus, rec.Code)
+			}
+		})
+	}
+}
+
+func TestHandler_GetByID(t *testing.T) {
+	t.Skip("TODO: Implement handler tests after setting up mock usecase")
+
+	tests := []struct {
+		name       string
+		id         string
+		wantStatus int
+	}{
+		{
+			name:       "valid id",
+			id:         uuid.New().String(),
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "invalid id format",
+			id:         "not-a-uuid",
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewHandler(nil)
+			r := chi.NewRouter()
+			h.RegisterRoutes(r)
+
+			req := httptest.NewRequest(http.MethodGet, "/{{.ModuleName}}s/"+tt.id, nil)
+			rec := httptest.NewRecorder()
+
+			r.ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Errorf("expected status %d, got %d", tt.wantStatus, rec.Code)
+			}
+		})
+	}
+}
