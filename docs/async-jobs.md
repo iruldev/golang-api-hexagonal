@@ -995,12 +995,52 @@ sum(rate(job_processed_total{status="failed"}[5m])) by (task_type)
 sum(rate(job_processed_total[5m])) by (task_type, queue)
 ```
 
-### Grafana Dashboard
+### Grafana Dashboards
 
-Pre-configured dashboard at `deploy/grafana/dashboards/service.json` includes:
-- Job Processing Rate panel
-- Job Duration panel
-- Failure rate tracking
+Two pre-configured dashboards are available:
+
+#### Service Dashboard (`deploy/grafana/dashboards/service.json`)
+
+General service health including:
+- HTTP Request Rate
+- HTTP Latency (p50, p95, p99)
+- HTTP Error Rate
+- Job Processing Rate (by status)
+- Job Duration
+
+#### Jobs Dashboard (`deploy/grafana/dashboards/jobs.json`)
+
+Dedicated async job monitoring with detailed panels:
+
+**Row 1: Overview Stats**
+| Panel | Metric | Thresholds |
+|-------|--------|------------|
+| Total Queued | `sum(asynq_queue_size)` | Green → Yellow (100) → Red (500) |
+| Processing/s | `sum(rate(job_processed_total[5m]))` | Green |
+| Failure Rate | `(failure / total) * 100` | Green → Yellow (1%) → Red (5%) |
+| DLQ Count | `sum(asynq_dead_count)` | Green → Yellow (1) → Red (10) |
+
+**Row 2: Queue Depth**
+- Queue Depth by Queue Name (critical, default, low)
+- Queue Depth by Task Type
+
+**Row 3: Processing**
+- Processing Rate by Task Type
+- Processing Rate by Status (success/failure)
+
+**Row 4: Latency**
+- Latency Percentiles (p50, p95, p99) with 5s SLO threshold
+- Latency by Task Type (p95)
+
+**Row 5: Failures**
+- Failure Rate with 5% threshold marker
+- Failed Jobs by Task Type
+
+> [!NOTE]
+> **Queue Depth Metrics Requirement:** The queue depth metrics (`asynq_queue_size`, `asynq_pending_count`, `asynq_dead_count`) require [asynq_exporter](https://github.com/hibiken/asynq_exporter) or custom queue metrics. The dashboard uses `or vector(0)` to gracefully show zeros when metrics are unavailable. To enable queue depth monitoring:
+> 1. Deploy `asynq_exporter` pointing to your Redis instance
+> 2. Add `asynq_exporter` as Prometheus scrape target
+> 3. Metrics will automatically populate in the dashboard
 
 ### Structured Logging
 

@@ -137,8 +137,8 @@ development_status:
   9-2-implement-scheduled-job-pattern-with-cron: done
   9-3-implement-fanout-job-pattern: done
   9-4-add-idempotency-key-pattern: done
-  9-5-create-dedicated-job-metrics-dashboard: backlog
-  9-6-document-copy-job-pattern-for-new-domain: backlog
+  9-5-create-dedicated-job-metrics-dashboard: done
+  9-6-document-copy-job-pattern-for-new-domain: ready-for-dev
   epic-9-retrospective: optional
 
   # Epic 10: Security & Guardrails (8 FRs)
