@@ -25,9 +25,18 @@ dev:
 build:
 	go build -o bin/server ./cmd/server
 
-# Testing
+# Testing (use env -u to unset all vars from .env that could interfere with tests)
 test:
-	go test -v -cover -race ./...
+	env -u APP_HTTP_PORT -u APP_NAME -u APP_ENV \
+	    -u DB_HOST -u DB_PORT -u DB_USER -u DB_NAME -u DB_PASSWORD -u DB_SSL_MODE \
+	    -u DB_MAX_OPEN_CONNS -u DB_MAX_IDLE_CONNS -u DB_CONN_MAX_LIFETIME -u DB_CONN_TIMEOUT -u DB_QUERY_TIMEOUT \
+	    -u REDIS_HOST -u REDIS_PORT -u REDIS_PASSWORD -u REDIS_DB -u REDIS_POOL_SIZE -u REDIS_MIN_IDLE_CONNS \
+	    -u REDIS_DIAL_TIMEOUT -u REDIS_READ_TIMEOUT -u REDIS_WRITE_TIMEOUT \
+	    -u OTEL_EXPORTER_OTLP_ENDPOINT -u OTEL_SERVICE_NAME \
+	    -u LOG_LEVEL -u LOG_FORMAT \
+	    -u ASYNQ_CONCURRENCY -u ASYNQ_RETRY_MAX -u ASYNQ_SHUTDOWN_TIMEOUT \
+	    -u APP_CONFIG_FILE \
+	go test -v -cover -race -p 1 ./...
 
 # Integration tests (requires Docker)
 test-integration:

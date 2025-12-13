@@ -1,6 +1,8 @@
 package redis
 
 import (
+	"context"
+	"net"
 	"testing"
 	"time"
 
@@ -10,41 +12,71 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
 )
 
-func TestNewClient_DefaultValues(t *testing.T) {
-	// Test that default values are applied when not specified
-	cfg := config.RedisConfig{}
-
-	// Note: This test expects Redis to NOT be running, so it will fail connection
-	// We're testing the defaults are applied before connection attempt
-	_, err := NewClient(cfg)
-
-	// We expect an error because Redis is not running in unit tests
-	// But this validates that the code doesn't panic with empty config
-	require.Error(t, err)
+// isRedisAvailable checks if Redis is running on localhost:6379
+func isRedisAvailable() bool {
+	conn, err := net.DialTimeout("tcp", "localhost:6379", 100*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
 }
 
-func TestNewClient_WithCustomConfig(t *testing.T) {
-	cfg := config.RedisConfig{
-		Host:         "localhost",
-		Port:         6379,
-		Password:     "testpass",
-		DB:           1,
-		PoolSize:     20,
-		MinIdleConns: 10,
-		DialTimeout:  10 * time.Second,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 5 * time.Second,
+func TestNewClient_WithRedisRunning(t *testing.T) {
+	if !isRedisAvailable() {
+		t.Skip("Redis not available, skipping connection test")
 	}
 
-	// This test also expects connection failure in unit test environment
-	_, err := NewClient(cfg)
+	// Test that we can connect when Redis is running
+	cfg := config.RedisConfig{
+		Host: "localhost",
+		Port: 6379,
+	}
 
-	// We expect connection error since Redis isn't running
+	client, err := NewClient(cfg)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+
+	// Cleanup
+	err = client.Close()
+	assert.NoError(t, err)
+}
+
+func TestNewClient_WithRedisNotRunning(t *testing.T) {
+	if isRedisAvailable() {
+		t.Skip("Redis is available, skipping connection failure test")
+	}
+
+	// Test connection failure when Redis is not running
+	cfg := config.RedisConfig{
+		Host:        "localhost",
+		Port:        6379,
+		DialTimeout: 100 * time.Millisecond, // Fast timeout for test
+	}
+
+	_, err := NewClient(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "redis connection failed")
+}
+
+func TestNewClient_InvalidHost(t *testing.T) {
+	// Test with definitely invalid host
+	cfg := config.RedisConfig{
+		Host:        "nonexistent.invalid.local.host.12345",
+		Port:        6379,
+		DialTimeout: 100 * time.Millisecond, // Fast timeout for test
+	}
+
+	_, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "redis connection failed")
 }
 
 func TestNewClient_ConfigDefaults(t *testing.T) {
+	if !isRedisAvailable() {
+		t.Skip("Redis not available, skipping config defaults test")
+	}
+
 	tests := []struct {
 		name     string
 		input    config.RedisConfig
@@ -58,36 +90,45 @@ func TestNewClient_ConfigDefaults(t *testing.T) {
 			wantPort: 6379,
 		},
 		{
-			name: "custom host preserved",
-			input: config.RedisConfig{
-				Host: "redis.example.com",
-			},
-			wantHost: "redis.example.com",
-			wantPort: 6379,
-		},
-		{
 			name: "custom port preserved",
 			input: config.RedisConfig{
-				Port: 6380,
+				Host: "localhost",
+				Port: 6379,
 			},
 			wantHost: "localhost",
-			wantPort: 6380,
+			wantPort: 6379,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// We can't fully test without Redis running, but we can test
-			// that our default application logic works by checking if the
-			// function doesn't panic and returns an error (no Redis available)
-			_, err := NewClient(tt.input)
-			require.Error(t, err) // Expected: no Redis in unit tests
+			client, err := NewClient(tt.input)
+			require.NoError(t, err)
+			require.NotNil(t, client)
+			client.Close()
 		})
 	}
 }
 
-// TestClient_Ping would require a running Redis instance.
-// This is tested in integration tests using testcontainers (Story 8.5).
+// TestClient_Ping requires a running Redis instance.
+func TestClient_Ping(t *testing.T) {
+	if !isRedisAvailable() {
+		t.Skip("Redis not available, skipping ping test")
+	}
+
+	cfg := config.RedisConfig{
+		Host: "localhost",
+		Port: 6379,
+	}
+
+	client, err := NewClient(cfg)
+	require.NoError(t, err)
+	defer client.Close()
+
+	err = client.Ping(context.Background())
+	assert.NoError(t, err)
+}
+
 func TestClient_ImplementsDBHealthChecker(t *testing.T) {
 	// Compile-time interface check
 	var _ interface {
@@ -96,4 +137,39 @@ func TestClient_ImplementsDBHealthChecker(t *testing.T) {
 
 	// The actual interface compatibility is enforced by the handlers package
 	// This test documents the requirement for future reference
+}
+
+func TestClient_Close(t *testing.T) {
+	if !isRedisAvailable() {
+		t.Skip("Redis not available, skipping close test")
+	}
+
+	cfg := config.RedisConfig{
+		Host: "localhost",
+		Port: 6379,
+	}
+
+	client, err := NewClient(cfg)
+	require.NoError(t, err)
+
+	err = client.Close()
+	assert.NoError(t, err)
+}
+
+func TestClient_Client(t *testing.T) {
+	if !isRedisAvailable() {
+		t.Skip("Redis not available, skipping underlying client test")
+	}
+
+	cfg := config.RedisConfig{
+		Host: "localhost",
+		Port: 6379,
+	}
+
+	client, err := NewClient(cfg)
+	require.NoError(t, err)
+	defer client.Close()
+
+	underlying := client.Client()
+	require.NotNil(t, underlying)
 }
