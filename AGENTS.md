@@ -604,6 +604,75 @@ Content-Type: application/json
 | Thread-safety | Uses sync.Map and mutexes |
 | X-Forwarded-For | Documented spoofing risk when behind proxy |
 
+#### Redis-Backed Rate Limiter (Distributed)
+
+For multi-instance deployments, use the Redis rate limiter. See `internal/infra/redis/ratelimiter.go`.
+
+##### Setup
+
+```go
+import (
+    infraredis "github.com/iruldev/golang-api-hexagonal/internal/infra/redis"
+    "github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
+    "github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
+)
+
+// Create Redis rate limiter (shared across instances)
+redisLimiter := infraredis.NewRedisRateLimiter(
+    redisClient.Client(),
+    infraredis.WithRedisDefaultRate(runtimeutil.NewRate(100, time.Minute)),
+    infraredis.WithKeyPrefix("api:ratelimit:"),
+)
+
+// Use with middleware
+r.Use(middleware.RateLimitMiddleware(redisLimiter))
+```
+
+##### Configuration Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `WithRedisDefaultRate(rate)` | 100 req/min | Default rate for new keys |
+| `WithKeyPrefix(string)` | `rl:` | Redis key prefix |
+| `WithRedisTimeout(duration)` | 100ms | Redis operation timeout |
+| `WithFallbackLimiter(limiter)` | nil | Fallback when Redis fails |
+| `WithCircuitBreakerConfig(threshold, recovery)` | 5 failures, 30s | Circuit breaker configuration |
+
+##### Fallback Configuration
+
+```go
+// Create in-memory fallback
+fallback := middleware.NewInMemoryRateLimiter(
+    middleware.WithDefaultRate(runtimeutil.NewRate(50, time.Minute)),
+)
+defer fallback.Stop()
+
+// Redis limiter with fallback
+redisLimiter := infraredis.NewRedisRateLimiter(
+    redisClient.Client(),
+    infraredis.WithRedisDefaultRate(runtimeutil.NewRate(100, time.Minute)),
+    infraredis.WithFallbackLimiter(fallback),
+    infraredis.WithCircuitBreakerConfig(5, 30*time.Second),
+)
+```
+
+##### Circuit Breaker Behavior
+
+| State | Condition | Behavior |
+|-------|-----------|----------|
+| Closed | < threshold failures | Uses Redis |
+| Open | ≥ threshold failures | Uses fallback, logs warning |
+| Half-Open | After recovery time | Attempts Redis, resets on success |
+
+##### Deployment Considerations
+
+| Consideration | Recommendation |
+|---------------|----------------|
+| Redis availability | Use Redis Cluster/Sentinel for HA |
+| Network latency | Set appropriate timeout (100ms default) |
+| Memory | Keys have TTL, but monitor at high traffic |
+| Fail-open | Requests allowed if Redis fails (controlled degradation) |
+
 > **For comprehensive async job documentation, see [`docs/async-jobs.md`](docs/async-jobs.md)**
 
 #### Step 1: Choose Your Pattern
