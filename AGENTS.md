@@ -235,6 +235,62 @@ Response (JSON envelope with error code)
 
 The auth middleware interface enables pluggable authentication providers. See `internal/interface/http/middleware/auth.go`.
 
+> **📚 For comprehensive architecture documentation including SSO/IDP integration patterns, OAuth2/OIDC examples, and security best practices, see [`docs/architecture.md#Security-Architecture`](docs/architecture.md#security-architecture).**
+
+#### Quick Guide: Implementing Custom Auth Provider
+
+To integrate with external identity providers (Auth0, Okta, Azure AD, etc.), implement the `Authenticator` interface:
+
+> [!TIP]
+> For OIDC/JWKS validation, use `github.com/lestrrat-go/jwx/v2/jwk` and `github.com/lestrrat-go/jwx/v2/jwt` packages.
+
+```go
+// 1. Define your authenticator struct
+type MyOIDCAuthenticator struct {
+    keySet   jwk.Set // JWKS for token validation (from github.com/lestrrat-go/jwx/v2/jwk)
+    issuer   string
+    audience string
+}
+
+// 2. Implement the Authenticate method
+func (a *MyOIDCAuthenticator) Authenticate(r *http.Request) (middleware.Claims, error) {
+    // Extract bearer token
+    authHeader := r.Header.Get("Authorization")
+    if !strings.HasPrefix(authHeader, "Bearer ") {
+        return middleware.Claims{}, middleware.ErrUnauthenticated
+    }
+    token := strings.TrimPrefix(authHeader, "Bearer ")
+    
+    // Validate with your IDP's JWKS
+    parsed, err := jwt.Parse(token, jwt.WithKeySet(a.keySet))
+    if err != nil {
+        return middleware.Claims{}, middleware.ErrTokenInvalid
+    }
+    
+    // Map claims to internal struct
+    return middleware.Claims{
+        UserID:      parsed.Subject(),
+        Roles:       extractRoles(parsed),
+        Permissions: extractPermissions(parsed),
+    }, nil
+}
+
+// 3. Use with AuthMiddleware
+r.Use(middleware.AuthMiddleware(myOIDCAuth))
+```
+
+#### Common Mistakes to Avoid
+
+| Mistake | Problem | Solution |
+|---------|---------|----------|
+| Hardcoding secrets | Security vulnerability | Use env vars or secret provider |
+| Short JWT secret | Weak cryptography | Use ≥32 bytes for HMAC-SHA256 |
+| Missing issuer/audience validation | Token from wrong source accepted | Always validate `iss` and `aud` |
+| Logging tokens/keys | Credential leakage | Never log auth credentials |
+| Using 401 for authorization failures | Incorrect HTTP semantics | Use 401 for authn, 403 for authz |
+| Rate limiting after auth | DoS on expensive validation | Rate limit before authentication |
+| Not handling token expiry | Stale sessions | Return `ErrTokenExpired` appropriately |
+
 #### Core Components
 
 | Component | Location | Purpose |

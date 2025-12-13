@@ -142,7 +142,7 @@ development_status:
   epic-9-retrospective: completed
 
   # Epic 10: Security & Guardrails (8 FRs)
-  epic-10: in-progress
+  epic-10: done
   10-1-define-auth-middleware-interface: done
   10-2-implement-jwt-auth-middleware: done
   10-3-implement-api-key-auth-middleware: done
@@ -150,7 +150,7 @@ development_status:
   10-5-implement-rate-limiter-with-in-memory-store: done
   10-6-add-redis-backed-rate-limiter-option: done
   10-7-create-feature-flag-interface-and-env-provider: done
-  10-8-document-auth-rbac-integration-guide: backlog
+  10-8-document-auth-rbac-integration-guide: done
   epic-10-retrospective: optional
 
   # Epic 11: DX & Operability (6 FRs)

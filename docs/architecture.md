@@ -87,7 +87,10 @@ infra (DB, external)
 | Tracing | OpenTelemetry | Industry standard |
 | Metrics | Prometheus | Cloud-native |
 
-**Out of Scope v1:** gRPC, GraphQL, multi-DB, full auth/RBAC, feature flags
+**Out of Scope v1:** gRPC, GraphQL, multi-DB
+
+> [!NOTE]
+> **Security Headers:** For production deployments, consider adding security headers middleware (HSTS, X-Content-Type-Options, X-Frame-Options, CSP). These are typically configured at the reverse proxy layer (nginx, Traefik) but can be added as Go middleware if needed.
 
 ---
 
@@ -157,7 +160,7 @@ infra (DB, external)
 ### Security Baseline
 
 #### Middleware Order (outer → inner)
-1. Recovery → 2. Request ID → 3. OTEL → 4. Logging → 5. Auth hook → 6. Handler
+1. Recovery → 2. Request ID → 3. OTEL → 4. Logging → 5. Rate Limiting → 6. Authentication → 7. Authorization → 8. Handler
 
 #### Validation
 - **HTTP:** go-playground/validator
@@ -166,6 +169,321 @@ infra (DB, external)
 #### Error Sanitization
 - Response: Generic messages
 - Logs: Full details, no secrets
+
+---
+
+## Security Architecture
+
+### Authentication vs Authorization
+
+| Concept | Responsibility | Implementation | Response on Failure |
+|---------|----------------|----------------|---------------------|
+| Authentication | Verify identity ("Who are you?") | `Authenticator` interface | 401 Unauthorized |
+| Authorization | Check permissions ("Can you do this?") | `RequireRole`, `RequirePermission` | 403 Forbidden |
+
+**Separation Principle:** Authentication validates tokens/credentials and extracts claims. Authorization uses those claims to check access. Always authenticate before authorizing.
+
+---
+
+### Middleware Chain (Security Order)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            HTTP Request                                  │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 1. Recovery (outermost) - Catch panics, return 500                      │
+├─────────────────────────────────────────────────────────────────────────┤
+│ 2. Request ID - Generate/propagate X-Request-ID                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│ 3. OTEL Tracing - Create span, inject trace_id                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│ 4. Logging - Log request/response with structured fields                │
+├─────────────────────────────────────────────────────────────────────────┤
+│ 5. Rate Limiting - Throttle requests before auth                        │
+├─────────────────────────────────────────────────────────────────────────┤
+│ 6. Authentication - Validate token/key, extract Claims                  │
+│    └── Stores Claims in context: middleware.NewContext(ctx, claims)     │
+├─────────────────────────────────────────────────────────────────────────┤
+│ 7. Authorization - Check role/permission from Claims                    │
+│    └── Reads Claims from context: middleware.FromContext(ctx)           │
+├─────────────────────────────────────────────────────────────────────────┤
+│ 8. Handler (innermost) - Business logic                                 │
+│    └── Access Claims via: middleware.FromContext(r.Context())           │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Points:**
+- Rate limiting before auth prevents DoS on expensive token validation
+- Auth middleware stores claims in context for downstream use
+- Authorization middleware and handlers read claims from same context
+
+---
+
+### Claims Propagation
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant AuthMiddleware
+    participant RBACMiddleware
+    participant Handler
+    
+    Client->>AuthMiddleware: Request + Token/Key
+    AuthMiddleware->>AuthMiddleware: Validate credentials
+    AuthMiddleware->>AuthMiddleware: Extract Claims{UserID, Roles, Permissions}
+    AuthMiddleware->>RBACMiddleware: ctx.WithValue(claims)
+    RBACMiddleware->>RBACMiddleware: claims.HasRole("admin")?
+    alt Has required role
+        RBACMiddleware->>Handler: ctx + Claims (authorized)
+        Handler->>Handler: claims, _ := FromContext(ctx)
+        Handler->>Client: 200 OK + Response
+    else Missing role
+        RBACMiddleware->>Client: 403 Forbidden
+    end
+```
+
+**Claims Struct:**
+
+```go
+type Claims struct {
+    UserID      string            `json:"user_id"`      // From "sub" claim
+    Roles       []string          `json:"roles"`        // ["admin", "user"]
+    Permissions []string          `json:"permissions"`  // ["note:create", "note:read"]
+    Metadata    map[string]string `json:"metadata"`     // Optional extra data
+}
+```
+
+**Helper Methods:**
+
+```go
+claims.HasRole("admin")           // Check if user has role
+claims.HasPermission("note:read") // Check if user has permission
+```
+
+---
+
+### Identity Provider Integration
+
+The auth system provides extensibility via interfaces for connecting to external identity providers (SSO/IDP).
+
+| Interface | Purpose | Location |
+|-----------|---------|----------|
+| `Authenticator` | Token/credential validation | `middleware/auth.go` |
+| `KeyValidator` | API key backend lookup | `middleware/apikey.go` |
+
+#### Built-in Authenticators
+
+| Authenticator | Use Case | Header |
+|---------------|----------|--------|
+| `JWTAuthenticator` | User authentication (JWT tokens) | `Authorization: Bearer <token>` |
+| `APIKeyAuthenticator` | Service-to-service auth | `X-API-Key: <key>` |
+
+#### Implementing Custom Authenticator
+
+For external SSO/IDP integration (OAuth2, OIDC, SAML), implement the `Authenticator` interface:
+
+```go
+// OIDCAuthenticator validates tokens against OIDC provider
+type OIDCAuthenticator struct {
+    issuer    string
+    audience  string
+    keySet    jwk.Set  // From lestrrat-go/jwx or similar
+}
+
+func (a *OIDCAuthenticator) Authenticate(r *http.Request) (middleware.Claims, error) {
+    token := extractBearerToken(r)
+    if token == "" {
+        return middleware.Claims{}, middleware.ErrUnauthenticated
+    }
+    
+    // Parse and validate JWT against JWKS
+    parsed, err := jwt.Parse(token, jwt.WithKeySet(a.keySet))
+    if err != nil {
+        return middleware.Claims{}, middleware.ErrTokenInvalid
+    }
+    
+    // Validate standard claims
+    if parsed.Issuer() != a.issuer {
+        return middleware.Claims{}, middleware.ErrTokenInvalid
+    }
+    
+    // Map claims from OIDC token to internal struct
+    return middleware.Claims{
+        UserID:      parsed.Subject(),
+        Roles:       extractRolesFromToken(parsed),
+        Permissions: extractPermissionsFromToken(parsed),
+    }, nil
+}
+```
+
+#### Custom KeyValidator for API Keys
+
+For database or external API key validation:
+
+```go
+type DBKeyValidator struct {
+    db *sql.DB
+}
+
+func (v *DBKeyValidator) Validate(ctx context.Context, key string) (*middleware.KeyInfo, error) {
+    // SECURITY: Never log the key value
+    var info middleware.KeyInfo
+    err := v.db.QueryRowContext(ctx, 
+        "SELECT service_id, roles FROM api_keys WHERE key_hash = $1 AND revoked = false",
+        hashKey(key), // Always hash API keys before lookup
+    ).Scan(&info.ServiceID, pq.Array(&info.Roles))
+    if err == sql.ErrNoRows {
+        return nil, middleware.ErrTokenInvalid
+    }
+    return &info, err
+}
+```
+
+---
+
+### OAuth2/OIDC Integration Pattern
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Backend
+    participant IDP as Identity Provider (Auth0, Okta, Azure AD)
+    
+    User->>Frontend: Login click
+    Frontend->>IDP: Authorization request (redirect)
+    IDP->>User: Login page
+    User->>IDP: Credentials
+    IDP->>Frontend: Authorization code (redirect)
+    Frontend->>IDP: Exchange code for tokens
+    IDP->>Frontend: Access token + ID token + Refresh token
+    Frontend->>Backend: API request + Access token
+    Backend->>Backend: Validate JWT signature (JWKS)
+    Backend->>Backend: Validate claims (iss, aud, exp)
+    Backend->>Frontend: Protected resource
+```
+
+#### JWKS Integration
+
+For production OIDC validation, use JWKS (JSON Web Key Set) to validate token signatures:
+
+```go
+import "github.com/lestrrat-go/jwx/v2/jwk"
+
+// Initialize JWKS with auto-refresh
+ctx := context.Background()
+cache := jwk.NewCache(ctx)
+
+// Register JWKS endpoint with auto-refresh
+err := cache.Register(
+    "https://idp.example.com/.well-known/jwks.json",
+    jwk.WithMinRefreshInterval(15*time.Minute),
+)
+
+// Use in validation
+keySet, err := cache.Get(ctx, "https://idp.example.com/.well-known/jwks.json")
+```
+
+#### Configuration for Common Providers
+
+| Provider | JWKS URL Pattern |
+|----------|------------------|
+| Auth0 | `https://{tenant}.auth0.com/.well-known/jwks.json` |
+| Okta | `https://{org}.okta.com/oauth2/default/v1/keys` |
+| Azure AD | `https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys` |
+| Google | `https://www.googleapis.com/oauth2/v3/certs` |
+| Keycloak | `https://{host}/realms/{realm}/protocol/openid-connect/certs` |
+
+#### Claim Mapping
+
+Standard OIDC claims to internal Claims struct:
+
+| OIDC Claim | Internal Field | Notes |
+|------------|----------------|-------|
+| `sub` | `UserID` | Unique user identifier |
+| `roles` / `groups` | `Roles` | Provider-specific claim name |
+| `permissions` / `scope` | `Permissions` | May need parsing (space-separated) |
+| `email` | `Metadata["email"]` | Optional |
+
+---
+
+### Authorization Patterns (RBAC)
+
+#### Role Hierarchy
+
+| Role | Hierarchy | Typical Use |
+|------|-----------|-------------|
+| `admin` | Highest | Full system access |
+| `service` | Middle | Machine-to-machine API calls |
+| `user` | Base | Standard user access |
+
+#### RBAC Middleware
+
+| Middleware | Logic | Use Case |
+|------------|-------|----------|
+| `RequireRole(roles...)` | OR | User has ANY of the roles |
+| `RequirePermission(perms...)` | AND | User has ALL permissions |
+| `RequireAnyPermission(perms...)` | OR | User has ANY permission |
+
+#### Usage Examples
+
+```go
+// Route-level protection with roles
+r.Group(func(r chi.Router) {
+    r.Use(middleware.AuthMiddleware(jwtAuth))
+    r.Use(middleware.RequireRole("admin", "service")) // Either role
+    r.Delete("/api/v1/users/{id}", deleteUserHandler)
+})
+
+// Permission-based access
+r.Group(func(r chi.Router) {
+    r.Use(middleware.AuthMiddleware(jwtAuth))
+    r.Use(middleware.RequirePermission("note:create", "note:read")) // Both required
+    r.Post("/api/v1/notes", createNoteHandler)
+})
+
+// Combining auth providers (e.g., JWT OR API Key)
+// Use separate route groups or implement a CompositeAuthenticator
+publicAPI := r.Group(func(r chi.Router) {
+    r.Use(middleware.AuthMiddleware(jwtAuth))
+    // User-facing routes
+})
+
+internalAPI := r.Group(func(r chi.Router) {
+    r.Use(middleware.AuthMiddleware(apiKeyAuth))
+    r.Use(middleware.RequireRole("service"))
+    // Service-to-service routes
+})
+```
+
+---
+
+### Security Best Practices
+
+| Practice | Implementation | Rationale |
+|----------|----------------|-----------|
+| **Fail-closed** | Missing token → 401 Unauthorized | Never default to "allow" |
+| **Secret rotation** | Use JWKS with auto-refresh | Keys can be rotated without deploy |
+| **Audit logging** | Log auth decisions at INFO level | Compliance and debugging |
+| **Rate limit auth** | Apply rate limiting before authentication | Prevents DoS on token validation |
+| **Token validation** | Always validate `iss`, `aud`, `exp`, `nbf` | Prevents token reuse attacks |
+| **Error sanitization** | Don't expose parsing errors to clients | Prevents information leakage |
+| **Minimum key length** | JWT secret ≥ 32 bytes | HMAC-SHA256 security |
+| **Constant-time comparison** | Use `subtle.ConstantTimeCompare` for secrets | Prevents timing attacks |
+
+#### Sentinel Errors
+
+| Error | HTTP Status | Meaning |
+|-------|-------------|---------|
+| `ErrUnauthenticated` | 401 | No credentials provided |
+| `ErrTokenInvalid` | 401 | Invalid token format/signature |
+| `ErrTokenExpired` | 401 | Token has expired |
+| `ErrForbidden` | 403 | Authenticated but not authorized |
+| `ErrInsufficientRole` | 403 | Missing required role |
+| `ErrInsufficientPermission` | 403 | Missing required permission |
 
 ---
 
