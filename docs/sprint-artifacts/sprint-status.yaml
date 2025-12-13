@@ -151,7 +151,7 @@ development_status:
   10-6-add-redis-backed-rate-limiter-option: done
   10-7-create-feature-flag-interface-and-env-provider: done
   10-8-document-auth-rbac-integration-guide: done
-  epic-10-retrospective: optional
+  epic-10-retrospective: completed
 
   # Epic 11: DX & Operability (6 FRs)
   epic-11: backlog
