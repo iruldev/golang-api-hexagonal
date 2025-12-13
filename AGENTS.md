@@ -231,6 +231,78 @@ Handler (maps to HTTP status)
 Response (JSON envelope with error code)
 ```
 
+### Adding Auth Middleware
+
+The auth middleware interface enables pluggable authentication providers. See `internal/interface/http/middleware/auth.go`.
+
+#### Core Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `Authenticator` interface | `middleware/auth.go` | Port for auth providers |
+| `Claims` struct | `middleware/auth.go` | Authenticated user info |
+| `AuthMiddleware` | `middleware/auth.go` | HTTP middleware wrapper |
+| Sentinel errors | `middleware/auth.go` | Error type checking |
+
+#### Implementing an Authenticator
+
+```go
+// JWT Authenticator example
+type JWTAuthenticator struct {
+    secretKey []byte
+}
+
+func (a *JWTAuthenticator) Authenticate(r *http.Request) (middleware.Claims, error) {
+    token := r.Header.Get("Authorization")
+    if token == "" {
+        return middleware.Claims{}, middleware.ErrUnauthenticated
+    }
+    // Validate and parse token...
+    return middleware.Claims{
+        UserID: "user-123",
+        Roles:  []string{"admin"},
+    }, nil
+}
+```
+
+#### Using Auth Middleware in Routes
+
+```go
+// Protected routes
+r.Group(func(r chi.Router) {
+    r.Use(middleware.AuthMiddleware(jwtAuth))
+    r.Get("/api/v1/notes", noteHandler.List)
+})
+```
+
+#### Extracting Claims in Handlers
+
+```go
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+    claims, err := middleware.FromContext(r.Context())
+    if err != nil {
+        // Handle error (shouldn't occur if middleware applied)
+    }
+    
+    if claims.HasRole("admin") {
+        // Admin-specific logic
+    }
+    
+    if claims.HasPermission("notes:delete") {
+        // Permission-specific logic
+    }
+}
+```
+
+#### Auth Error Types
+
+| Error | When Returned | HTTP Status |
+|-------|---------------|-------------|
+| `ErrUnauthenticated` | No/invalid credentials | 401 |
+| `ErrTokenExpired` | Token has expired | 401 |
+| `ErrTokenInvalid` | Malformed/bad signature | 401 |
+| `ErrNoClaimsInContext` | Claims missing from ctx | 500 |
+
 ### Adding a New Async Job
 
 > **For comprehensive async job documentation, see [`docs/async-jobs.md`](docs/async-jobs.md)**
