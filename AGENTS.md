@@ -483,7 +483,126 @@ r.Route("/api/v1", func(r chi.Router) {
 | `ErrInsufficientRole` | Missing required role | 403 |
 | `ErrInsufficientPermission` | Missing required permission | 403 |
 
-### Adding a New Async Job
+### Rate Limiting Middleware
+
+The rate limiting middleware protects endpoints from abuse using a token bucket algorithm. See `internal/interface/http/middleware/ratelimit.go`.
+
+#### Core Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `TokenBucket` | `middleware/ratelimit.go` | Token bucket algorithm implementation |
+| `InMemoryRateLimiter` | `middleware/ratelimit.go` | Thread-safe in-memory limiter |
+| `RateLimitMiddleware` | `middleware/ratelimit.go` | HTTP middleware wrapper |
+| `IPKeyExtractor` | `middleware/ratelimit.go` | Extract client IP for rate limiting |
+| `UserIDKeyExtractor` | `middleware/ratelimit.go` | Extract user ID from auth claims |
+
+#### Basic Usage
+
+```go
+import "github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
+import "github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
+
+// Create rate limiter: 100 requests per minute
+limiter := middleware.NewInMemoryRateLimiter(
+    middleware.WithDefaultRate(runtimeutil.NewRate(100, time.Minute)),
+)
+defer limiter.Stop()
+
+// Apply to routes
+r.Use(middleware.RateLimitMiddleware(limiter))
+```
+
+#### Configuration Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `WithDefaultRate(rate)` | 100 req/min | Default rate for new keys |
+| `WithCleanupInterval(d)` | 5 min | Interval for cleaning expired buckets |
+| `WithBucketTTL(d)` | 10 min | How long to keep inactive buckets |
+| `WithKeyExtractor(fn)` | IP address | Function to extract key from request |
+| `WithRetryAfterSeconds(n)` | dynamic | Seconds to return in Retry-After header |
+
+#### Per-Endpoint Rate Limits
+
+```go
+// Strict rate limit for sensitive endpoints
+strictLimiter := middleware.NewInMemoryRateLimiter(
+    middleware.WithDefaultRate(runtimeutil.NewRate(10, time.Minute)),
+)
+
+// Normal rate limit for public endpoints  
+normalLimiter := middleware.NewInMemoryRateLimiter(
+    middleware.WithDefaultRate(runtimeutil.NewRate(100, time.Minute)),
+)
+
+r.Group(func(r chi.Router) {
+    r.Use(middleware.RateLimitMiddleware(strictLimiter))
+    r.Post("/auth/login", loginHandler)
+})
+
+r.Group(func(r chi.Router) {
+    r.Use(middleware.RateLimitMiddleware(normalLimiter))
+    r.Get("/notes", notesHandler)
+})
+```
+
+#### User-Based Rate Limiting
+
+```go
+// Rate limit by authenticated user ID instead of IP
+r.Group(func(r chi.Router) {
+    r.Use(middleware.AuthMiddleware(jwtAuth))
+    r.Use(middleware.RateLimitMiddleware(limiter,
+        middleware.WithKeyExtractor(middleware.UserIDKeyExtractor),
+    ))
+    r.Get("/api/v1/me", userHandler)
+})
+```
+
+#### Custom Key Extractor
+
+```go
+// Rate limit by API key header
+apiKeyExtractor := func(r *http.Request) string {
+    apiKey := r.Header.Get("X-API-Key")
+    if apiKey == "" {
+        return middleware.IPKeyExtractor(r) // Fallback
+    }
+    return "apikey:" + apiKey
+}
+
+r.Use(middleware.RateLimitMiddleware(limiter,
+    middleware.WithKeyExtractor(apiKeyExtractor),
+))
+```
+
+#### Response Format
+
+When rate limit is exceeded:
+
+```json
+HTTP/1.1 429 Too Many Requests
+Retry-After: 60
+Content-Type: application/json
+
+{
+  "success": false,
+  "error": {
+    "code": "ERR_RATE_LIMITED",
+    "message": "Rate limit exceeded"
+  }
+}
+```
+
+#### Security Considerations
+
+| Consideration | Implementation |
+|---------------|----------------|
+| Fail-open | On limiter error, requests are allowed through |
+| Memory limits | Automatic cleanup of expired buckets |
+| Thread-safety | Uses sync.Map and mutexes |
+| X-Forwarded-For | Documented spoofing risk when behind proxy |
 
 > **For comprehensive async job documentation, see [`docs/async-jobs.md`](docs/async-jobs.md)**
 
