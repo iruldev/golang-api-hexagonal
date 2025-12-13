@@ -265,6 +265,38 @@ func (a *JWTAuthenticator) Authenticate(r *http.Request) (middleware.Claims, err
 }
 ```
 
+#### Using JWTAuthenticator (Built-in)
+
+The framework includes a ready-to-use JWT authenticator. See `internal/interface/http/middleware/jwt.go`.
+
+```go
+import "github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
+
+// Create authenticator (secret must be ≥32 bytes)
+jwtAuth, err := middleware.NewJWTAuthenticator(
+    []byte(os.Getenv("JWT_SECRET")),
+    middleware.WithIssuer("my-app"),     // Optional: validates "iss" claim
+    middleware.WithAudience("my-api"),   // Optional: validates "aud" claim
+)
+if err != nil {
+    log.Fatal("JWT config error:", err)  // ErrSecretKeyTooShort if <32 bytes
+}
+
+// Use with AuthMiddleware
+r.Group(func(r chi.Router) {
+    r.Use(middleware.AuthMiddleware(jwtAuth))
+    r.Get("/api/v1/protected", protectedHandler)
+})
+```
+
+#### JWT Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `JWT_SECRET` | HMAC-SHA256 secret (≥32 bytes) | `your-secret-key-at-least-32-bytes!!` |
+| `JWT_ISSUER` | (Optional) Expected token issuer | `my-app` |
+| `JWT_AUDIENCE` | (Optional) Expected token audience | `my-api` |
+
 #### Using Auth Middleware in Routes
 
 ```go

@@ -144,7 +144,7 @@ development_status:
   # Epic 10: Security & Guardrails (8 FRs)
   epic-10: in-progress
   10-1-define-auth-middleware-interface: done
-  10-2-implement-jwt-auth-middleware: backlog
+  10-2-implement-jwt-auth-middleware: done
   10-3-implement-api-key-auth-middleware: backlog
   10-4-create-rbac-permission-model: backlog
   10-5-implement-rate-limiter-with-in-memory-store: backlog
