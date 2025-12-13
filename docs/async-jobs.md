@@ -360,6 +360,208 @@ make scheduler
 
 ---
 
+## Fanout Pattern
+
+The Fanout pattern is for event-driven workflows where a single event triggers multiple independent handlers:
+- Each handler processes the event **independently**
+- Failures in one handler **don't affect others**
+- Each handler can have **different queue priorities**
+
+### When to Use Fanout
+
+| Scenario | Use Fanout? | Reasoning |
+|----------|-------------|-----------|
+| User signup → email, settings, notify | ✅ Yes | Multiple independent actions |
+| Order completed → receipt, inventory, shipping | ✅ Yes | Event-driven orchestration |
+| Note archived → search index, notify, backup | ✅ Yes | Parallel processing |
+| Single background task | ❌ No | Use Fire-and-Forget |
+| Periodic cleanup | ❌ No | Use Scheduled Job |
+| Sequential workflow | ❌ No | Use saga pattern |
+
+### Fanout Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           ENQUEUE SIDE (API)                                │
+│                                                                             │
+│   FanoutRegistry ──────► Fanout() ──────► Redis Queue                       │
+│   (stores handlers)      (enqueues fanout:event:handlerID tasks)            │
+└──────────────────────────────────────────────────────|──────────────────────┘
+                                                       │
+                                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           PROCESS SIDE (Worker)                             │
+│                                                                             │
+│   Worker Server ◄─────── Redis Queue                                        │
+│        │                                                                    │
+│        ▼                                                                    │
+│   FanoutDispatcher ──────► Handler Function                                 │
+│   (routes by handlerID)   (processes event)                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Usage
+
+```go
+import (
+    "github.com/iruldev/golang-api-hexagonal/internal/worker/patterns"
+    "github.com/iruldev/golang-api-hexagonal/internal/worker"
+)
+
+// 1. Create registry and register handlers
+registry := patterns.NewFanoutRegistry()
+
+registry.Register("user:created", "welcome-email", func(ctx context.Context, event patterns.FanoutEvent) error {
+    // Send welcome email
+    return nil
+})
+
+registry.Register("user:created", "default-settings", func(ctx context.Context, event patterns.FanoutEvent) error {
+    // Create default user settings
+    return nil
+})
+
+// Use different queue for critical handlers
+registry.RegisterWithQueue("user:created", "notify-admin", 
+    func(ctx context.Context, event patterns.FanoutEvent) error {
+        return nil
+    },
+    worker.QueueCritical,
+)
+
+// 2. Publish fanout event
+event := patterns.FanoutEvent{
+    Type:    "user:created",
+    Payload: json.RawMessage(`{"user_id": "123", "email": "user@example.com"}`),
+    Metadata: map[string]string{"trace_id": "abc-123"},
+}
+
+errors := patterns.Fanout(ctx, client, registry, logger, event)
+if len(errors) > 0 {
+    // Handle partial failures (some handlers may have failed to enqueue)
+}
+```
+
+### Worker Registration
+
+The fanout pattern requires both **enqueue-side** (API) and **process-side** (Worker) registration.
+
+#### Complete Worker Setup
+
+Add the following to `cmd/worker/main.go`:
+
+```go
+import (
+    "github.com/iruldev/golang-api-hexagonal/internal/worker/patterns"
+)
+
+func main() {
+    // ... existing config and logger setup ...
+
+    // Create worker server
+    srv := worker.NewServer(redisOpt, cfg.Asynq)
+
+    // === FANOUT PATTERN SETUP ===
+    
+    // 1. Create shared registry (define once, use everywhere)
+    fanoutRegistry := patterns.NewFanoutRegistry()
+    
+    // 2. Register handlers for each event type
+    _ = fanoutRegistry.Register("user:created", "welcome-email", func(ctx context.Context, event patterns.FanoutEvent) error {
+        // Handler logic: send welcome email
+        return nil
+    })
+    
+    _ = fanoutRegistry.Register("user:created", "default-settings", func(ctx context.Context, event patterns.FanoutEvent) error {
+        // Handler logic: create default user settings
+        return nil
+    })
+    
+    // 3. Create dispatcher
+    fanoutDispatcher := patterns.NewFanoutDispatcher(fanoutRegistry, logger)
+    
+    // 4. Register each fanout task type with the worker
+    // Since asynq doesn't support wildcards, register each event:handler combination
+    for _, eventType := range []string{"user:created", "order:completed", "note:archived"} {
+        for _, h := range fanoutRegistry.Handlers(eventType) {
+            taskType := fmt.Sprintf("fanout:%s:%s", eventType, h.ID)
+            srv.HandleFunc(taskType, fanoutDispatcher.Handle)
+        }
+    }
+
+    // === OTHER HANDLERS ===
+    // ... register other task handlers ...
+    
+    // Start server
+    if err := srv.Start(); err != nil {
+        logger.Fatal("Worker error", zap.Error(err))
+    }
+}
+```
+
+#### Shared Registry Pattern
+
+For production use, create a shared registry in a separate file:
+
+```go
+// internal/worker/patterns/registry.go
+package patterns
+
+import (
+    "context"
+)
+
+// DefaultRegistry is a shared fanout registry for the application.
+var DefaultRegistry = NewFanoutRegistry()
+
+// RegisterDefaultHandlers registers all fanout handlers.
+// Call this from both API and Worker initialization.
+func RegisterDefaultHandlers() {
+    _ = DefaultRegistry.Register("user:created", "welcome-email", handleWelcomeEmail)
+    _ = DefaultRegistry.Register("user:created", "default-settings", handleDefaultSettings)
+    // ... more handlers ...
+}
+
+func handleWelcomeEmail(ctx context.Context, event FanoutEvent) error {
+    // Implementation
+    return nil
+}
+
+func handleDefaultSettings(ctx context.Context, event FanoutEvent) error {
+    // Implementation
+    return nil
+}
+```
+
+### Handler Isolation
+
+Each handler is completely isolated:
+
+1. **Separate Task:** Each handler gets its own asynq task (`fanout:eventType:handlerID`)
+2. **Independent Retry:** Each task retries according to its own configuration
+3. **Separate Queue:** Handlers can run on different queues
+4. **Independent Failure:** One handler failure doesn't affect others
+
+### Comparison: Job Patterns
+
+| Aspect | Fire-and-Forget | Scheduled | Fanout |
+|--------|-----------------|-----------|--------|
+| Trigger | Immediate, caller-driven | Cron schedule | Event-driven |
+| Handlers | Single | Single | Multiple |
+| Isolation | Caller isolated | N/A | Handler isolated |
+| Default Queue | low | default | per-handler |
+| Use case | Non-critical background | Periodic tasks | Event workflows |
+
+### Key Files
+
+| Component | Path |
+|-----------|------|
+| Pattern implementation | `internal/worker/patterns/fanout.go` |
+| Unit tests | `internal/worker/patterns/fanout_test.go` |
+| Examples | `internal/worker/patterns/fanout_example_test.go` |
+
+---
+
 ## Task Handler Patterns
 
 ### Task Type Naming Convention

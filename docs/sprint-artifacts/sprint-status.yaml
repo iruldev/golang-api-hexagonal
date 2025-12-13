@@ -135,7 +135,7 @@ development_status:
   epic-9: in-progress
   9-1-implement-fire-and-forget-job-pattern: done
   9-2-implement-scheduled-job-pattern-with-cron: done
-  9-3-implement-fanout-job-pattern: backlog
+  9-3-implement-fanout-job-pattern: done
   9-4-add-idempotency-key-pattern: backlog
   9-5-create-dedicated-job-metrics-dashboard: backlog
   9-6-document-copy-job-pattern-for-new-domain: backlog
