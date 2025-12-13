@@ -139,7 +139,7 @@ development_status:
   9-4-add-idempotency-key-pattern: done
   9-5-create-dedicated-job-metrics-dashboard: done
   9-6-document-copy-job-pattern-for-new-domain: done
-  epic-9-retrospective: optional
+  epic-9-retrospective: completed
 
   # Epic 10: Security & Guardrails (8 FRs)
   epic-10: backlog
