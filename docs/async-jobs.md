@@ -562,6 +562,123 @@ Each handler is completely isolated:
 
 ---
 
+## Idempotency Pattern
+
+The Idempotency pattern ensures duplicate jobs don't cause data corruption by tracking which jobs have already been processed at the handler level.
+
+### When to Use Idempotency
+
+| Scenario | Use Idempotency? | Reasoning |
+|----------|-----------------|-----------|
+| Payment processing | ✅ Yes | Duplicate charges must be prevented |
+| Order creation | ✅ Yes | Duplicate orders cause data issues |
+| Email sending | ✅ Yes | Duplicate emails annoy users |
+| Cache warming | ❌ No | Idempotent by nature |
+| Analytics events | ⚠️ Maybe | Depends on accuracy requirements |
+
+### asynq.Unique() vs Idempotency Package
+
+| Feature | `asynq.Unique()` | `idempotency` Package |
+|---------|------------------|----------------------|
+| **Scope** | Enqueue-level | Handler-level |
+| **Protects against** | Duplicate enqueue | Duplicate processing (incl. retries) |
+| **Result caching** | ❌ No | ✅ Yes |
+| **Custom key logic** | ❌ No | ✅ Yes |
+| **Fail mode control** | ❌ No | ✅ Yes |
+
+**For maximum protection, combine both:**
+
+```go
+// 1. Enqueue with asynq.Unique (prevents duplicate enqueue)
+task := asynq.NewTask("order:create", payload)
+client.Enqueue(task, asynq.Unique(24*time.Hour))
+
+// 2. Handler wrapped with idempotency (prevents duplicate processing)
+srv.HandleFunc("order:create", 
+    idempotency.IdempotentHandler(store, extractKey, 24*time.Hour, handler))
+```
+
+### Usage
+
+```go
+import (
+    "github.com/iruldev/golang-api-hexagonal/internal/worker/idempotency"
+)
+
+// Create idempotency store
+store := idempotency.NewRedisStore(redisClient.Client(), "idempotency:",
+    idempotency.WithFailMode(idempotency.FailOpen),
+    idempotency.WithLogger(logger),
+)
+
+// Define key extractor
+keyExtractor := func(t *asynq.Task) string {
+    var p struct{ OrderID string `json:"order_id"` }
+    json.Unmarshal(t.Payload(), &p)
+    return fmt.Sprintf("order:%s", p.OrderID)
+}
+
+// Wrap handler with idempotency
+handler := idempotency.IdempotentHandler(
+    store,
+    keyExtractor,
+    24*time.Hour,  // TTL
+    originalHandler,
+    idempotency.WithHandlerLogger(logger),
+)
+
+// Register with worker
+srv.HandleFunc("order:create", handler)
+```
+
+### Key Extraction Strategies
+
+| Strategy | Key Format | Use Case |
+|----------|------------|----------|
+| **Payload-based** | `orderID:productID` | Entity-specific idempotency |
+| **Task-type + ID** | `note:archive:uuid-123` | General purpose |
+| **Hash-based** | `sha256(payload)[:16]` | Complex payloads |
+| **Business key** | `invoice:2024-001` | Domain-specific |
+
+### Fail Modes
+
+| Mode | Behavior on Redis Error | Use Case |
+|------|------------------------|----------|
+| `FailOpen` | Process task anyway | Non-critical ops |
+| `FailClosed` | Return error (retry) | Critical ops |
+
+### Redis Key Format
+
+The idempotency store uses the following key patterns:
+
+| Type | Pattern | Example | TTL |
+|------|---------|---------|-----|
+| Check key | `{prefix}{key}` | `idempotency:order:123` | Configurable (default 24h) |
+| Result key | `{prefix}result:{key}` | `idempotency:result:order:123` | Same as check key |
+
+### Observability
+
+Deduplication events are logged at DEBUG level:
+```
+DEBUG duplicate task skipped {"idempotency_key": "order:123", "task_type": "order:create"}
+```
+
+Redis errors are logged at WARN (fail-open) or ERROR (fail-closed) level.
+
+### Key Files
+
+| Component | Path |
+|-----------|------|
+| Core types | `internal/worker/idempotency/idempotency.go` |
+| Store interface | `internal/worker/idempotency/store.go` |
+| Redis implementation | `internal/worker/idempotency/redis_store.go` |
+| Handler wrapper | `internal/worker/idempotency/handler.go` |
+| Unit tests | `internal/worker/idempotency/idempotency_test.go` |
+| Redis tests | `internal/worker/idempotency/redis_store_test.go` |
+| Examples | `internal/worker/idempotency/example_test.go` |
+
+---
+
 ## Task Handler Patterns
 
 ### Task Type Naming Convention
