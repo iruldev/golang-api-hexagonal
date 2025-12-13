@@ -335,6 +335,66 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 | `ErrTokenInvalid` | Malformed/bad signature | 401 |
 | `ErrNoClaimsInContext` | Claims missing from ctx | 500 |
 
+#### Using APIKeyAuthenticator (Built-in)
+
+The framework includes a ready-to-use API key authenticator for service-to-service auth. See `internal/interface/http/middleware/apikey.go`.
+
+```go
+import "github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
+
+// Create validator from environment variables
+// Format: API_KEYS="key1:svc-payments,key2:svc-inventory"
+validator := middleware.NewEnvKeyValidator("API_KEYS")
+
+// Create authenticator (validator is required)
+apiAuth, err := middleware.NewAPIKeyAuthenticator(
+    validator,
+    middleware.WithHeaderName("X-Custom-Key"),  // Optional: default is X-API-Key
+)
+if err != nil {
+    log.Fatal("API Key config error:", err)  // ErrValidatorRequired if nil
+}
+
+// Use with AuthMiddleware
+r.Group(func(r chi.Router) {
+    r.Use(middleware.AuthMiddleware(apiAuth))
+    r.Get("/api/v1/internal", internalHandler)
+})
+```
+
+#### API Key Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `API_KEYS` | Comma-separated key:service pairs | `abc123:svc-payments,xyz789:svc-inventory` |
+
+#### Custom Key Validators
+
+Implement the `KeyValidator` interface for database or external validation:
+
+```go
+type KeyValidator interface {
+    Validate(ctx context.Context, key string) (*KeyInfo, error)
+}
+
+// Example: Database validator
+type DBKeyValidator struct {
+    db *sql.DB
+}
+
+func (v *DBKeyValidator) Validate(ctx context.Context, key string) (*middleware.KeyInfo, error) {
+    var serviceID string
+    err := v.db.QueryRowContext(ctx, "SELECT service_id FROM api_keys WHERE key = $1", key).Scan(&serviceID)
+    if err != nil {
+        return nil, middleware.ErrTokenInvalid
+    }
+    return &middleware.KeyInfo{
+        ServiceID: serviceID,
+        Roles:     []string{"service"},
+    }, nil
+}
+```
+
 ### Adding a New Async Job
 
 > **For comprehensive async job documentation, see [`docs/async-jobs.md`](docs/async-jobs.md)**
