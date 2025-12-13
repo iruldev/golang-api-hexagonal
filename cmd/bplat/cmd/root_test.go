@@ -21,10 +21,12 @@ It helps you scaffold new services and modules quickly.
 
 Available Commands:
   version     Print version information
+  init        Initialize new components
 
 Use "bplat [command] --help" for more information about a command.`,
 	}
 	root.AddCommand(newVersionCmd())
+	root.AddCommand(newInitCmd())
 	return root
 }
 

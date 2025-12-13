@@ -69,6 +69,12 @@ make build-bplat
 
 # View help
 ./bin/bplat --help
+
+# Initialize a new service
+./bin/bplat init service myservice
+
+# With custom module path
+./bin/bplat init service myservice --module github.com/myorg/myservice
 ```
 
 

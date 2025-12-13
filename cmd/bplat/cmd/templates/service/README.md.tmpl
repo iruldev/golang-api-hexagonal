@@ -1,0 +1,37 @@
+# {{.ServiceName}}
+
+Service generated with bplat CLI.
+
+## Quick Start
+
+```bash
+cp .env.example .env
+make dev
+```
+
+## Project Structure
+
+```
+{{.ServiceName}}/
+├── cmd/
+│   └── server/
+│       └── main.go
+├── internal/
+│   ├── app/
+│   ├── config/
+│   ├── domain/
+│   ├── usecase/
+│   ├── interface/
+│   │   └── http/
+│   └── infra/
+├── db/
+│   ├── migrations/
+│   └── queries/
+├── .env.example
+├── go.mod
+└── README.md
+```
+
+## License
+
+MIT

@@ -982,7 +982,66 @@ The `bplat` CLI tool provides code scaffolding utilities for the boilerplate. Lo
 | Command | Description |
 |---------|-------------|
 | `bplat version` | Print version, build date, git commit, and Go version |
+| `bplat init service <name>` | Initialize a new service with complete project structure |
 | `bplat --help` | List all available commands |
+
+### Init Service Command
+
+Initialize a new service from the boilerplate template:
+
+```bash
+# Basic usage
+bplat init service myservice
+
+# With custom module path
+bplat init service myservice --module github.com/myorg/myservice
+
+# In a specific directory
+bplat init service myservice --dir /path/to/projects
+
+# Overwrite existing directory
+bplat init service myservice --force
+```
+
+#### Flags
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--module` | `-m` | `github.com/user/<name>` | Go module path |
+| `--dir` | `-d` | `.` | Output directory |
+| `--force` | `-f` | `false` | Overwrite existing directory |
+
+#### Generated Structure
+
+```
+myservice/
+├── cmd/
+│   └── server/
+│       └── main.go
+├── internal/
+│   ├── app/
+│   │   └── app.go
+│   ├── config/
+│   ├── domain/
+│   ├── usecase/
+│   ├── interface/
+│   │   └── http/
+│   └── infra/
+├── db/
+│   ├── migrations/
+│   └── queries/
+├── .env.example
+├── go.mod
+└── README.md
+```
+
+#### Validation Rules
+
+| Rule | Pattern | Error Message |
+|------|---------|---------------|
+| Name empty | `len(name) == 0` | "service name is required" |
+| Invalid chars | `^[a-z][a-z0-9_-]*$` | "service name must start with letter and contain only lowercase letters, numbers, hyphens, underscores" |
+| Dir exists | `os.Stat(dir)` | "directory already exists, use --force to overwrite" |
 
 ### Building and Installing
 
@@ -1017,7 +1076,10 @@ cmd/bplat/
     ├── root.go       # Root command with Execute() function
     ├── root_test.go  # Root command tests
     ├── version.go    # Version command
-    └── version_test.go
+    ├── version_test.go
+    ├── init.go       # Init parent command
+    ├── init_service.go  # Init service subcommand
+    └── init_test.go  # Init command tests
 ```
 
 ### Adding New Commands
