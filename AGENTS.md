@@ -231,6 +231,139 @@ Handler (maps to HTTP status)
 Response (JSON envelope with error code)
 ```
 
+### Adding a New Async Job
+
+> **For comprehensive async job documentation, see [`docs/async-jobs.md`](docs/async-jobs.md)**
+
+#### Step 1: Choose Your Pattern
+
+| Scenario | Pattern | Package |
+|----------|---------|---------|
+| Non-critical background (analytics, audit) | Fire-and-Forget | `internal/worker/patterns/fireandforget.go` |
+| Periodic tasks (cleanup, reports) | Scheduled | `internal/worker/patterns/scheduled.go` |
+| Event → multiple handlers | Fanout | `internal/worker/patterns/fanout.go` |
+| Critical operations (payments, orders) | Standard + Idempotency | `internal/worker/idempotency/` |
+
+#### Step 2: Create Task Type
+
+Add to `internal/worker/tasks/types.go`:
+
+```go
+const (
+    Type{Name} = "{domain}:{action}"  // e.g., TypeEmailSend = "email:send"
+)
+```
+
+#### Step 3: Create Task Handler
+
+Create `internal/worker/tasks/{name}.go`:
+
+```go
+// 1. Payload struct
+type {Name}Payload struct {
+    ID uuid.UUID `json:"id"`
+}
+
+// 2. Task constructor
+func New{Name}Task(id uuid.UUID) (*asynq.Task, error) {
+    payload, err := json.Marshal({Name}Payload{ID: id})
+    if err != nil {
+        return nil, fmt.Errorf("marshal payload: %w", err)
+    }
+    return asynq.NewTask(Type{Name}, payload, asynq.MaxRetry(3)), nil
+}
+
+// 3. Handler struct with dependencies
+type {Name}Handler struct {
+    logger *zap.Logger
+    // Add: repo, usecase, etc.
+}
+
+func New{Name}Handler(logger *zap.Logger) *{Name}Handler {
+    return &{Name}Handler{logger: logger}
+}
+
+// 4. Handle method with validation
+func (h *{Name}Handler) Handle(ctx context.Context, t *asynq.Task) error {
+    var p {Name}Payload
+    if err := json.Unmarshal(t.Payload(), &p); err != nil {
+        return fmt.Errorf("unmarshal: %v: %w", err, asynq.SkipRetry)
+    }
+    if p.ID == uuid.Nil {
+        return fmt.Errorf("id required: %w", asynq.SkipRetry)
+    }
+    // Process task
+    return nil
+}
+```
+
+#### Step 4: Register Handler
+
+Add to `cmd/worker/main.go`:
+
+```go
+handler := tasks.New{Name}Handler(logger)
+srv.HandleFunc(tasks.Type{Name}, handler.Handle)
+```
+
+#### Step 5: Write Tests
+
+Create `internal/worker/tasks/{name}_test.go` with tests for:
+- Valid payload handling
+- Invalid/empty payload (SkipRetry)
+- Missing required fields (SkipRetry)
+- Happy path processing
+
+#### Async Job Creation Checklist
+
+- [ ] Task type constant in `internal/worker/tasks/types.go`
+- [ ] Payload struct with JSON tags
+- [ ] Task constructor (`New{Name}Task`) with default options
+- [ ] Handler struct with dependencies
+- [ ] `Handle` method with validation
+- [ ] `SkipRetry` for validation errors
+- [ ] Handler registered in `cmd/worker/main.go`
+- [ ] Unit tests in `internal/worker/tasks/{name}_test.go`
+
+#### Copy Commands
+
+```bash
+# Copy reference task file
+cp internal/worker/tasks/note_archive.go internal/worker/tasks/{name}.go
+cp internal/worker/tasks/note_archive_test.go internal/worker/tasks/{name}_test.go
+
+# Replace placeholders (macOS)
+sed -i '' 's/NoteArchive/{Name}/g' internal/worker/tasks/{name}.go
+sed -i '' 's/note:archive/{domain}:{action}/g' internal/worker/tasks/{name}.go
+sed -i '' 's/NoteID/YourFieldID/g' internal/worker/tasks/{name}.go
+
+# Linux: use sed -i without quotes: sed -i 's/NoteArchive/{Name}/g' ...
+
+# Add type constant to types.go
+# Manually add: Type{Name} = "{domain}:{action}"
+
+# Register handler in cmd/worker/main.go
+# Manually add: srv.HandleFunc(tasks.Type{Name}, handler.Handle)
+```
+
+#### Queue Selection Guide
+
+| Priority | Queue | Weight | When to Use |
+|----------|-------|--------|-------------|
+| High | `critical` | 6 | User-facing (email, notifications) |
+| Normal | `default` | 3 | Business logic (archival, sync) |
+| Low | `low` | 1 | Analytics, cleanup, batch jobs |
+
+#### Pattern Selection Decision Table
+
+| Your Scenario | Use This Pattern | Queue |
+|---------------|------------------|-------|
+| Non-critical, best-effort | `patterns.FireAndForget()` | `low` |
+| Scheduled cleanup/reports | `patterns.RegisterScheduledJobs()` | `default` |
+| Single event → multiple actions | `patterns.Fanout()` | per-handler |
+| Prevent duplicate processing | `idempotency.IdempotentHandler()` | any |
+| Critical with confirmation | Standard enqueue | `critical` |
+
 ---
 
 ## 📋 Checklist for Code Review
