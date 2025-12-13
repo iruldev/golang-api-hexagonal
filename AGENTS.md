@@ -395,6 +395,94 @@ func (v *DBKeyValidator) Validate(ctx context.Context, key string) (*middleware.
 }
 ```
 
+#### RBAC Authorization Middleware
+
+After authentication, use RBAC middleware to control access based on roles or permissions. See `internal/interface/http/middleware/rbac.go` and `internal/domain/auth/rbac.go`.
+
+##### Available Roles
+
+| Role | Constant | Purpose |
+|------|----------|---------|
+| Admin | `auth.RoleAdmin` | Full system access |
+| Service | `auth.RoleService` | Service-to-service auth |
+| User | `auth.RoleUser` | Standard user access |
+
+##### Available Permissions
+
+Permissions follow the `resource:action` pattern:
+
+| Permission | Constant | Description |
+|------------|----------|-------------|
+| `note:create` | `auth.PermNoteCreate` | Create new notes |
+| `note:read` | `auth.PermNoteRead` | Read notes |
+| `note:update` | `auth.PermNoteUpdate` | Update notes |
+| `note:delete` | `auth.PermNoteDelete` | Delete notes |
+| `note:list` | `auth.PermNoteList` | List all notes |
+
+##### RequireRole Middleware (OR Logic)
+
+Requires user to have **at least one** of the specified roles:
+
+```go
+import "github.com/iruldev/golang-api-hexagonal/internal/domain/auth"
+
+r.Group(func(r chi.Router) {
+    r.Use(middleware.AuthMiddleware(jwtAuth))
+    r.Use(middleware.RequireRole(string(auth.RoleAdmin), string(auth.RoleService)))
+    r.Delete("/admin/users/{id}", deleteUserHandler)
+})
+```
+
+##### RequirePermission Middleware (AND Logic)
+
+Requires user to have **all** of the specified permissions:
+
+```go
+r.Group(func(r chi.Router) {
+    r.Use(middleware.AuthMiddleware(jwtAuth))
+    r.Use(middleware.RequirePermission(string(auth.PermNoteCreate), string(auth.PermNoteRead)))
+    r.Post("/notes", createNoteHandler)
+})
+```
+
+##### RequireAnyPermission Middleware (OR Logic)
+
+Requires user to have **at least one** of the specified permissions:
+
+```go
+r.Group(func(r chi.Router) {
+    r.Use(middleware.AuthMiddleware(jwtAuth))
+    r.Use(middleware.RequireAnyPermission(string(auth.PermNoteUpdate), string(auth.PermNoteDelete)))
+    r.Patch("/notes/{id}", modifyNoteHandler)
+})
+```
+
+##### Combined Auth + RBAC Pattern
+
+```go
+r.Route("/api/v1", func(r chi.Router) {
+    // Apply auth to all API routes
+    r.Use(middleware.AuthMiddleware(jwtAuth))
+    
+    // User-accessible routes
+    r.Get("/notes", noteHandler.List)
+    
+    // Admin-only routes
+    r.Group(func(r chi.Router) {
+        r.Use(middleware.RequireRole(string(auth.RoleAdmin)))
+        r.Delete("/notes/{id}", noteHandler.Delete)
+    })
+})
+```
+
+##### RBAC Error Types
+
+| Error | When Returned | HTTP Status |
+|-------|---------------|-------------|
+| `ErrForbidden` | Authorization failed | 403 |
+| `ErrInsufficientRole` | Missing required role | 403 |
+| `ErrInsufficientPermission` | Missing required permission | 403 |
+
 ### Adding a New Async Job
 
 > **For comprehensive async job documentation, see [`docs/async-jobs.md`](docs/async-jobs.md)**

@@ -21,6 +21,16 @@ var (
 
 	// ErrNoClaimsInContext indicates claims were not found in context.
 	ErrNoClaimsInContext = errors.New("no claims in context")
+
+	// ErrForbidden indicates the user lacks permission for the requested resource.
+	// This is returned when authorization (not authentication) fails.
+	ErrForbidden = errors.New("forbidden")
+
+	// ErrInsufficientRole indicates the user does not have the required role.
+	ErrInsufficientRole = errors.New("insufficient role")
+
+	// ErrInsufficientPermission indicates the user does not have the required permission.
+	ErrInsufficientPermission = errors.New("insufficient permission")
 )
 
 // Authenticator defines the interface for authentication providers.

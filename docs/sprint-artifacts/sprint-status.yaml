@@ -146,7 +146,7 @@ development_status:
   10-1-define-auth-middleware-interface: done
   10-2-implement-jwt-auth-middleware: done
   10-3-implement-api-key-auth-middleware: done
-  10-4-create-rbac-permission-model: backlog
+  10-4-create-rbac-permission-model: done
   10-5-implement-rate-limiter-with-in-memory-store: backlog
   10-6-add-redis-backed-rate-limiter-option: backlog
   10-7-create-feature-flag-interface-and-env-provider: backlog
