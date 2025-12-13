@@ -149,7 +149,7 @@ development_status:
   10-4-create-rbac-permission-model: done
   10-5-implement-rate-limiter-with-in-memory-store: done
   10-6-add-redis-backed-rate-limiter-option: done
-  10-7-create-feature-flag-interface-and-env-provider: backlog
+  10-7-create-feature-flag-interface-and-env-provider: done
   10-8-document-auth-rbac-integration-guide: backlog
   epic-10-retrospective: optional
 

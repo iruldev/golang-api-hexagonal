@@ -673,6 +673,117 @@ redisLimiter := infraredis.NewRedisRateLimiter(
 | Memory | Keys have TTL, but monitor at high traffic |
 | Fail-open | Requests allowed if Redis fails (controlled degradation) |
 
+### Feature Flags
+
+The feature flag interface enables toggling features without deployment. See `internal/runtimeutil/featureflags.go`.
+
+#### Core Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `FeatureFlagProvider` interface | `runtimeutil/featureflags.go` | Port for feature flag providers |
+| `EvalContext` struct | `runtimeutil/featureflags.go` | Context for user targeting |
+| `EnvFeatureFlagProvider` | `runtimeutil/featureflags.go` | Environment variable provider |
+| `NopFeatureFlagProvider` | `runtimeutil/featureflags.go` | No-op provider for testing |
+
+#### Basic Usage
+
+```go
+import "github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
+
+// Create provider with default settings (FF_ prefix, fail-closed)
+provider := runtimeutil.NewEnvFeatureFlagProvider()
+
+// Check if feature is enabled
+enabled, err := provider.IsEnabled(ctx, "new_dashboard")
+if enabled {
+    // Render new dashboard
+}
+```
+
+#### Environment Variable Naming
+
+| Flag Name | Env Var | Value | Result |
+|-----------|---------|-------|--------|
+| `new_dashboard` | `FF_NEW_DASHBOARD` | `true` | enabled |
+| `beta-feature` | `FF_BETA_FEATURE` | `1` | enabled |
+| `dark_mode` | `FF_DARK_MODE` | `enabled` | enabled |
+| `experimental` | `FF_EXPERIMENTAL` | `false` | disabled |
+| `not_set` | (not set) | - | default (false) |
+
+**Truthy values:** `true`, `1`, `enabled`, `on`, `yes` (case-insensitive)
+
+#### Configuration Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `WithEnvPrefix(string)` | `FF_` | Environment variable prefix |
+| `WithEnvDefaultValue(bool)` | `false` | Default for unconfigured flags |
+| `WithEnvStrictMode(bool)` | `false` | Error on unknown flags |
+
+```go
+// Custom prefix and fail-open behavior
+provider := runtimeutil.NewEnvFeatureFlagProvider(
+    runtimeutil.WithEnvPrefix("FEATURE_"),
+    runtimeutil.WithEnvDefaultValue(true),  // Fail-open
+)
+
+// Strict mode (error on unknown flags)
+provider := runtimeutil.NewEnvFeatureFlagProvider(
+    runtimeutil.WithEnvStrictMode(true),
+)
+enabled, err := provider.IsEnabled(ctx, "unknown_flag")
+// err == ErrFlagNotFound
+```
+
+#### Context-Based Evaluation
+
+```go
+// For future providers that support user targeting
+evalCtx := runtimeutil.EvalContext{
+    UserID: "user-123",
+    Attributes: map[string]interface{}{
+        "plan":    "premium",
+        "country": "US",
+    },
+    Percentage: 50.0,  // For gradual rollouts
+}
+
+enabled, err := provider.IsEnabledForContext(ctx, "beta_feature", evalCtx)
+```
+
+> **Note:** EnvProvider ignores context; use LaunchDarkly, Split.io, etc. for advanced targeting.
+
+#### Testing with NopProvider
+
+```go
+// All flags disabled (for testing)
+provider := runtimeutil.NewNopFeatureFlagProvider(false)
+
+// All flags enabled (for testing)
+provider := runtimeutil.NewNopFeatureFlagProvider(true)
+```
+
+#### Error Types
+
+| Error | When Returned | Description |
+|-------|---------------|-------------|
+| `ErrFlagNotFound` | Strict mode + unknown flag | Flag not configured |
+| `ErrInvalidFlagName` | Empty or invalid characters | Flag name validation failed |
+
+#### Usage in HTTP Handlers
+
+```go
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+    enabled, _ := h.featureFlags.IsEnabled(r.Context(), "new_list_ui")
+    if enabled {
+        // New UI logic
+    } else {
+        // Classic UI logic
+    }
+}
+```
+
 > **For comprehensive async job documentation, see [`docs/async-jobs.md`](docs/async-jobs.md)**
 
 #### Step 1: Choose Your Pattern
