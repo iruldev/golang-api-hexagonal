@@ -11,8 +11,16 @@ type Config struct {
 	Database      DatabaseConfig      `koanf:"db"`
 	Redis         RedisConfig         `koanf:"redis"`
 	Asynq         AsynqConfig         `koanf:"asynq"`
+	GRPC          GRPCConfig          `koanf:"grpc"`
 	Observability ObservabilityConfig `koanf:"otel"`
 	Log           LogConfig           `koanf:"log"`
+}
+
+// GRPCConfig holds gRPC server settings.
+type GRPCConfig struct {
+	Enabled           bool `koanf:"enabled"`            // default: false
+	Port              int  `koanf:"port"`               // default: 50051
+	ReflectionEnabled bool `koanf:"reflection_enabled"` // default: true in dev, false in prod
 }
 
 // AppConfig holds application settings.

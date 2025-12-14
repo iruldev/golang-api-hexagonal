@@ -219,6 +219,63 @@ func TestHandler_Integration(t *testing.T) {
 10. Register routes in router
 11. Write tests for all layers
 
+### gRPC Server Patterns (Story 12.1)
+
+The gRPC server runs alongside HTTP and follows hexagonal architecture patterns.
+
+#### Directory Structure
+
+```
+internal/interface/grpc/
+├── server.go                  # gRPC server initialization
+└── interceptor/
+    ├── recovery.go            # Panic recovery
+    ├── logging.go             # Structured logging  
+    ├── requestid.go           # Request ID propagation
+    └── metrics.go             # Prometheus metrics
+
+proto/
+└── {domain}/v1/{domain}.proto  # Proto definitions (Story 12.2)
+```
+
+#### Configuration
+
+| Env Variable | Default | Description |
+|--------------|---------|-------------|
+| `GRPC_ENABLED` | `false` | Enable gRPC server |
+| `GRPC_PORT` | `50051` | gRPC server port |
+| `GRPC_REFLECTION_ENABLED` | `true` | Enable reflection (dev only) |
+
+#### Interceptor Chain Order
+
+1. **OTEL StatsHandler** → Tracing (via grpc.StatsHandler)
+2. **Recovery** → Panic recovery, returns INTERNAL
+3. **Logging** → Structured request logging
+4. **RequestID** → Generate/propagate request ID
+5. **Metrics** → Prometheus counters/histograms
+6. **Handler** → Business logic
+
+#### Adding a gRPC Service
+
+1. Define proto: `proto/{name}/v1/{name}.proto`
+2. Generate code: `make gen-proto`
+3. Create handler: `internal/interface/grpc/{name}/handler.go`
+4. Register with server: `{serviceName}.Register{Name}Server(grpcSrv.GRPCServer(), handler)`
+5. Handler MUST call usecase layer (not infra)
+
+#### Testing with grpcurl
+
+```bash
+# List services (reflection enabled)
+grpcurl -plaintext localhost:50051 list
+
+# Describe service
+grpcurl -plaintext localhost:50051 describe {service}.v1.{Service}
+
+# Call method
+grpcurl -plaintext -d '{"field": "value"}' localhost:50051 {service}.v1.{Service}/{Method}
+```
+
 ### Error Handling Flow
 
 ```

@@ -107,3 +107,14 @@ build-bplat: ## Build bplat CLI tool
 .PHONY: install-bplat
 install-bplat: ## Install bplat CLI tool to GOPATH/bin
 	go install $(BPLAT_LDFLAGS) ./cmd/bplat
+
+# gRPC (Story 12.1) - Protobuf code generation
+.PHONY: install-protoc gen-proto
+install-protoc: ## Install protoc-gen-go and protoc-gen-go-grpc plugins
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+gen-proto: ## Generate Go code from .proto files
+	protoc --go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		proto/**/**/*.proto

@@ -13,7 +13,10 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/redis"
+	grpcserver "github.com/iruldev/golang-api-hexagonal/internal/interface/grpc"
+	"github.com/iruldev/golang-api-hexagonal/internal/interface/grpc/interceptor"
 	httpx "github.com/iruldev/golang-api-hexagonal/internal/interface/http"
+	"github.com/iruldev/golang-api-hexagonal/internal/observability"
 )
 
 func main() {
@@ -24,6 +27,14 @@ func main() {
 		log.Fatalf("Configuration error: %v", err)
 	}
 
+	// Initialize logger (Story 5.6 / 5.7)
+	zapLogger, err := observability.NewLogger(&cfg.Log, cfg.App.Env)
+	if err != nil {
+		log.Fatalf("Logger initialization error: %v", err)
+	}
+	logger := observability.NewZapLogger(zapLogger)
+	defer logger.Sync()
+
 	// Initialize database connection pool (Story 4.1)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	pool, err := postgres.NewPool(ctx, cfg)
@@ -32,12 +43,15 @@ func main() {
 	var dbChecker *postgres.PoolHealthChecker
 	if err != nil {
 		// Log warning but don't fail - database may be optional for some routes
-		log.Printf("Warning: Database connection failed: %v", err)
+		logger.Warn("Database connection failed", observability.Err(err))
 	} else {
 		defer pool.Close()
-		log.Printf("Database connected: %s@%s:%d/%s (max_conns=%d)",
-			cfg.Database.User, cfg.Database.Host, cfg.Database.Port, cfg.Database.Name,
-			cfg.Database.MaxOpenConns)
+		logger.Info("Database connected",
+			observability.String("user", cfg.Database.User),
+			observability.String("host", cfg.Database.Host),
+			observability.Int("port", cfg.Database.Port),
+			observability.String("name", cfg.Database.Name),
+			observability.Int("max_conns", cfg.Database.MaxOpenConns))
 		// Create DB health checker for readiness probe (Story 4.7)
 		dbChecker = postgres.NewPoolHealthChecker(pool)
 	}
@@ -47,11 +61,13 @@ func main() {
 	redisClient, err := redis.NewClient(cfg.Redis)
 	if err != nil {
 		// Log warning but don't fail - Redis may be optional for some routes
-		log.Printf("Warning: Redis connection failed: %v", err)
+		logger.Warn("Redis connection failed", observability.Err(err))
 	} else {
 		defer redisClient.Close()
-		log.Printf("Redis connected: %s:%d (pool_size=%d)",
-			cfg.Redis.Host, cfg.Redis.Port, cfg.Redis.PoolSize)
+		logger.Info("Redis connected",
+			observability.String("host", cfg.Redis.Host),
+			observability.Int("port", cfg.Redis.Port),
+			observability.Int("pool_size", cfg.Redis.PoolSize))
 		// Use Redis client as health checker for readiness probe
 		redisChecker = redisClient
 	}
@@ -71,21 +87,52 @@ func main() {
 		Handler: router,
 	}
 
-	// Start server in goroutine
+	// Start HTTP server in goroutine
 	go func() {
-		log.Printf("Server starting on port %s", port)
+		logger.Info("HTTP server starting", observability.String("port", port))
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+			logger.Error("HTTP server error", observability.Err(err))
+			os.Exit(1)
 		}
 	}()
+
+	// Start gRPC server if enabled (Story 12.1)
+	var grpcSrv *grpcserver.Server
+	if cfg.GRPC.Enabled {
+		grpcSrv = grpcserver.NewServer(
+			&cfg.GRPC,
+			logger,
+			grpcserver.WithUnaryInterceptors(
+				interceptor.RequestIDInterceptor(),      // First: propagate request ID to all downstream
+				interceptor.MetricsInterceptor(),        // Second: capture metrics including panic errors
+				interceptor.LoggingInterceptor(logger),  // Third: log request including panic errors
+				interceptor.RecoveryInterceptor(logger), // Last: catch panics and return INTERNAL
+			),
+		)
+
+		go func() {
+			if err := grpcSrv.Start(context.Background()); err != nil {
+				logger.Error("gRPC server error", observability.Err(err))
+				os.Exit(1)
+			}
+		}()
+	}
 
 	// Wait for shutdown signal (Story 1.4 graceful shutdown)
 	done := make(chan error, 1)
 	go app.GracefulShutdown(server, done)
 
 	if err := <-done; err != nil {
-		log.Printf("Shutdown error: %v", err)
-		os.Exit(1)
+		logger.Error("HTTP shutdown error", observability.Err(err))
+	}
+
+	// Shutdown gRPC server if running (Story 12.1 - respects global shutdown timeout)
+	if grpcSrv != nil {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if err := grpcSrv.Shutdown(shutdownCtx); err != nil {
+			logger.Error("gRPC shutdown error", observability.Err(err))
+		}
+		shutdownCancel()
 	}
 
 	// Shutdown tracer provider to flush remaining spans (Story 3.5)
@@ -93,10 +140,10 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := httpx.TracerShutdown(ctx); err != nil {
-			log.Printf("Tracer shutdown error: %v", err)
+			logger.Error("Tracer shutdown error", observability.Err(err))
 		}
 	}
 
-	log.Println("Server shutdown complete")
+	logger.Info("Server shutdown complete")
 	os.Exit(0)
 }
