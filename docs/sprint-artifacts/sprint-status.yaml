@@ -162,3 +162,36 @@ development_status:
   11-5-create-runbook-documentation-template: done
   11-6-update-readme-and-agents-md-with-v2-features: done
   epic-11-retrospective: completed
+
+  # =============================================================================
+  # V3 EPICS - Enterprise Scale
+  # =============================================================================
+
+  # Epic 12: Advanced Interface Layer (4 Stories)
+  epic-12: backlog
+  12-1-add-grpc-server-support: backlog
+  12-2-create-grpc-service-definition-proto: backlog
+  12-3-implement-graphql-handler-with-gqlgen: backlog
+  12-4-add-graphql-playground: backlog
+
+  # Epic 13: Event-Driven Implementations (4 Stories)
+  epic-13: backlog
+  13-1-implement-kafka-event-publisher: backlog
+  13-2-implement-rabbitmq-event-publisher: backlog
+  13-3-create-event-consumer-interface: backlog
+  13-4-implement-dead-letter-queue-pattern: backlog
+
+  # Epic 14: Advanced Security (4 Stories)
+  epic-14: backlog
+  14-1-implement-oidc-authenticator: backlog
+  14-2-implement-rbac-middleware: backlog
+  14-3-add-security-headers-middleware: backlog
+  14-4-implement-audit-logging: backlog
+
+  # Epic 15: Admin / Backoffice API (4 Stories)
+  epic-15: backlog
+  15-1-create-admin-api-route-group: backlog
+  15-2-implement-feature-flag-management-api: backlog
+  15-3-implement-user-role-management-api: backlog
+  15-4-create-job-queue-inspection-api: backlog
+

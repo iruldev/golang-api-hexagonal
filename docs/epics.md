@@ -1509,10 +1509,248 @@ So that I can use new capabilities correctly.
 | 11 | DX & Operability | 6 | 6 |
 | **V2 Total** | | **28** | **28** |
 
+---
+
+## V3 Epics (Enterprise Scale)
+
+### Epic 12: Advanced Interface Layer
+Service supports advanced communication protocols including gRPC for internal services and GraphQL for flexible frontend data fetching.
+
+### Story 12.1: Add gRPC Server Support
+
+As a developer,
+I want to serve gRPC requests alongside HTTP,
+So that high-performance internal communication is possible.
+
+**Acceptance Criteria:**
+
+**Given** `internal/interface/grpc` directory created
+**When** server starts
+**Then** gRPC server listens on configured port (e.g., 50051)
+**And** supports reflection for debugging
+
+### Story 12.2: Create gRPC Service Definition (Proto)
+
+As a developer,
+I want to define service contracts via Protobuf,
+So that interfaces are strongly typed and versioned.
+
+**Acceptance Criteria:**
+
+**Given** `proto/note/v1/note.proto` exists
+**When** I run `make gen`
+**Then** Go code interfaces are generated
+**And** I can implement the server interface in `internal/interface/grpc/note`
+
+### Story 12.3: Implement GraphQL Handler with GQLGen
+
+As a frontend developer,
+I want a GraphQL endpoint,
+So that I can fetch flexible data dependencies in one request.
+
+**Acceptance Criteria:**
+
+**Given** `gqlgen.yml` configured
+**And** schema defined in `api/graphql/schema.graphqls`
+**When** `make gen` runs
+**Then** resolvers are generated in `internal/interface/graphql`
+
+### Story 12.4: Add GraphQL Playground
+
+As a developer,
+I want GraphQL Playground enabled in dev mode,
+So that I can explore and test queries easily.
+
+**Acceptance Criteria:**
+
+**Given** `APP_ENV=development`
+**When** I visit `/playground`
+**Then** the interactive playground loads
+
+---
+
+### Epic 13: Event-Driven Implementations
+Service implements robust event-driven architecture using dedicated message brokers for high throughput and reliability.
+
+### Story 13.1: Implement Kafka Event Publisher
+
+As a developer,
+I want to publish events to Kafka,
+So that other services can react asynchronously with high throughput.
+
+**Acceptance Criteria:**
+
+**Given** `KafkaPublisher` implements `EventPublisher` interface
+**When** `Publish(ctx, "topic", event)` is called
+**Then** message is sent to Kafka broker
+**And** structured logging captures the action
+
+### Story 13.2: Implement RabbitMQ Event Publisher
+
+As a developer,
+I want to publish events to RabbitMQ,
+So that I can use standard AMQP routing patterns.
+
+**Acceptance Criteria:**
+
+**Given** `RabbitMQPublisher` implements `EventPublisher` interface
+**When** `Publish(ctx, "exchange", event)` is called
+**Then** message is routed to correct queue
+
+### Story 13.3: Create Event Consumer Interface
+
+As a developer,
+I want a standard interface for consuming events,
+So that consumer implementations are swappable and testable.
+
+**Acceptance Criteria:**
+
+**Given** `EventConsumer` interface defined
+**When** implementing a new consumer
+**Then** I only need to implement `Handle(ctx, event)` logic
+
+### Story 13.4: Implement Dead Letter Queue Pattern
+
+As a SRE,
+I want failed events to go to a DLQ,
+So that no data is lost during processing failures.
+
+**Acceptance Criteria:**
+
+**Given** event processing fails N times
+**When** max retries reached
+**Then** event is moved to a dedicated error topic/queue
+**And** alert is generated
+
+---
+
+### Epic 14: Advanced Security
+Service implements enterprise-grade security features including OIDC/SSO, fine-grained RBAC, and strict security headers.
+
+### Story 14.1: Implement OIDC Authenticator
+
+As a security engineer,
+I want to authenticate users via OIDC (e.g., Auth0, Keycloak),
+So that we use centralized identity management.
+
+**Acceptance Criteria:**
+
+**Given** `OIDCAuthenticator` configured with issuer URL
+**When** JWT from provider is received
+**Then** signature is validated using JWKS
+**And** claims are mapped to internal context
+
+### Story 14.2: Implement RBAC Middleware
+
+As a security engineer,
+I want fine-grained permission checks,
+So that users can only access resources they are authorized for.
+
+**Acceptance Criteria:**
+
+**Given** `RequirePermission("note:write")` middleware
+**When** user with read-only role requests
+**Then** 403 Forbidden is returned
+
+### Story 14.3: Add Security Headers Middleware
+
+As a security engineer,
+I want strict security headers (CSP, HSTS, X-Frame),
+So that common web vulnerabilities are mitigated.
+
+**Acceptance Criteria:**
+
+**Given** `SecurityHeaders` middleware enabled
+**When** any response is sent
+**Then** `Strict-Transport-Security`, `X-Content-Type-Options`, `Content-Security-Policy` are present
+
+### Story 14.4: Implement Audit Logging
+
+As a compliance officer,
+I want critical actions logged with audit details,
+So that we have a traceable history of changes.
+
+**Acceptance Criteria:**
+
+**Given** a mutation action (Create/Update/Delete)
+**When** action completes
+**Then** specialized Audit Log entry is written
+**And** includes: who, what, when, old_value, new_value
+
+---
+
+### Epic 15: Admin / Backoffice API
+Service provides specialized management endpoints for operations and support teams.
+
+### Story 15.1: Create Admin API Route Group
+
+As a developer,
+I want a separate `/admin` API group,
+So that sensitive management endpoints are isolated.
+
+**Acceptance Criteria:**
+
+**Given** `/admin` routes defined
+**When** accessing without `admin` role
+**Then** 403 Forbidden is returned immediately
+
+### Story 15.2: Implement Feature Flag Management API
+
+As a product manager,
+I want to toggle feature flags via API,
+So that features can be enabled/disabled without deployment.
+
+**Acceptance Criteria:**
+
+**Given** `POST /admin/features/{flag}/enable`
+**When** called by admin
+**Then** flag state is updated in Redis/DB
+**And** change is effective immediately
+
+### Story 15.3: Implement User Role Management API
+
+As an admin,
+I want to assign roles to users,
+So that I can manage access control.
+
+**Acceptance Criteria:**
+
+**Given** `POST /admin/users/{id}/roles`
+**When** called with new roles
+**Then** user permissions are updated
+
+### Story 15.4: Create Job Queue Inspection API
+
+As a support engineer,
+I want to inspect job queue status via API,
+So that I can verify background processing health.
+
+**Acceptance Criteria:**
+
+**Given** `GET /admin/queues/stats`
+**When** called
+**Then** active, pending, and failed job counts are returned
+
+---
+
+## Summary Update
+
+### V3 Epics (Enterprise Scale)
+
+| Epic | Title | Stories |
+|------|-------|---------|
+| 12 | Advanced Interface Layer | 4 |
+| 13 | Event-Driven Implementations | 4 |
+| 14 | Advanced Security | 4 |
+| 15 | Admin / Backoffice API | 4 |
+| **V3 Total** | | **16** |
+
 ### Grand Total
 
-| Version | Stories | FRs |
-|---------|---------|-----|
-| V1 | 50 | 56 |
-| V2 | 28 | 28 |
-| **Total** | **78** | **84** |
+| Version | Stories |
+|---------|---------|
+| V1 | 50 |
+| V2 | 28 |
+| V3 | 16 |
+| **Total** | **94** |
+
