@@ -11,6 +11,7 @@ import (
 
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/kafka"
@@ -22,6 +23,7 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/grpc/interceptor"
 	grpcnote "github.com/iruldev/golang-api-hexagonal/internal/interface/grpc/note"
 	httpx "github.com/iruldev/golang-api-hexagonal/internal/interface/http"
+	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
 	"github.com/iruldev/golang-api-hexagonal/internal/observability"
 	"github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
 	noteuc "github.com/iruldev/golang-api-hexagonal/internal/usecase/note"
@@ -145,6 +147,33 @@ func main() {
 	// Use typed config instead of raw os.Getenv
 	port := fmt.Sprintf("%d", cfg.App.HTTPPort)
 
+	// Initialize Authenticator (Story 14.1)
+	var authenticator middleware.Authenticator
+	if cfg.OIDC.IsEnabled() {
+		oidcCtx, oidcCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		provider, err := oidc.NewProvider(oidcCtx, cfg.OIDC.IssuerURL)
+		oidcCancel()
+		if err != nil {
+			logger.Error("Failed to query OIDC provider", observability.Err(err))
+			os.Exit(1)
+		}
+
+		oidcConfig := &oidc.Config{
+			ClientID: cfg.OIDC.ClientID,
+		}
+		// If multiple audiences are configured, we skip the default ClientID check
+		// and perform a custom check against the configured list in the Authenticator.
+		if len(cfg.OIDC.Audience) > 0 {
+			oidcConfig.SkipClientIDCheck = true
+		}
+		verifier := provider.Verifier(oidcConfig)
+
+		authenticator = middleware.NewOIDCAuthenticator(cfg.OIDC, verifier)
+		logger.Info("OIDC Authenticator initialized", observability.String("issuer", cfg.OIDC.IssuerURL))
+	} else {
+		logger.Info("OIDC Authentication disabled")
+	}
+
 	// Create chi router with versioned API routes (Story 3.1)
 	router := httpx.NewRouter(httpx.RouterDeps{
 		Config:          cfg,
@@ -152,6 +181,7 @@ func main() {
 		RedisChecker:    redisChecker,
 		KafkaChecker:    kafkaChecker,
 		RabbitMQChecker: rabbitmqChecker,
+		Authenticator:   authenticator,
 	})
 
 	server := &http.Server{

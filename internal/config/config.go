@@ -16,6 +16,7 @@ type Config struct {
 	RabbitMQ      RabbitMQConfig      `koanf:"rabbitmq"`
 	Observability ObservabilityConfig `koanf:"otel"`
 	Log           LogConfig           `koanf:"log"`
+	OIDC          OIDCConfig          `koanf:"oidc"`
 }
 
 // GRPCConfig holds gRPC server settings.
@@ -138,5 +139,19 @@ type RabbitMQConfig struct {
 
 // IsEnabled returns true if RabbitMQ is enabled.
 func (c *RabbitMQConfig) IsEnabled() bool {
+	return c.Enabled
+}
+
+// OIDCConfig holds OIDC authentication settings.
+type OIDCConfig struct {
+	Enabled    bool     `koanf:"enabled"`     // OIDC_ENABLED
+	IssuerURL  string   `koanf:"issuer_url"`  // OIDC_ISSUER_URL
+	ClientID   string   `koanf:"client_id"`   // OIDC_CLIENT_ID
+	Audience   []string `koanf:"audience"`    // OIDC_AUDIENCE (optional, defaults to ClientID if empty)
+	RolesClaim string   `koanf:"roles_claim"` // OIDC_ROLES_CLAIM (optional, defaults to "realm_access.roles")
+}
+
+// IsEnabled returns true if OIDC is enabled.
+func (c *OIDCConfig) IsEnabled() bool {
 	return c.Enabled
 }

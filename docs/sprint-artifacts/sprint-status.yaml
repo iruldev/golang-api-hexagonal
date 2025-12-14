@@ -182,8 +182,8 @@ development_status:
   13-4-implement-dead-letter-queue-pattern: done
 
   # Epic 14: Advanced Security (4 Stories)
-  epic-14: backlog
-  14-1-implement-oidc-authenticator: backlog
+  epic-14: in-progress
+  14-1-implement-oidc-authenticator: done
   14-2-implement-rbac-middleware: backlog
   14-3-add-security-headers-middleware: backlog
   14-4-implement-audit-logging: backlog

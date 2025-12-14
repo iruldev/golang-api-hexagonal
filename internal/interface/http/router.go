@@ -24,6 +24,7 @@ type RouterDeps struct {
 	RedisChecker    handlers.DBHealthChecker // Optional, can be nil
 	KafkaChecker    handlers.DBHealthChecker // Optional, can be nil (Story 13.1)
 	RabbitMQChecker handlers.DBHealthChecker // Optional, can be nil (Story 13.2)
+	Authenticator   middleware.Authenticator // Optional, can be nil (Story 14.1)
 }
 
 // NewRouter creates a new chi router with versioned API routes.
@@ -83,7 +84,13 @@ func NewRouter(deps RouterDeps) chi.Router {
 	r.Handle("/metrics", promhttp.Handler())
 
 	// API v1 routes - delegate to routes.go (Story 3.6)
-	r.Route("/api/v1", RegisterRoutes)
+	r.Route("/api/v1", func(r chi.Router) {
+		// Apply authentication middleware if authenticator is provided (Story 14.1)
+		if deps.Authenticator != nil {
+			r.Use(middleware.AuthMiddleware(deps.Authenticator))
+		}
+		RegisterRoutes(r)
+	})
 
 	return r
 }
