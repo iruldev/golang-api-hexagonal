@@ -15,8 +15,11 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/redis"
 	grpcserver "github.com/iruldev/golang-api-hexagonal/internal/interface/grpc"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/grpc/interceptor"
+	grpcnote "github.com/iruldev/golang-api-hexagonal/internal/interface/grpc/note"
 	httpx "github.com/iruldev/golang-api-hexagonal/internal/interface/http"
 	"github.com/iruldev/golang-api-hexagonal/internal/observability"
+	noteuc "github.com/iruldev/golang-api-hexagonal/internal/usecase/note"
+	notev1 "github.com/iruldev/golang-api-hexagonal/proto/note/v1"
 )
 
 func main() {
@@ -109,6 +112,18 @@ func main() {
 				interceptor.RecoveryInterceptor(logger), // Last: catch panics and return INTERNAL
 			),
 		)
+
+		// Register gRPC services (Story 12.2)
+		// NoteService requires database - only register if pool is available
+		if pool != nil {
+			noteRepo := postgres.NewNoteRepository(pool)
+			noteUsecase := noteuc.NewUsecase(noteRepo)
+			noteHandler := grpcnote.NewHandler(noteUsecase)
+			notev1.RegisterNoteServiceServer(grpcSrv.GRPCServer(), noteHandler)
+			logger.Info("gRPC NoteService registered")
+		} else {
+			logger.Warn("gRPC NoteService not registered - database unavailable")
+		}
 
 		go func() {
 			if err := grpcSrv.Start(context.Background()); err != nil {

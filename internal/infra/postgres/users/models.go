@@ -8,12 +8,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+// Sample notes table demonstrating hexagonal architecture patterns
 type Note struct {
-	ID        pgtype.UUID        `json:"id"`
-	UserID    pgtype.UUID        `json:"user_id"`
-	Title     string             `json:"title"`
-	Content   pgtype.Text        `json:"content"`
+	// Unique identifier for the note
+	ID     pgtype.UUID `json:"id"`
+	UserID pgtype.UUID `json:"user_id"`
+	// Note title (required, max 255 chars)
+	Title string `json:"title"`
+	// Note body content (optional)
+	Content pgtype.Text `json:"content"`
+	// Timestamp when note was created
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	// Timestamp when note was last updated
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 

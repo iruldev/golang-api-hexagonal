@@ -26,6 +26,6 @@ SET title = $2, content = $3, updated_at = $4
 WHERE id = $1
 RETURNING *;
 
--- name: DeleteNote :exec
--- DeleteNote removes a note by ID.
+-- name: DeleteNote :execrows
+-- DeleteNote removes a note by ID. Returns the number of rows affected.
 DELETE FROM notes WHERE id = $1;

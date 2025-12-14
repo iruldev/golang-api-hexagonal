@@ -170,7 +170,7 @@ development_status:
   # Epic 12: Advanced Interface Layer (4 Stories)
   epic-12: in-progress
   12-1-add-grpc-server-support: done
-  12-2-create-grpc-service-definition-proto: backlog
+  12-2-create-grpc-service-definition-proto: done
   12-3-implement-graphql-handler-with-gqlgen: backlog
   12-4-add-graphql-playground: backlog
 

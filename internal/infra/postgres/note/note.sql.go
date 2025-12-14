@@ -11,21 +11,44 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countNotes = `-- name: CountNotes :one
+SELECT COUNT(*) FROM notes
+`
+
+// CountNotes returns the total number of notes (for pagination).
+func (q *Queries) CountNotes(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countNotes)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createNote = `-- name: CreateNote :one
-INSERT INTO notes (user_id, title, content)
-VALUES ($1, $2, $3)
+
+INSERT INTO notes (id, title, content, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id, user_id, title, content, created_at, updated_at
 `
 
 type CreateNoteParams struct {
-	UserID  pgtype.UUID `json:"user_id"`
-	Title   string      `json:"title"`
-	Content pgtype.Text `json:"content"`
+	ID        pgtype.UUID        `json:"id"`
+	Title     string             `json:"title"`
+	Content   pgtype.Text        `json:"content"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
-// CreateNote inserts a new note and returns it
+// Note CRUD queries for sqlc.
+// This file demonstrates type-safe query patterns using sqlc.
+// CreateNote inserts a new note and returns the created record.
 func (q *Queries) CreateNote(ctx context.Context, arg CreateNoteParams) (Note, error) {
-	row := q.db.QueryRow(ctx, createNote, arg.UserID, arg.Title, arg.Content)
+	row := q.db.QueryRow(ctx, createNote,
+		arg.ID,
+		arg.Title,
+		arg.Content,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
 	var i Note
 	err := row.Scan(
 		&i.ID,
@@ -38,21 +61,24 @@ func (q *Queries) CreateNote(ctx context.Context, arg CreateNoteParams) (Note, e
 	return i, err
 }
 
-const deleteNote = `-- name: DeleteNote :exec
+const deleteNote = `-- name: DeleteNote :execrows
 DELETE FROM notes WHERE id = $1
 `
 
-// DeleteNote removes a note by ID
-func (q *Queries) DeleteNote(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteNote, id)
-	return err
+// DeleteNote removes a note by ID. Returns the number of rows affected.
+func (q *Queries) DeleteNote(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteNote, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getNote = `-- name: GetNote :one
 SELECT id, user_id, title, content, created_at, updated_at FROM notes WHERE id = $1
 `
 
-// GetNote retrieves a note by ID
+// GetNote retrieves a single note by ID.
 func (q *Queries) GetNote(ctx context.Context, id pgtype.UUID) (Note, error) {
 	row := q.db.QueryRow(ctx, getNote, id)
 	var i Note
@@ -67,13 +93,18 @@ func (q *Queries) GetNote(ctx context.Context, id pgtype.UUID) (Note, error) {
 	return i, err
 }
 
-const listNotesByUser = `-- name: ListNotesByUser :many
-SELECT id, user_id, title, content, created_at, updated_at FROM notes WHERE user_id = $1 ORDER BY created_at DESC
+const listNotes = `-- name: ListNotes :many
+SELECT id, user_id, title, content, created_at, updated_at FROM notes ORDER BY created_at DESC LIMIT $1 OFFSET $2
 `
 
-// ListNotesByUser retrieves all notes for a user
-func (q *Queries) ListNotesByUser(ctx context.Context, userID pgtype.UUID) ([]Note, error) {
-	rows, err := q.db.Query(ctx, listNotesByUser, userID)
+type ListNotesParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+// ListNotes retrieves notes with pagination, ordered by creation time descending.
+func (q *Queries) ListNotes(ctx context.Context, arg ListNotesParams) ([]Note, error) {
+	rows, err := q.db.Query(ctx, listNotes, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -100,21 +131,27 @@ func (q *Queries) ListNotesByUser(ctx context.Context, userID pgtype.UUID) ([]No
 }
 
 const updateNote = `-- name: UpdateNote :one
-UPDATE notes
-SET title = $2, content = $3, updated_at = NOW()
+UPDATE notes 
+SET title = $2, content = $3, updated_at = $4 
 WHERE id = $1
 RETURNING id, user_id, title, content, created_at, updated_at
 `
 
 type UpdateNoteParams struct {
-	ID      pgtype.UUID `json:"id"`
-	Title   string      `json:"title"`
-	Content pgtype.Text `json:"content"`
+	ID        pgtype.UUID        `json:"id"`
+	Title     string             `json:"title"`
+	Content   pgtype.Text        `json:"content"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
-// UpdateNote updates a note's title and content
+// UpdateNote updates a note's title and content, returns the updated record.
 func (q *Queries) UpdateNote(ctx context.Context, arg UpdateNoteParams) (Note, error) {
-	row := q.db.QueryRow(ctx, updateNote, arg.ID, arg.Title, arg.Content)
+	row := q.db.QueryRow(ctx, updateNote,
+		arg.ID,
+		arg.Title,
+		arg.Content,
+		arg.UpdatedAt,
+	)
 	var i Note
 	err := row.Scan(
 		&i.ID,

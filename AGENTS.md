@@ -228,6 +228,9 @@ The gRPC server runs alongside HTTP and follows hexagonal architecture patterns.
 ```
 internal/interface/grpc/
 ├── server.go                  # gRPC server initialization
+├── {domain}/
+│   ├── handler.go             # gRPC service handler
+│   └── handler_test.go        # Handler unit tests
 └── interceptor/
     ├── recovery.go            # Panic recovery
     ├── logging.go             # Structured logging  
@@ -274,6 +277,146 @@ grpcurl -plaintext localhost:50051 describe {service}.v1.{Service}
 
 # Call method
 grpcurl -plaintext -d '{"field": "value"}' localhost:50051 {service}.v1.{Service}/{Method}
+```
+
+### Proto File Patterns (Story 12.2)
+
+Protobuf service definitions provide strongly typed, versioned interfaces for gRPC services.
+
+#### Proto File Naming Conventions
+
+| Element | Convention | Example |
+|---------|------------|---------|
+| Directory | `proto/{domain}/v1/` | `proto/note/v1/` |
+| File name | `{domain}.proto` | `note.proto` |
+| Package | `{domain}.v1` | `note.v1` |
+| Go package | `proto/{domain}/v1;{domain}v1` | `proto/note/v1;notev1` |
+| Service | `{Domain}Service` | `NoteService` |
+| Messages | `{Action}{Domain}{Request/Response}` | `CreateNoteRequest` |
+
+#### Proto File Structure
+
+```protobuf
+syntax = "proto3";
+
+package note.v1;
+
+option go_package = "github.com/iruldev/golang-api-hexagonal/proto/note/v1;notev1";
+
+import "google/protobuf/timestamp.proto";
+
+// Entity message
+message Note {
+  string id = 1;
+  string title = 2;
+  string content = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+// Request/Response messages for each RPC
+message CreateNoteRequest {
+  string title = 1;
+  string content = 2;
+}
+
+message CreateNoteResponse {
+  Note note = 1;
+}
+
+// Service definition
+service NoteService {
+  rpc CreateNote(CreateNoteRequest) returns (CreateNoteResponse);
+  rpc GetNote(GetNoteRequest) returns (GetNoteResponse);
+  rpc ListNotes(ListNotesRequest) returns (ListNotesResponse);
+  rpc UpdateNote(UpdateNoteRequest) returns (UpdateNoteResponse);
+  rpc DeleteNote(DeleteNoteRequest) returns (DeleteNoteResponse);
+}
+```
+
+#### gRPC Handler Implementation
+
+```go
+// internal/interface/grpc/note/handler.go
+type Handler struct {
+    notev1.UnimplementedNoteServiceServer
+    usecase *noteuc.Usecase  // Inject usecase, NOT infra
+}
+
+func NewHandler(uc *noteuc.Usecase) *Handler {
+    return &Handler{usecase: uc}
+}
+
+func (h *Handler) CreateNote(ctx context.Context, req *notev1.CreateNoteRequest) (*notev1.CreateNoteResponse, error) {
+    // Call usecase layer, NOT infra directly
+    note, err := h.usecase.Create(ctx, req.GetTitle(), req.GetContent())
+    if err != nil {
+        return nil, mapErrorToStatus(err)
+    }
+    return &notev1.CreateNoteResponse{Note: toProto(note)}, nil
+}
+```
+
+#### Error Mapping to gRPC Status
+
+| Domain Error | gRPC Status Code | When to Use |
+|--------------|------------------|-------------|
+| `ErrNoteNotFound` | `codes.NotFound` | Resource doesn't exist |
+| `ErrEmptyTitle` | `codes.InvalidArgument` | Validation failure |
+| `ErrTitleTooLong` | `codes.InvalidArgument` | Validation failure |
+| DB/infra errors | `codes.Internal` | Server-side issues |
+| Invalid UUID | `codes.InvalidArgument` | Bad request format |
+
+```go
+func mapErrorToStatus(err error) error {
+    switch {
+    case errors.Is(err, notedom.ErrNoteNotFound):
+        return status.Error(codes.NotFound, err.Error())
+    case errors.Is(err, notedom.ErrEmptyTitle):
+        return status.Error(codes.InvalidArgument, err.Error())
+    default:
+        return status.Error(codes.Internal, "internal error")
+    }
+}
+```
+
+#### Registering gRPC Services in main.go
+
+```go
+// Register gRPC services when pool is available
+if pool != nil {
+    noteRepo := postgres.NewNoteRepository(pool)
+    noteUsecase := noteuc.NewUsecase(noteRepo)
+    noteHandler := grpcnote.NewHandler(noteUsecase)
+    notev1.RegisterNoteServiceServer(grpcSrv.GRPCServer(), noteHandler)
+}
+```
+
+#### Testing gRPC Handlers
+
+Use mock repository for unit tests:
+
+```go
+type MockRepository struct {
+    CreateFunc func(ctx context.Context, note *notedom.Note) error
+    // ... other methods
+}
+
+func TestHandler_CreateNote(t *testing.T) {
+    mockRepo := &MockRepository{
+        CreateFunc: func(ctx context.Context, note *notedom.Note) error {
+            note.ID = uuid.New()
+            return nil
+        },
+    }
+    uc := noteuc.NewUsecase(mockRepo)
+    handler := NewHandler(uc)
+    
+    resp, err := handler.CreateNote(ctx, &notev1.CreateNoteRequest{
+        Title: "Test", Content: "Content",
+    })
+    // Assert...
+}
 ```
 
 ### Error Handling Flow

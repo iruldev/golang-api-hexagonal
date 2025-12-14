@@ -11,15 +11,19 @@ import (
 )
 
 type Querier interface {
-	// CreateNote inserts a new note and returns it
+	// CountNotes returns the total number of notes (for pagination).
+	CountNotes(ctx context.Context) (int64, error)
+	// Note CRUD queries for sqlc.
+	// This file demonstrates type-safe query patterns using sqlc.
+	// CreateNote inserts a new note and returns the created record.
 	CreateNote(ctx context.Context, arg CreateNoteParams) (Note, error)
-	// DeleteNote removes a note by ID
-	DeleteNote(ctx context.Context, id pgtype.UUID) error
-	// GetNote retrieves a note by ID
+	// DeleteNote removes a note by ID. Returns the number of rows affected.
+	DeleteNote(ctx context.Context, id pgtype.UUID) (int64, error)
+	// GetNote retrieves a single note by ID.
 	GetNote(ctx context.Context, id pgtype.UUID) (Note, error)
-	// ListNotesByUser retrieves all notes for a user
-	ListNotesByUser(ctx context.Context, userID pgtype.UUID) ([]Note, error)
-	// UpdateNote updates a note's title and content
+	// ListNotes retrieves notes with pagination, ordered by creation time descending.
+	ListNotes(ctx context.Context, arg ListNotesParams) ([]Note, error)
+	// UpdateNote updates a note's title and content, returns the updated record.
 	UpdateNote(ctx context.Context, arg UpdateNoteParams) (Note, error)
 }
 
