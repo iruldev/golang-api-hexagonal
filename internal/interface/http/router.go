@@ -93,5 +93,15 @@ func NewRouter(deps RouterDeps) chi.Router {
 		RegisterRoutes(r)
 	})
 
+	// Admin routes - separated from versioned API (Story 15.1)
+	// Requires authentication + admin role to access any endpoint
+	if deps.Authenticator != nil {
+		r.Route("/admin", func(r chi.Router) {
+			r.Use(middleware.AuthMiddleware(deps.Authenticator))
+			r.Use(middleware.RequireRole("admin"))
+			RegisterAdminRoutes(r)
+		})
+	}
+
 	return r
 }

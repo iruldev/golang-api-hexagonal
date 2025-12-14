@@ -804,6 +804,61 @@ r.Route("/api/v1", func(r chi.Router) {
 })
 ```
 
+### Adding Admin Endpoints (Story 15.1)
+
+Admin routes are mounted at `/admin` (NOT under `/api/v1`) and require authentication + admin role.
+
+#### Route Structure
+
+```
+/admin                     # Admin route group (requires: auth + admin role)
+├── /health               # Admin health check (GET)
+└── /...                  # Future admin endpoints
+```
+
+#### Adding New Admin Endpoints
+
+1. **Create Handler** in `internal/interface/http/admin/`:
+
+```go
+// internal/interface/http/admin/your_handler.go
+func YourHandler(w http.ResponseWriter, r *http.Request) {
+    // Business logic here
+    response.Success(w, data)
+}
+```
+
+2. **Register Route** in `internal/interface/http/routes_admin.go`:
+
+```go
+func RegisterAdminRoutes(r chi.Router) {
+    r.Get("/health", admin.HealthHandler)
+    r.Get("/your-endpoint", admin.YourHandler)  // Add here
+}
+```
+
+3. **Middleware Applied Automatically**:
+   - `AuthMiddleware` - validates identity (returns 401 if missing)
+   - `RequireRole("admin")` - validates admin access (returns 403 if unauthorized)
+
+#### Security Requirements
+
+| Requirement | Implementation |
+|-------------|----------------|
+| Authentication | Applied via `AuthMiddleware` |
+| Authorization | Applied via `RequireRole("admin")` |
+| Middleware Order | Auth BEFORE RBAC (critical!) |
+| Fail-closed | No fallback to allow access |
+
+#### Expected Responses
+
+| Scenario | HTTP Status | Error Code |
+|----------|-------------|------------|
+| No token | 401 | `ERR_UNAUTHORIZED` |
+| Invalid token | 401 | `ERR_UNAUTHORIZED` |
+| Valid token, no admin role | 403 | `ERR_INSUFFICIENT_ROLE` |
+| Valid token + admin role | 200 | (success) |
+
 ### Audit Logging (Story 14.4)
 
 Audit logging records critical system actions for security and compliance.

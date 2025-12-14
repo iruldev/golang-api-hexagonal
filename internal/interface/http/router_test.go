@@ -6,8 +6,107 @@ import (
 	"testing"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
+	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
 	"github.com/stretchr/testify/assert"
 )
+
+// mockAuthenticator is a test double for the Authenticator interface.
+type mockAuthenticator struct {
+	claims *middleware.Claims
+	err    error
+}
+
+func (m *mockAuthenticator) Authenticate(r *http.Request) (middleware.Claims, error) {
+	if m.err != nil {
+		return middleware.Claims{}, m.err
+	}
+	return *m.claims, nil
+}
+
+func TestRouter_AdminRoutes_WithAuthenticator(t *testing.T) {
+	tests := []struct {
+		name         string
+		auth         *mockAuthenticator
+		wantStatus   int
+		wantContains string
+	}{
+		{
+			name: "no_token_returns_401",
+			auth: &mockAuthenticator{
+				err: middleware.ErrUnauthenticated,
+			},
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name: "valid_token_no_admin_role_returns_403",
+			auth: &mockAuthenticator{
+				claims: &middleware.Claims{
+					UserID: "user-123",
+					Roles:  []string{"user"},
+				},
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "valid_token_with_admin_role_returns_200",
+			auth: &mockAuthenticator{
+				claims: &middleware.Claims{
+					UserID: "admin-123",
+					Roles:  []string{"admin"},
+				},
+			},
+			wantStatus:   http.StatusOK,
+			wantContains: `"admin_access":true`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange: Create real router with authenticator
+			cfg := &config.Config{
+				App: config.AppConfig{Env: "test"},
+			}
+			deps := RouterDeps{
+				Config:        cfg,
+				Authenticator: tt.auth,
+			}
+			router := NewRouter(deps)
+
+			req := httptest.NewRequest(http.MethodGet, "/admin/health", nil)
+			rr := httptest.NewRecorder()
+
+			// Act
+			router.ServeHTTP(rr, req)
+
+			// Assert
+			assert.Equal(t, tt.wantStatus, rr.Code)
+			if tt.wantContains != "" {
+				assert.Contains(t, rr.Body.String(), tt.wantContains)
+			}
+		})
+	}
+}
+
+func TestRouter_AdminRoutes_NoAuthenticator_NotMounted(t *testing.T) {
+	// Arrange: Create router WITHOUT authenticator
+	cfg := &config.Config{
+		App: config.AppConfig{Env: "test"},
+	}
+	deps := RouterDeps{
+		Config:        cfg,
+		Authenticator: nil, // No authenticator
+	}
+	router := NewRouter(deps)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/health", nil)
+	rr := httptest.NewRecorder()
+
+	// Act
+	router.ServeHTTP(rr, req)
+
+	// Assert: Should be 404 because admin routes are not mounted
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+}
 
 func TestRouter_SecurityHeaders(t *testing.T) {
 	// Setup minimal dependencies
