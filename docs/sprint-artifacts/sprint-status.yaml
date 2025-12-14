@@ -171,7 +171,7 @@ development_status:
   epic-12: in-progress
   12-1-add-grpc-server-support: done
   12-2-create-grpc-service-definition-proto: done
-  12-3-implement-graphql-handler-with-gqlgen: backlog
+  12-3-implement-graphql-handler-with-gqlgen: done
   12-4-add-graphql-playground: backlog
 
   # Epic 13: Event-Driven Implementations (4 Stories)

@@ -68,8 +68,8 @@ migrate-create: ## Create new migration (usage: make migrate-create NAME=create_
 	@test -n "$(NAME)" || (echo "Usage: make migrate-create NAME=migration_name" && exit 1)
 	migrate create -ext sql -dir db/migrations -seq $(NAME)
 
-# Code generation (Story 4.3: sqlc)
-gen:
+# Updated gen target to include all generations
+gen: gen-proto gen-gql
 	sqlc generate
 
 sqlc-check:
@@ -118,3 +118,11 @@ gen-proto: ## Generate Go code from .proto files
 	protoc --go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 		proto/**/**/*.proto
+
+# GraphQL (Story 12.3)
+gen-gql: ## Generate GraphQL code from schema
+	go run github.com/99designs/gqlgen generate
+
+# Updated gen target to include all generations
+gen: gen-proto gen-gql
+	sqlc generate

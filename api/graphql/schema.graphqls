@@ -1,0 +1,32 @@
+# GraphQL Schema for Note Domain
+
+scalar Time
+
+type Note {
+  id: ID!
+  title: String!
+  content: String!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+input CreateNoteInput {
+  title: String!
+  content: String!
+}
+
+input UpdateNoteInput {
+  title: String!
+  content: String!
+}
+
+type Query {
+  notes: [Note!]!
+  note(id: ID!): Note
+}
+
+type Mutation {
+  createNote(input: CreateNoteInput!): Note!
+  updateNote(id: ID!, input: UpdateNoteInput!): Note!
+  deleteNote(id: ID!): Boolean!
+}

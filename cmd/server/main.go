@@ -9,10 +9,12 @@ import (
 	"os"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/redis"
+	"github.com/iruldev/golang-api-hexagonal/internal/interface/graphql"
 	grpcserver "github.com/iruldev/golang-api-hexagonal/internal/interface/grpc"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/grpc/interceptor"
 	grpcnote "github.com/iruldev/golang-api-hexagonal/internal/interface/grpc/note"
@@ -99,6 +101,27 @@ func main() {
 		}
 	}()
 
+	// Initialize Note module (Common for REST, gRPC, GraphQL)
+	var noteUsecase *noteuc.Usecase
+	if pool != nil {
+		noteRepo := postgres.NewNoteRepository(pool)
+		noteUsecase = noteuc.NewUsecase(noteRepo)
+	}
+
+	// Initialize GraphQL handler (Story 12.3)
+	// We register this on the main router to leverage existing middleware (logging, auth, etc)
+	if noteUsecase != nil {
+		srv := handler.NewDefaultServer(graphql.NewExecutableSchema(graphql.Config{
+			Resolvers: &graphql.Resolver{
+				NoteUsecase: noteUsecase,
+			},
+		}))
+		router.Handle("/query", srv)
+		logger.Info("GraphQL handler registered at /query")
+	} else {
+		logger.Warn("GraphQL handler not registered - database unavailable")
+	}
+
 	// Start gRPC server if enabled (Story 12.1)
 	var grpcSrv *grpcserver.Server
 	if cfg.GRPC.Enabled {
@@ -114,10 +137,7 @@ func main() {
 		)
 
 		// Register gRPC services (Story 12.2)
-		// NoteService requires database - only register if pool is available
-		if pool != nil {
-			noteRepo := postgres.NewNoteRepository(pool)
-			noteUsecase := noteuc.NewUsecase(noteRepo)
+		if noteUsecase != nil {
 			noteHandler := grpcnote.NewHandler(noteUsecase)
 			notev1.RegisterNoteServiceServer(grpcSrv.GRPCServer(), noteHandler)
 			logger.Info("gRPC NoteService registered")

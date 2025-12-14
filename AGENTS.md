@@ -431,6 +431,42 @@ Handler (maps to HTTP status)
 Response (JSON envelope with error code)
 ```
 
+### GraphQL Server Patterns (Story 12.3)
+
+The GraphQL server uses `99designs/gqlgen` and follows the same hexagonal architecture.
+
+#### Directory Structure
+
+```
+internal/interface/graphql/
+├── resolver.go         # Dependency injection
+├── schema.resolvers.go # Resolver implementation
+├── generated.go        # Generated code
+├── model/              # Generated models
+└── integration_test.go # Integration tests
+api/graphql/
+└── schema.graphqls     # Schema definitions
+```
+
+#### Workflow
+
+1.  **Define Schema**: Edit `api/graphql/schema.graphqls`.
+2.  **Generate Code**: Run `make gen-gql` (or `make gen`).
+3.  **Implement Resolvers**: Edit `internal/interface/graphql/schema.resolvers.go`.
+    *   Inject Usecase in `internal/interface/graphql/resolver.go`.
+    *   Call Usecase methods in resolvers.
+    *   Map domain models to GraphQL models if needed.
+4.  **Test**: Add integration tests in `internal/interface/graphql/`.
+
+#### Resolver Implementation
+
+```go
+func (r *queryResolver) Notes(ctx context.Context) ([]*note.Note, error) {
+    // Call usecase layer, NOT infra directly
+    return r.NoteUsecase.List(ctx, 1, 100)
+}
+```
+
 ### Adding Auth Middleware
 
 The auth middleware interface enables pluggable authentication providers. See `internal/interface/http/middleware/auth.go`.
