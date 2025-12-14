@@ -178,7 +178,7 @@ development_status:
   epic-13: in-progress
   13-1-implement-kafka-event-publisher: done
   13-2-implement-rabbitmq-event-publisher: done
-  13-3-create-event-consumer-interface: backlog
+  13-3-create-event-consumer-interface: done
   13-4-implement-dead-letter-queue-pattern: backlog
 
   # Epic 14: Advanced Security (4 Stories)

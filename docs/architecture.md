@@ -868,6 +868,48 @@ func (p *KafkaPublisher) Publish(ctx context.Context, topic string, event Event)
 
 ---
 
+### EventConsumer Interface
+
+**Location:** `internal/runtimeutil/events.go`
+
+```go
+type EventHandler func(ctx context.Context, event Event) error
+
+type EventConsumer interface {
+    Subscribe(ctx context.Context, topic string, handler EventHandler) error
+    Close() error
+}
+
+type ConsumerConfig struct {
+    GroupID           string        // Consumer group identifier
+    MaxRetries        int           // Default: 3
+    Concurrency       int           // Default: 1
+    ProcessingTimeout time.Duration // Default: 30s
+    AutoAck           bool          // Default: true
+}
+```
+
+**Default:** `NopEventConsumer` (returns immediately)  
+**Testing:** `MockEventConsumer` (simulate events)
+
+**Sentinel Errors:**
+- `ErrConsumerClosed` - Consumer has been closed
+- `ErrProcessingTimeout` - Processing exceeded timeout
+- `ErrMaxRetriesExceeded` - Retry limit reached
+
+**Kafka Consumer Example:**
+```go
+type KafkaConsumer struct {
+    consumerGroup sarama.ConsumerGroup
+}
+
+func (c *KafkaConsumer) Subscribe(ctx context.Context, topic string, handler EventHandler) error {
+    return c.consumerGroup.Consume(ctx, []string{topic}, &consumerHandler{handler})
+}
+```
+
+---
+
 ### SecretProvider Interface
 
 **Location:** `internal/runtimeutil/secrets.go`

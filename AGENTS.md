@@ -1319,7 +1319,133 @@ if closer, ok := rabbitmqPublisher.(*rabbitmq.RabbitMQPublisher); ok {
 
 ---
 
-## 🔄 Async Job Patterns
+## 📥 Event Consumer Interface (Story 13.3)
+
+The Event Consumer interface enables swappable event consumption from message brokers (Kafka, RabbitMQ, NATS). See `internal/runtimeutil/events.go`.
+
+### Core Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `EventConsumer` interface | `runtimeutil/events.go` | Port for event consumption |
+| `EventHandler` func type | `runtimeutil/events.go` | Handler function signature |
+| `ConsumerConfig` struct | `runtimeutil/events.go` | Consumer configuration options |
+| `NopEventConsumer` | `runtimeutil/events.go` | No-op implementation for testing |
+| `MockEventConsumer` | `runtimeutil/events.go` | Mock for behavior verification |
+
+### Interface Definition
+
+```go
+// EventHandler processes a consumed event
+// Return nil for success, error to signal processing failure
+type EventHandler func(ctx context.Context, event Event) error
+
+// EventConsumer defines event consumption abstraction
+type EventConsumer interface {
+    // Subscribe starts consuming events from the specified topic
+    // Blocks until ctx is cancelled or an error occurs
+    Subscribe(ctx context.Context, topic string, handler EventHandler) error
+    
+    // Close gracefully stops the consumer
+    // In-flight messages complete before return
+    Close() error
+}
+```
+
+### Configuration Options
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `GroupID` | "" | Consumer group identifier (Kafka/RabbitMQ) |
+| `MaxRetries` | 3 | Retry attempts for failed processing |
+| `Concurrency` | 1 | Concurrent message handlers |
+| `ProcessingTimeout` | 30s | Max time per event |
+| `AutoAck` | true | Auto-acknowledge on success |
+
+```go
+// Get sensible defaults
+config := runtimeutil.DefaultConsumerConfig()
+config.GroupID = "my-service"
+config.Concurrency = 4
+```
+
+### Basic Usage
+
+```go
+import "github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
+
+// Create handler function
+handler := func(ctx context.Context, event runtimeutil.Event) error {
+    log.Info("received event", "id", event.ID, "type", event.Type)
+    // Process event...
+    return nil
+}
+
+// Subscribe to topic (blocks until ctx cancelled)
+err := consumer.Subscribe(ctx, "orders", handler)
+```
+
+### Sentinel Errors
+
+| Error | When Returned |
+|-------|---------------|
+| `ErrConsumerClosed` | Operations on closed consumer |
+| `ErrProcessingTimeout` | Event processing exceeds timeout |
+| `ErrMaxRetriesExceeded` | All retry attempts exhausted |
+
+### Prometheus Metrics (for implementations)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `event_consumer_messages_total` | Counter | `topic`, `status` | Total consumed |
+| `event_consumer_errors_total` | Counter | `topic`, `error_type` | Failed processing |
+| `event_consumer_duration_seconds` | Histogram | `topic` | Processing latency |
+
+### Testing with NopEventConsumer
+
+```go
+// No-op consumer for testing (returns immediately)
+consumer := runtimeutil.NewNopEventConsumer()
+err := consumer.Subscribe(ctx, "test", handler) // Returns nil immediately
+```
+
+### Testing with MockEventConsumer
+
+```go
+import "github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
+
+func TestOrderHandler(t *testing.T) {
+    mock := runtimeutil.NewMockEventConsumer()
+    
+    // Start subscription in goroutine
+    ctx, cancel := context.WithCancel(context.Background())
+    go func() {
+        mock.Subscribe(ctx, "orders", orderHandler)
+    }()
+    
+    // Simulate incoming event
+    event, _ := runtimeutil.NewEvent("order.created", payload)
+    err := mock.SimulateEvent(event)
+    require.NoError(t, err)
+    
+    // Verify handler was called
+    assert.True(t, mock.HandlerCalled())
+    assert.Equal(t, event.ID, mock.LastEvent().ID)
+    
+    cancel()
+}
+```
+
+### MockEventConsumer Methods
+
+| Method | Purpose |
+|--------|---------|
+| `SimulateEvent(event)` | Trigger handler with test event |
+| `HandlerCalled()` | Check if handler was invoked |
+| `LastEvent()` | Get last processed event |
+| `Events()` | Get all simulated events |
+| `Topic()` | Get subscribed topic |
+
 
 > **For comprehensive async job documentation, see [`docs/async-jobs.md`](docs/async-jobs.md)**
 

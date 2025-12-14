@@ -126,6 +126,23 @@ publisher.PublishAsync(ctx, "analytics", event)
 | `KAFKA_BROKERS` | `localhost:9092` | Broker addresses |
 | `KAFKA_CLIENT_ID` | `golang-api-hexagonal` | Client identifier |
 
+### 📥 Event Consuming (V3)
+
+| Type | Use Case | Location |
+|------|----------|----------|
+| **EventConsumer Interface** | Swappable event consumption (Kafka, RabbitMQ, NATS) | `internal/runtimeutil/events.go` |
+| **NopConsumer** | Testing, disabled mode | `internal/runtimeutil/events.go` |
+| **MockConsumer** | Behavior verification in tests | `internal/runtimeutil/events.go` |
+
+```go
+// Subscribe to events (blocks until ctx cancelled)
+handler := func(ctx context.Context, event runtimeutil.Event) error {
+    // Process event...
+    return nil
+}
+consumer.Subscribe(ctx, "orders", handler)
+```
+
 ### 🛠 CLI Tool (bplat)
 
 | Command | Purpose |
