@@ -18,7 +18,7 @@ func TestMetricsMiddleware_Success(t *testing.T) {
 	// Arrange - using actual MetricsMiddleware with global observability metrics
 	middleware := MetricsMiddleware()
 
-	successHandler := asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
+	successHandler := asynq.HandlerFunc(func(ctx context.Context, task *asynq.Task) error {
 		return nil
 	})
 
@@ -43,7 +43,7 @@ func TestMetricsMiddleware_Failure(t *testing.T) {
 	// Arrange - using actual MetricsMiddleware
 	middleware := MetricsMiddleware()
 
-	failHandler := asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
+	failHandler := asynq.HandlerFunc(func(ctx context.Context, task *asynq.Task) error {
 		return errors.New("task failed")
 	})
 
@@ -68,7 +68,7 @@ func TestMetricsMiddleware_RecordsHistogram(t *testing.T) {
 	// Arrange - test histogram observation
 	middleware := MetricsMiddleware()
 
-	handler := asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
+	handler := asynq.HandlerFunc(func(ctx context.Context, task *asynq.Task) error {
 		return nil
 	})
 
@@ -94,7 +94,7 @@ func TestMetricsMiddleware_ReturnsError(t *testing.T) {
 	middleware := MetricsMiddleware()
 	expectedErr := errors.New("expected error")
 
-	failHandler := asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
+	failHandler := asynq.HandlerFunc(func(ctx context.Context, task *asynq.Task) error {
 		return expectedErr
 	})
 
@@ -114,7 +114,7 @@ func TestMetricsMiddleware_UsesQueueDefault(t *testing.T) {
 	// Arrange
 	middleware := MetricsMiddleware()
 
-	handler := asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
+	handler := asynq.HandlerFunc(func(ctx context.Context, task *asynq.Task) error {
 		return nil
 	})
 
@@ -148,18 +148,18 @@ func TestMetricsMiddleware_MockPattern(t *testing.T) {
 
 	// Custom middleware using isolated counter
 	middleware := func(next asynq.Handler) asynq.Handler {
-		return asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
-			err := next.ProcessTask(ctx, t)
+		return asynq.HandlerFunc(func(ctx context.Context, task *asynq.Task) error {
+			err := next.ProcessTask(ctx, task)
 			status := "success"
 			if err != nil {
 				status = "failed"
 			}
-			counter.WithLabelValues(t.Type(), "default", status).Inc()
+			counter.WithLabelValues(task.Type(), "default", status).Inc()
 			return err
 		})
 	}
 
-	successHandler := asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
+	successHandler := asynq.HandlerFunc(func(ctx context.Context, task *asynq.Task) error {
 		return nil
 	})
 

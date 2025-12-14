@@ -33,7 +33,7 @@ func TestRecoveryMiddleware_RecoversPanic(t *testing.T) {
 	logger := zap.NewNop()
 	middleware := RecoveryMiddleware(logger)
 
-	panicHandler := asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
+	panicHandler := asynq.HandlerFunc(func(ctx context.Context, task *asynq.Task) error {
 		panic("test panic")
 	})
 
@@ -53,7 +53,7 @@ func TestLoggingMiddleware_LogsSuccess(t *testing.T) {
 	logger := zap.NewNop()
 	middleware := LoggingMiddleware(logger)
 
-	successHandler := asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
+	successHandler := asynq.HandlerFunc(func(ctx context.Context, task *asynq.Task) error {
 		return nil
 	})
 
@@ -73,7 +73,7 @@ func TestLoggingMiddleware_LogsFailure(t *testing.T) {
 	middleware := LoggingMiddleware(logger)
 
 	expectedErr := errors.New("task failed")
-	failHandler := asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
+	failHandler := asynq.HandlerFunc(func(ctx context.Context, task *asynq.Task) error {
 		return expectedErr
 	})
 
@@ -100,7 +100,7 @@ func TestTracingMiddleware_CreatesSpan(t *testing.T) {
 	// Arrange
 	middleware := TracingMiddleware()
 
-	successHandler := asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
+	successHandler := asynq.HandlerFunc(func(ctx context.Context, task *asynq.Task) error {
 		return nil
 	})
 
