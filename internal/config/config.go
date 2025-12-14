@@ -23,11 +23,25 @@ type GRPCConfig struct {
 	ReflectionEnabled bool `koanf:"reflection_enabled"` // default: true in dev, false in prod
 }
 
+// Environment constants for application environment.
+const (
+	EnvDevelopment = "development"
+	EnvLocal       = "local"
+	EnvStaging     = "staging"
+	EnvProduction  = "production"
+)
+
 // AppConfig holds application settings.
 type AppConfig struct {
 	Name     string `koanf:"name"`
-	Env      string `koanf:"env"` // development, staging, production
+	Env      string `koanf:"env"` // development, local, staging, production
 	HTTPPort int    `koanf:"http_port"`
+}
+
+// IsDevelopment returns true if the environment is development or local.
+// Use this for enabling dev-only features like GraphQL Playground.
+func (c *AppConfig) IsDevelopment() bool {
+	return c.Env == EnvDevelopment || c.Env == EnvLocal
 }
 
 // DatabaseConfig holds PostgreSQL connection settings.

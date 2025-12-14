@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
@@ -118,6 +119,15 @@ func main() {
 		}))
 		router.Handle("/query", srv)
 		logger.Info("GraphQL handler registered at /query")
+
+		// Initialize GraphQL Playground (Story 12.4)
+		// CRITICAL: Only enable in development/local for security - playground exposes schema introspection
+		if cfg.App.IsDevelopment() {
+			router.Handle("/playground", playground.Handler("GraphQL playground", "/query"))
+			logger.Info("GraphQL Playground enabled at /playground (dev mode)")
+		} else {
+			logger.Info("GraphQL Playground disabled (non-dev mode)", observability.String("env", cfg.App.Env))
+		}
 	} else {
 		logger.Warn("GraphQL handler not registered - database unavailable")
 	}

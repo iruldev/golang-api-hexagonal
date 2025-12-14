@@ -22,6 +22,15 @@ make migrate-up
 make dev
 ```
 
+### GraphQL Playground
+
+When running in development mode (`APP_ENV=development` or `APP_ENV=local`), you can explore the GraphQL API interactively:
+
+- **URL:** `http://localhost:8080/playground`
+- **GraphQL Endpoint:** `/query`
+
+> ⚠️ **Security Note:** The playground is automatically disabled in `staging` and `production` environments.
+
 ## V2 Features (Platform Evolution)
 
 V2 extends the golden template foundation with enterprise-grade capabilities:

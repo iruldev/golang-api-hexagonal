@@ -458,6 +458,7 @@ api/graphql/
     *   Map domain models to GraphQL models if needed.
 4.  **Test**: Add integration tests in `internal/interface/graphql/`.
 
+
 #### Resolver Implementation
 
 ```go
@@ -466,6 +467,24 @@ func (r *queryResolver) Notes(ctx context.Context) ([]*note.Note, error) {
     return r.NoteUsecase.List(ctx, 1, 100)
 }
 ```
+
+#### GraphQL Playground (Story 12.4)
+
+> [!CAUTION]
+> GraphQL Playground is **ONLY** enabled in development/local mode. It is automatically disabled in production for security (prevents schema introspection exposure).
+
+| Environment | Endpoint | Status |
+|-------------|----------|--------|
+| `development` | `/playground` | ✅ Enabled |
+| `local` | `/playground` | ✅ Enabled |
+| `staging` | `/playground` | ❌ Disabled (404) |
+| `production` | `/playground` | ❌ Disabled (404) |
+
+**Usage:**
+1. Set `APP_ENV=development` in your `.env`
+2. Start the server: `make dev` or `go run cmd/server/main.go`
+3. Navigate to `http://localhost:8080/playground`
+4. Execute queries against the `/query` endpoint
 
 ### Adding Auth Middleware
 
