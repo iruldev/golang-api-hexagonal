@@ -15,6 +15,8 @@ type AdminDeps struct {
 	FeatureFlagProvider runtimeutil.AdminFeatureFlagProvider
 	// UserRoleProvider for user role management (Story 15.3)
 	UserRoleProvider runtimeutil.UserRoleProvider
+	// QueueInspector for job queue inspection (Story 15.4)
+	QueueInspector runtimeutil.QueueInspector
 	// Logger for audit logging
 	Logger *zap.Logger
 }
@@ -71,6 +73,18 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 		r.Post("/users/{id}/roles", rolesHandler.SetUserRoles)
 		r.Post("/users/{id}/roles/add", rolesHandler.AddUserRole)
 		r.Post("/users/{id}/roles/remove", rolesHandler.RemoveUserRole)
+	}
+
+	// -------------------------------------------------------------------------
+	// Job Queue Inspection (Story 15.4)
+	// -------------------------------------------------------------------------
+	if deps.QueueInspector != nil {
+		queuesHandler := admin.NewQueuesHandler(deps.QueueInspector, deps.Logger)
+		r.Get("/queues/stats", queuesHandler.GetQueueStats)
+		r.Get("/queues/{queue}/jobs", queuesHandler.ListJobs)
+		r.Get("/queues/{queue}/failed", queuesHandler.ListFailedJobs)
+		r.Delete("/queues/{queue}/failed/{task_id}", queuesHandler.DeleteFailedJob)
+		r.Post("/queues/{queue}/failed/{task_id}/retry", queuesHandler.RetryFailedJob)
 	}
 
 	// -------------------------------------------------------------------------

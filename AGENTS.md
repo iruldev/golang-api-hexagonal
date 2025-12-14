@@ -1398,6 +1398,90 @@ Role changes are automatically logged with:
 
 ---
 
+## 🔍 Admin Job Queue Inspection API (Story 15.4)
+
+The Admin Job Queue Inspection API enables monitoring and management of Asynq background job queues. Requires admin role.
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/admin/queues/stats` | Get aggregate and per-queue statistics |
+| `GET` | `/admin/queues/{queue}/jobs` | List jobs in a queue |
+| `GET` | `/admin/queues/{queue}/failed` | List failed jobs in a queue |
+| `DELETE` | `/admin/queues/{queue}/failed/{task_id}` | Delete a failed job |
+| `POST` | `/admin/queues/{queue}/failed/{task_id}/retry` | Retry a failed job |
+
+### Valid Queue Names
+
+| Queue | Priority Weight | Use For |
+|-------|-----------------|---------|
+| `critical` | 6 | Time-sensitive tasks |
+| `default` | 3 | Normal background jobs |
+| `low` | 1 | Deferred/batch jobs |
+
+### QueueInspector Interface
+
+```go
+type QueueInspector interface {
+    GetQueueStats(ctx context.Context) (*QueueStats, error)
+    GetJobsInQueue(ctx context.Context, queueName string, page, pageSize int) (*JobList, error)
+    GetFailedJobs(ctx context.Context, queueName string, page, pageSize int) (*FailedJobList, error)
+    DeleteFailedJob(ctx context.Context, queueName, taskID string) error
+    RetryFailedJob(ctx context.Context, queueName, taskID string) (*JobInfo, error)
+}
+```
+
+### Response Examples
+
+**GET /admin/queues/stats**
+```json
+{"success": true, "data": {
+  "aggregate": {"total_enqueued": 150, "total_active": 5, "total_pending": 100},
+  "queues": [
+    {"name": "critical", "size": 50, "active": 2, "pending": 30},
+    {"name": "default", "size": 80, "active": 3, "pending": 60},
+    {"name": "low", "size": 20, "active": 0, "pending": 10}
+  ]
+}}
+```
+
+**GET /admin/queues/{queue}/jobs?page=1&page_size=10**
+```json
+{"success": true, "data": {
+  "jobs": [{"task_id": "abc123", "type": "note:archive", "state": "pending"}],
+  "pagination": {"page": 1, "page_size": 10, "total": 60, "total_pages": 6}
+}}
+```
+
+**POST /admin/queues/{queue}/failed/{task_id}/retry**
+```json
+{"success": true, "data": {"message": "Task requeued for retry", "task_id": "abc123", "queue": "default"}}
+```
+
+### Error Responses
+
+| Status | Error Code | Condition |
+|--------|------------|-----------|
+| 400 | `ERR_BAD_REQUEST` | Invalid queue name |
+| 404 | `ERR_NOT_FOUND` | Task not found |
+| 403 | `ERR_FORBIDDEN` | Non-admin user |
+
+### Wiring QueueInspector
+
+```go
+import "github.com/iruldev/golang-api-hexagonal/internal/worker"
+
+inspector := worker.NewAsynqQueueInspector(asynq.RedisClientOpt{Addr: "localhost:6379"})
+routerDeps := http.RouterDeps{
+    QueueInspector: inspector,
+}
+```
+
+> **Note:** Queue inspection requires access to the same Redis instance used by Asynq workers.
+
+---
+
 ## 📤 Kafka Event Publisher (Story 13.1)
 
 

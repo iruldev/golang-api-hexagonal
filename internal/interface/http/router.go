@@ -30,6 +30,8 @@ type RouterDeps struct {
 	AdminFeatureFlagProvider runtimeutil.AdminFeatureFlagProvider
 	// UserRoleProvider for user role management API (Story 15.3)
 	UserRoleProvider runtimeutil.UserRoleProvider
+	// QueueInspector for job queue inspection API (Story 15.4)
+	QueueInspector runtimeutil.QueueInspector
 }
 
 // NewRouter creates a new chi router with versioned API routes.
@@ -107,6 +109,7 @@ func NewRouter(deps RouterDeps) chi.Router {
 			adminDeps := AdminDeps{
 				FeatureFlagProvider: deps.AdminFeatureFlagProvider,
 				UserRoleProvider:    deps.UserRoleProvider,
+				QueueInspector:      deps.QueueInspector,
 				Logger:              logger,
 			}
 			RegisterAdminRoutes(r, adminDeps)
