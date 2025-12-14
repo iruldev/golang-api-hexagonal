@@ -13,6 +13,7 @@ type Config struct {
 	Asynq         AsynqConfig         `koanf:"asynq"`
 	GRPC          GRPCConfig          `koanf:"grpc"`
 	Kafka         KafkaConfig         `koanf:"kafka"`
+	RabbitMQ      RabbitMQConfig      `koanf:"rabbitmq"`
 	Observability ObservabilityConfig `koanf:"otel"`
 	Log           LogConfig           `koanf:"log"`
 }
@@ -119,5 +120,23 @@ type KafkaConfig struct {
 
 // IsEnabled returns true if Kafka is enabled.
 func (c *KafkaConfig) IsEnabled() bool {
+	return c.Enabled
+}
+
+// RabbitMQConfig holds RabbitMQ connection settings.
+type RabbitMQConfig struct {
+	Enabled       bool          `koanf:"enabled"`        // RABBITMQ_ENABLED, default: false
+	URL           string        `koanf:"url"`            // RABBITMQ_URL, default: amqp://guest:guest@localhost:5672/
+	Exchange      string        `koanf:"exchange"`       // RABBITMQ_EXCHANGE, default: events
+	ExchangeType  string        `koanf:"exchange_type"`  // RABBITMQ_EXCHANGE_TYPE: direct, topic, fanout, headers
+	Durable       bool          `koanf:"durable"`        // RABBITMQ_DURABLE, default: true
+	PrefetchCount int           `koanf:"prefetch_count"` // RABBITMQ_PREFETCH_COUNT, default: 10 (for future consumer)
+	Timeout       time.Duration `koanf:"timeout"`        // RABBITMQ_TIMEOUT, default: 10s
+	// TLS config placeholder for production
+	TLSEnabled bool `koanf:"tls_enabled"` // RABBITMQ_TLS_ENABLED, default: false
+}
+
+// IsEnabled returns true if RabbitMQ is enabled.
+func (c *RabbitMQConfig) IsEnabled() bool {
 	return c.Enabled
 }

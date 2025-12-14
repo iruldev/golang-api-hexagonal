@@ -26,9 +26,10 @@ type DBHealthChecker interface {
 
 // ReadyzHandler handles readiness probe requests.
 type ReadyzHandler struct {
-	dbChecker    DBHealthChecker
-	redisChecker DBHealthChecker
-	kafkaChecker DBHealthChecker
+	dbChecker       DBHealthChecker
+	redisChecker    DBHealthChecker
+	kafkaChecker    DBHealthChecker
+	rabbitmqChecker DBHealthChecker
 }
 
 // NewReadyzHandler creates a new ReadyzHandler with optional checkers.
@@ -45,6 +46,12 @@ func (h *ReadyzHandler) WithRedis(redisChecker DBHealthChecker) *ReadyzHandler {
 // WithKafka adds Kafka health checker to the readiness handler.
 func (h *ReadyzHandler) WithKafka(kafkaChecker DBHealthChecker) *ReadyzHandler {
 	h.kafkaChecker = kafkaChecker
+	return h
+}
+
+// WithRabbitMQ adds RabbitMQ health checker to the readiness handler.
+func (h *ReadyzHandler) WithRabbitMQ(rabbitmqChecker DBHealthChecker) *ReadyzHandler {
+	h.rabbitmqChecker = rabbitmqChecker
 	return h
 }
 
@@ -73,6 +80,14 @@ func (h *ReadyzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.kafkaChecker != nil {
 		if err := h.kafkaChecker.Ping(ctx); err != nil {
 			response.Error(w, http.StatusServiceUnavailable, response.ErrServiceUnavailable, "kafka unavailable")
+			return
+		}
+	}
+
+	// Check RabbitMQ if available (Story 13.2)
+	if h.rabbitmqChecker != nil {
+		if err := h.rabbitmqChecker.Ping(ctx); err != nil {
+			response.Error(w, http.StatusServiceUnavailable, response.ErrServiceUnavailable, "rabbitmq unavailable")
 			return
 		}
 	}

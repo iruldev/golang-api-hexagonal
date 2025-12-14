@@ -19,10 +19,11 @@ var TracerShutdown func(context.Context) error
 
 // RouterDeps holds dependencies for the router.
 type RouterDeps struct {
-	Config       *config.Config
-	DBChecker    handlers.DBHealthChecker // Optional, can be nil
-	RedisChecker handlers.DBHealthChecker // Optional, can be nil
-	KafkaChecker handlers.DBHealthChecker // Optional, can be nil (Story 13.1)
+	Config          *config.Config
+	DBChecker       handlers.DBHealthChecker // Optional, can be nil
+	RedisChecker    handlers.DBHealthChecker // Optional, can be nil
+	KafkaChecker    handlers.DBHealthChecker // Optional, can be nil (Story 13.1)
+	RabbitMQChecker handlers.DBHealthChecker // Optional, can be nil (Story 13.2)
 }
 
 // NewRouter creates a new chi router with versioned API routes.
@@ -72,6 +73,9 @@ func NewRouter(deps RouterDeps) chi.Router {
 	}
 	if deps.KafkaChecker != nil {
 		readyzHandler = readyzHandler.WithKafka(deps.KafkaChecker)
+	}
+	if deps.RabbitMQChecker != nil {
+		readyzHandler = readyzHandler.WithRabbitMQ(deps.RabbitMQChecker)
 	}
 	r.Handle("/readyz", readyzHandler)
 

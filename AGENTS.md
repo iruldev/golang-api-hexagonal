@@ -1208,6 +1208,117 @@ if closer, ok := eventPublisher.(kafka.Closeable); ok {
 
 ---
 
+## 🐰 RabbitMQ Event Publisher (Story 13.2)
+
+RabbitMQ uses AMQP protocol for message publishing with topic-based routing.
+
+### Core Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `EventPublisher` interface | `runtimeutil/events.go` | Port for event publishing |
+| `RabbitMQPublisher` | `infra/rabbitmq/publisher.go` | RabbitMQ adapter implementation |
+| `RabbitMQHealthChecker` | `infra/rabbitmq/publisher.go` | Health check adapter |
+
+### Configuration
+
+| Env Variable | Default | Description |
+|--------------|---------|-------------|
+| `RABBITMQ_ENABLED` | `false` | Enable RabbitMQ publisher |
+| `RABBITMQ_URL` | `amqp://guest:guest@localhost:5672/` | AMQP connection URL |
+| `RABBITMQ_EXCHANGE` | `events` | Default exchange name |
+| `RABBITMQ_EXCHANGE_TYPE` | `topic` | Exchange type: `direct`, `topic`, `fanout`, `headers` |
+| `RABBITMQ_DURABLE` | `true` | Make exchange durable |
+| `RABBITMQ_TIMEOUT` | `10s` | Operation timeout |
+
+### Basic Usage
+
+```go
+import (
+    "github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
+    "github.com/iruldev/golang-api-hexagonal/internal/infra/rabbitmq"
+)
+
+// Create event
+event, err := runtimeutil.NewEvent("order.created", map[string]string{
+    "order_id": "456",
+})
+
+// Sync publish - waits for broker confirmation
+err = publisher.Publish(ctx, "orders", event)  // exchange name, event
+
+// Async publish - fire-and-forget
+err = publisher.PublishAsync(ctx, "analytics", event)
+```
+
+### AMQP Concepts Mapping
+
+| Kafka | RabbitMQ | Notes |
+|-------|----------|-------|
+| Topic | Exchange | Target for publishing |
+| Key | Routing Key | Uses `event.Type` |
+| Partition | Queue | Queues bound to exchange |
+| Broker | Virtual Host | `/` by default |
+
+### Health Check Integration
+
+```go
+// Automatic integration in main.go
+rabbitmqChecker = rabbitmq.NewRabbitMQHealthChecker(pub)
+router := httpx.NewRouter(httpx.RouterDeps{
+    RabbitMQChecker: rabbitmqChecker,
+})
+```
+
+### Prometheus Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `rabbitmq_publish_total` | Counter | `exchange`, `routing_key`, `status` | Total publish attempts |
+| `rabbitmq_publish_errors_total` | Counter | `exchange`, `error_type` | Failed publishes |
+| `rabbitmq_publish_duration_seconds` | Histogram | `exchange` | Publish latency |
+
+### Docker Compose Setup
+
+RabbitMQ with management UI is included in `docker-compose.yaml`:
+
+```bash
+docker-compose up -d rabbitmq
+# Management UI: http://localhost:15672 (guest/guest)
+```
+
+### Testing with Testcontainers
+
+```go
+import inttesting "github.com/iruldev/golang-api-hexagonal/internal/testing"
+
+func TestRabbitMQIntegration(t *testing.T) {
+    ctx := context.Background()
+    rmqContainer, _ := inttesting.NewRabbitMQContainer(ctx)
+    defer rmqContainer.Terminate(ctx)
+    
+    cfg := &config.RabbitMQConfig{
+        Enabled:      true,
+        URL:          rmqContainer.URL,
+        Exchange:     "test-events",
+        ExchangeType: "topic",
+    }
+    publisher, _ := rabbitmq.NewRabbitMQPublisher(cfg, logger)
+    // Use publisher...
+}
+```
+
+### Graceful Shutdown
+
+```go
+// RabbitMQPublisher implements Close() for graceful shutdown
+if closer, ok := rabbitmqPublisher.(*rabbitmq.RabbitMQPublisher); ok {
+    defer closer.Close()
+}
+```
+
+---
+
 ## 🔄 Async Job Patterns
 
 > **For comprehensive async job documentation, see [`docs/async-jobs.md`](docs/async-jobs.md)**

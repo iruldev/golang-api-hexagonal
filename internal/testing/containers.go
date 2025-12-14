@@ -161,3 +161,59 @@ func (c *KafkaContainer) Terminate(ctx context.Context) error {
 	}
 	return nil
 }
+
+// RabbitMQContainer wraps a testcontainers RabbitMQ container.
+type RabbitMQContainer struct {
+	Container testcontainers.Container
+	URL       string // AMQP connection URL
+}
+
+// NewRabbitMQContainer starts a RabbitMQ container for testing.
+// Returns the container wrapper with AMQP URL for connecting.
+// Caller must call Terminate() when done.
+func NewRabbitMQContainer(ctx context.Context) (*RabbitMQContainer, error) {
+	req := testcontainers.ContainerRequest{
+		Image:        "rabbitmq:3.13-management",
+		ExposedPorts: []string{"5672/tcp", "15672/tcp"},
+		Env: map[string]string{
+			"RABBITMQ_DEFAULT_USER": "guest",
+			"RABBITMQ_DEFAULT_PASS": "guest",
+		},
+		WaitingFor: wait.ForLog("Server startup complete").WithStartupTimeout(60 * time.Second),
+	}
+
+	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: req,
+		Started:          true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("start rabbitmq container: %w", err)
+	}
+
+	host, err := container.Host(ctx)
+	if err != nil {
+		_ = container.Terminate(ctx)
+		return nil, fmt.Errorf("get host: %w", err)
+	}
+
+	port, err := container.MappedPort(ctx, "5672")
+	if err != nil {
+		_ = container.Terminate(ctx)
+		return nil, fmt.Errorf("get port: %w", err)
+	}
+
+	url := fmt.Sprintf("amqp://guest:guest@%s:%s/", host, port.Port())
+
+	return &RabbitMQContainer{
+		Container: container,
+		URL:       url,
+	}, nil
+}
+
+// Terminate stops and removes the RabbitMQ container.
+func (c *RabbitMQContainer) Terminate(ctx context.Context) error {
+	if c.Container != nil {
+		return c.Container.Terminate(ctx)
+	}
+	return nil
+}

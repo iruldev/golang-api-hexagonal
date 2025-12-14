@@ -15,6 +15,7 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/kafka"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/rabbitmq"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/redis"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/graphql"
 	grpcserver "github.com/iruldev/golang-api-hexagonal/internal/interface/grpc"
@@ -111,15 +112,46 @@ func main() {
 	}()
 	_ = eventPublisher // Available for use in future stories
 
+	// Initialize RabbitMQ publisher if enabled (Story 13.2)
+	var rabbitmqPublisher runtimeutil.EventPublisher
+	var rabbitmqChecker *rabbitmq.RabbitMQHealthChecker
+	if cfg.RabbitMQ.IsEnabled() {
+		pub, err := rabbitmq.NewRabbitMQPublisher(&cfg.RabbitMQ, logger)
+		if err != nil {
+			logger.Error("RabbitMQ initialization failed", observability.Err(err))
+		} else {
+			rabbitmqPublisher = pub
+			rabbitmqChecker = rabbitmq.NewRabbitMQHealthChecker(pub)
+			logger.Info("RabbitMQ publisher initialized",
+				observability.String("exchange", cfg.RabbitMQ.Exchange))
+		}
+	} else {
+		rabbitmqPublisher = runtimeutil.NewNopEventPublisher()
+		logger.Info("RabbitMQ publisher disabled, using noop publisher")
+	}
+
+	// Graceful shutdown for RabbitMQ publisher (Story 13.2)
+	defer func() {
+		if rmqPub, ok := rabbitmqPublisher.(*rabbitmq.RabbitMQPublisher); ok {
+			if err := rmqPub.Close(); err != nil {
+				logger.Error("RabbitMQ publisher close error", observability.Err(err))
+			} else {
+				logger.Info("RabbitMQ publisher closed gracefully")
+			}
+		}
+	}()
+	_ = rabbitmqPublisher // Available for use in future stories
+
 	// Use typed config instead of raw os.Getenv
 	port := fmt.Sprintf("%d", cfg.App.HTTPPort)
 
 	// Create chi router with versioned API routes (Story 3.1)
 	router := httpx.NewRouter(httpx.RouterDeps{
-		Config:       cfg,
-		DBChecker:    dbChecker,
-		RedisChecker: redisChecker,
-		KafkaChecker: kafkaChecker,
+		Config:          cfg,
+		DBChecker:       dbChecker,
+		RedisChecker:    redisChecker,
+		KafkaChecker:    kafkaChecker,
+		RabbitMQChecker: rabbitmqChecker,
 	})
 
 	server := &http.Server{
