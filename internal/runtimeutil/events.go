@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -352,4 +354,303 @@ func (m *MockEventConsumer) Topic() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.topic
+}
+
+// -----------------------------------------------------------------------------
+// Dead Letter Queue Interface (Story 13.4)
+// -----------------------------------------------------------------------------
+
+// DLQEvent represents a failed event moved to the dead letter queue.
+type DLQEvent struct {
+	// OriginalEvent is the event that failed processing.
+	OriginalEvent Event `json:"original_event"`
+
+	// ErrorMessage is the formatted error from the last failure.
+	ErrorMessage string `json:"error_message"`
+
+	// RetryCount is the number of processing attempts made.
+	RetryCount int `json:"retry_count"`
+
+	// FailedAt is when the event was moved to DLQ.
+	FailedAt time.Time `json:"failed_at"`
+
+	// SourceTopic is the original topic/queue the event came from.
+	SourceTopic string `json:"source_topic"`
+
+	// StackTrace is optional debug information (if enabled).
+	StackTrace string `json:"stack_trace,omitempty"`
+
+	// Headers contains optional custom metadata.
+	Headers map[string]string `json:"headers,omitempty"`
+}
+
+// DeadLetterQueue defines the interface for dead letter queue operations.
+// Implement this interface for Kafka, RabbitMQ, or other message brokers.
+//
+// Usage Example:
+//
+//	// Configure DLQ
+//	cfg := runtimeutil.DefaultDLQConfig()
+//	cfg.TopicName = "orders.dlq"
+//
+//	// Wrap handler with DLQ support
+//	handler := runtimeutil.NewDLQHandler(myHandler, dlq, cfg)
+//	consumer.Subscribe(ctx, "orders", handler)
+//
+// Metrics (implemented by concrete DLQ implementations):
+//
+//	event_dlq_total{source_topic, error_type}    - Counter: Events moved to DLQ
+//	event_dlq_errors_total{source_topic}         - Counter: DLQ write failures
+//	event_dlq_queue_size{dlq_topic}              - Gauge: Current DLQ depth
+//	event_dlq_processing_attempts{source_topic}  - Histogram: Retry attempts before DLQ
+type DeadLetterQueue interface {
+	// Send moves a failed event to the dead letter queue.
+	// Returns error if the DLQ write fails.
+	Send(ctx context.Context, event DLQEvent) error
+
+	// Close gracefully shuts down the DLQ connection.
+	Close() error
+}
+
+// DLQMetrics defines the interface for recording DLQ metrics.
+type DLQMetrics interface {
+	// IncDLQTotal increments the counter for events moved to DLQ.
+	IncDLQTotal(topic, errType string)
+
+	// IncDLQErrors increments the counter for failed DLQ writes.
+	IncDLQErrors(topic string)
+}
+
+// NopDLQMetrics is a no-op implementation of DLQMetrics.
+type NopDLQMetrics struct{}
+
+func (m NopDLQMetrics) IncDLQTotal(_, _ string) {}
+func (m NopDLQMetrics) IncDLQErrors(_ string)   {}
+
+// DLQConfig provides options for DLQ behavior.
+type DLQConfig struct {
+	// TopicName is the DLQ topic/queue name.
+	// If empty, defaults to "{source-topic}.dlq"
+	TopicName string
+
+	// AlertThreshold is the number of events before alerting.
+	// Default: 100
+	AlertThreshold int
+
+	// IncludeStackTrace includes stack trace in DLQEvent.
+	// Default: false (for privacy/size)
+	IncludeStackTrace bool
+
+	// RetryDelay is the wait time between retries.
+	// Default: 1 second
+	RetryDelay time.Duration
+}
+
+// DefaultDLQConfig returns sensible defaults.
+func DefaultDLQConfig() DLQConfig {
+	return DLQConfig{
+		AlertThreshold:    100,
+		IncludeStackTrace: false,
+		RetryDelay:        1 * time.Second,
+	}
+}
+
+// Validate checks the DLQConfig for invalid values.
+func (c DLQConfig) Validate() error {
+	if c.AlertThreshold < 0 {
+		return errors.New("AlertThreshold must be >= 0")
+	}
+	if c.RetryDelay < 0 {
+		return errors.New("RetryDelay must be >= 0")
+	}
+	return nil
+}
+
+// Sentinel errors for DLQ operations.
+var (
+	// ErrDLQClosed is returned when operations are attempted on a closed DLQ.
+	ErrDLQClosed = errors.New("dlq closed")
+
+	// ErrDLQFull is returned when the DLQ has reached capacity.
+	ErrDLQFull = errors.New("dlq full")
+)
+
+// -----------------------------------------------------------------------------
+// DLQHandler Wrapper
+// -----------------------------------------------------------------------------
+
+// DLQHandler wraps an EventHandler with retry and DLQ logic.
+type DLQHandler struct {
+	handler      EventHandler
+	dlq          DeadLetterQueue
+	maxRetries   int
+	retryDelay   time.Duration
+	dlqTopic     string
+	includeStack bool
+	metrics      DLQMetrics
+}
+
+// NewDLQHandler creates a handler that retries failures and forwards to DLQ.
+//
+// CAUTION: The double-retry risk exists if the underlying consumer (e.g., Kafka/RabbitMQ)
+// also has a retry mechanism configured. If the consumer retries on error return, and
+// DLQHandler also retries, you may get N*M executions.
+// RECOMMENDATION: Set consumer's MaxRetries to 0 or 1 when using DLQHandler,
+// or ensure this handler returns nil to the consumer (which it does on success or DLQ success).
+func NewDLQHandler(handler EventHandler, dlq DeadLetterQueue, config DLQConfig, consumerConfig ConsumerConfig, metrics DLQMetrics) EventHandler {
+	if metrics == nil {
+		metrics = NopDLQMetrics{}
+	}
+	h := &DLQHandler{
+		handler:      handler,
+		dlq:          dlq,
+		maxRetries:   consumerConfig.MaxRetries,
+		retryDelay:   config.RetryDelay,
+		dlqTopic:     config.TopicName,
+		includeStack: config.IncludeStackTrace,
+		metrics:      metrics,
+	}
+	return h.Handle
+}
+
+// Handle processes the event with retry logic.
+func (h *DLQHandler) Handle(ctx context.Context, event Event) error {
+	var lastErr error
+	for attempt := 0; attempt <= h.maxRetries; attempt++ {
+		err := h.handler(ctx, event)
+		if err == nil {
+			return nil // Success
+		}
+		lastErr = err
+
+		// If we have retries left, wait and retry
+		if attempt < h.maxRetries {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(h.retryDelay):
+				// continue to next attempt
+			}
+		}
+	}
+
+	// Max retries exhausted, send to DLQ
+	dlqEvent := DLQEvent{
+		OriginalEvent: event,
+		ErrorMessage:  lastErr.Error(),
+		RetryCount:    h.maxRetries + 1,
+		FailedAt:      time.Now().UTC(),
+		SourceTopic:   h.dlqTopic,
+	}
+
+	if h.includeStack {
+		dlqEvent.StackTrace = string(debug.Stack())
+	}
+
+	// Send to DLQ
+	if err := h.dlq.Send(ctx, dlqEvent); err != nil {
+		h.metrics.IncDLQErrors(h.dlqTopic)
+		// If DLQ send fails, we must return error so the original message isn't lost/committed
+		return fmt.Errorf("failed to send to DLQ: %w", err)
+	}
+
+	h.metrics.IncDLQTotal(h.dlqTopic, "processing_failed")
+	// Successfully sent to DLQ, return nil to ack original message
+	return nil
+}
+
+// -----------------------------------------------------------------------------
+// NopDeadLetterQueue
+// -----------------------------------------------------------------------------
+
+// NopDeadLetterQueue is a no-op DLQ for testing.
+type NopDeadLetterQueue struct {
+	mu     sync.Mutex
+	closed bool
+}
+
+// NewNopDeadLetterQueue creates a new NopDeadLetterQueue.
+func NewNopDeadLetterQueue() DeadLetterQueue {
+	return &NopDeadLetterQueue{}
+}
+
+// Send is a no-op.
+func (q *NopDeadLetterQueue) Send(_ context.Context, _ DLQEvent) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.closed {
+		return ErrDLQClosed
+	}
+	return nil
+}
+
+// Close is a no-op.
+func (q *NopDeadLetterQueue) Close() error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.closed = true
+	return nil
+}
+
+// -----------------------------------------------------------------------------
+// MockDeadLetterQueue
+// -----------------------------------------------------------------------------
+
+// MockDeadLetterQueue is a test double for DLQ.
+type MockDeadLetterQueue struct {
+	events []DLQEvent
+	mu     sync.Mutex
+	closed bool
+}
+
+// NewMockDeadLetterQueue creates a new MockDeadLetterQueue.
+func NewMockDeadLetterQueue() *MockDeadLetterQueue {
+	return &MockDeadLetterQueue{
+		events: make([]DLQEvent, 0),
+	}
+}
+
+// Send captures the event.
+func (m *MockDeadLetterQueue) Send(_ context.Context, event DLQEvent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return ErrDLQClosed
+	}
+	m.events = append(m.events, event)
+	return nil
+}
+
+// Close marks the DLQ as closed.
+func (m *MockDeadLetterQueue) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.closed = true
+	return nil
+}
+
+// Events returns captured DLQ events.
+func (m *MockDeadLetterQueue) Events() []DLQEvent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([]DLQEvent, len(m.events))
+	copy(result, m.events)
+	return result
+}
+
+// LastEvent returns the last event sent to DLQ.
+func (m *MockDeadLetterQueue) LastEvent() DLQEvent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.events) == 0 {
+		return DLQEvent{}
+	}
+	return m.events[len(m.events)-1]
+}
+
+// Clear resets captured events.
+func (m *MockDeadLetterQueue) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.events = []DLQEvent{}
 }

@@ -140,7 +140,13 @@ handler := func(ctx context.Context, event runtimeutil.Event) error {
     // Process event...
     return nil
 }
-consumer.Subscribe(ctx, "orders", handler)
+
+// Optional: Wrap with DLQ handler for reliability
+dlqCfg := runtimeutil.DefaultDLQConfig()
+dlqCfg.TopicName = "orders.dlq"
+dlqHandler := runtimeutil.NewDLQHandler(handler, dlq, dlqCfg, consumerCfg)
+
+consumer.Subscribe(ctx, "orders", dlqHandler)
 ```
 
 ### 🛠 CLI Tool (bplat)

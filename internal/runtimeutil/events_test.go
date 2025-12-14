@@ -506,3 +506,277 @@ func TestSentinelErrorsCanBeWrapped(t *testing.T) {
 		t.Error("Wrapped error should match original via errors.Is")
 	}
 }
+
+// =============================================================================
+// DeadLetterQueue Tests
+// =============================================================================
+
+func TestNopDeadLetterQueue_ImplementsInterface(t *testing.T) {
+	var _ DeadLetterQueue = &NopDeadLetterQueue{}
+	var _ DeadLetterQueue = NewNopDeadLetterQueue()
+}
+
+func TestNopDeadLetterQueue_Send(t *testing.T) {
+	dlq := NewNopDeadLetterQueue()
+	event := DLQEvent{ErrorMessage: "test"}
+	err := dlq.Send(context.Background(), event)
+	if err != nil {
+		t.Errorf("NopDeadLetterQueue.Send() error = %v, want nil", err)
+	}
+}
+
+func TestNopDeadLetterQueue_Close(t *testing.T) {
+	dlq := NewNopDeadLetterQueue()
+	err := dlq.Close()
+	if err != nil {
+		t.Errorf("NopDeadLetterQueue.Close() error = %v, want nil", err)
+	}
+	err = dlq.Send(context.Background(), DLQEvent{})
+	if !errors.Is(err, ErrDLQClosed) {
+		t.Errorf("NopDeadLetterQueue.Send() after Close = %v, want ErrDLQClosed", err)
+	}
+}
+
+// =============================================================================
+// MockDeadLetterQueue Tests
+// =============================================================================
+
+func TestMockDeadLetterQueue_Capture(t *testing.T) {
+	mock := NewMockDeadLetterQueue()
+	dlqEvent := DLQEvent{ErrorMessage: "failure"}
+
+	_ = mock.Send(context.Background(), dlqEvent)
+
+	events := mock.Events()
+	if len(events) != 1 {
+		t.Errorf("MockDeadLetterQueue.Events() count = %d, want 1", len(events))
+	}
+	if events[0].ErrorMessage != "failure" {
+		t.Errorf("MockDeadLetterQueue.Events[0].ErrorMessage = %v, want failure", events[0].ErrorMessage)
+	}
+}
+
+func TestMockDeadLetterQueue_Clear(t *testing.T) {
+	mock := NewMockDeadLetterQueue()
+	_ = mock.Send(context.Background(), DLQEvent{})
+
+	mock.Clear()
+	if len(mock.Events()) != 0 {
+		t.Error("MockDeadLetterQueue should be empty after Clear()")
+	}
+}
+
+func TestMockDeadLetterQueue_LastEvent(t *testing.T) {
+	mock := NewMockDeadLetterQueue()
+	_ = mock.Send(context.Background(), DLQEvent{ErrorMessage: "1"})
+	_ = mock.Send(context.Background(), DLQEvent{ErrorMessage: "2"})
+
+	last := mock.LastEvent()
+	if last.ErrorMessage != "2" {
+		t.Errorf("MockDeadLetterQueue.LastEvent() = %v, want 2", last.ErrorMessage)
+	}
+}
+
+// =============================================================================
+// DLQHandler Tests (The Core Logic)
+// =============================================================================
+
+func TestDLQHandler_Success(t *testing.T) {
+	// Arrange
+	mockHandler := func(ctx context.Context, event Event) error {
+		return nil // Success
+	}
+	dlq := NewMockDeadLetterQueue()
+	config := DefaultDLQConfig()
+	consumerConfig := DefaultConsumerConfig()
+	// Set 0 retries to simplify
+	consumerConfig.MaxRetries = 0
+
+	handler := NewDLQHandler(mockHandler, dlq, config, consumerConfig, nil)
+	event, _ := NewEvent("test.event", nil)
+
+	// Act
+	err := handler(context.Background(), event)
+
+	// Assert
+	if err != nil {
+		t.Errorf("DLQHandler returned error on success: %v", err)
+	}
+	if len(dlq.Events()) > 0 {
+		t.Error("DLQHandler sent event to DLQ on success")
+	}
+}
+
+func TestDLQHandler_RetryAndFail(t *testing.T) {
+	// Arrange
+	attempts := 0
+	expectedErr := errors.New("processing failed")
+	mockHandler := func(ctx context.Context, event Event) error {
+		attempts++
+		return expectedErr
+	}
+	dlq := NewMockDeadLetterQueue()
+	config := DefaultDLQConfig()
+	config.RetryDelay = 1 * time.Millisecond // Fast retries for test
+	config.TopicName = "test.dlq"
+
+	consumerConfig := DefaultConsumerConfig()
+	consumerConfig.MaxRetries = 2
+
+	handler := NewDLQHandler(mockHandler, dlq, config, consumerConfig, nil)
+	event, _ := NewEvent("test.event", nil)
+
+	// Act
+	err := handler(context.Background(), event)
+
+	// Assert
+	// 1 initial + 2 retries = 3 attempts
+	if attempts != 3 {
+		t.Errorf("DLQHandler attempts = %d, want 3", attempts)
+	}
+	// Warning: Handler wrapping should mask the error, or return nil if forwarded?
+	// Usually, if sent to DLQ successfully, it counts as "handled" from the consumer perspective (so nil),
+	// BUT typically we might want to log it or return nil to commit offset.
+	// For this specific implementation, if it goes to DLQ, we consider it "processed".
+	// Let's assume Handle returns nil if DLQ successful.
+	if err != nil {
+		t.Errorf("DLQHandler returned error after successful DLQ send: %v", err)
+	}
+
+	dlqEvents := dlq.Events()
+	if len(dlqEvents) != 1 {
+		t.Fatalf("DLQ events count = %d, want 1", len(dlqEvents))
+	}
+
+	deadMsg := dlqEvents[0]
+	if deadMsg.OriginalEvent.ID != event.ID {
+		t.Errorf("DLQEvent.OriginalEvent.ID = %v, want %v", deadMsg.OriginalEvent.ID, event.ID)
+	}
+	if deadMsg.ErrorMessage != expectedErr.Error() {
+		t.Errorf("DLQEvent.ErrorMessage = %v, want %v", deadMsg.ErrorMessage, expectedErr.Error())
+	}
+	if deadMsg.RetryCount != 3 {
+		t.Errorf("DLQEvent.RetryCount = %d, want 3", deadMsg.RetryCount)
+	}
+	if deadMsg.SourceTopic != "test.dlq" {
+		t.Errorf("DLQEvent.SourceTopic = %v, want test.dlq", deadMsg.SourceTopic)
+	}
+}
+
+func TestDLQHandler_SuccessAfterRetry(t *testing.T) {
+	// Arrange
+	attempts := 0
+	mockHandler := func(ctx context.Context, event Event) error {
+		attempts++
+		if attempts <= 2 {
+			return errors.New("temporary failure")
+		}
+		return nil // Success on 3rd attempt (2nd retry)
+	}
+	dlq := NewMockDeadLetterQueue()
+	config := DefaultDLQConfig()
+	config.RetryDelay = 1 * time.Millisecond
+
+	consumerConfig := DefaultConsumerConfig()
+	consumerConfig.MaxRetries = 5
+
+	handler := NewDLQHandler(mockHandler, dlq, config, consumerConfig, nil)
+	event, _ := NewEvent("test.event", nil)
+
+	// Act
+	err := handler(context.Background(), event)
+
+	// Assert
+	if err != nil {
+		t.Errorf("DLQHandler returned error on eventual success: %v", err)
+	}
+	if attempts != 3 {
+		t.Errorf("DLQHandler attempts = %d, want 3", attempts)
+	}
+	if len(dlq.Events()) > 0 {
+		t.Error("DLQHandler sent event to DLQ on success")
+	}
+}
+
+func TestDLQHandler_StackTrace(t *testing.T) {
+	mockHandler := func(ctx context.Context, event Event) error {
+		return errors.New("fail")
+	}
+	dlq := NewMockDeadLetterQueue()
+	config := DefaultDLQConfig()
+	config.RetryDelay = 1 * time.Millisecond
+	config.IncludeStackTrace = true
+
+	consumerConfig := DefaultConsumerConfig()
+	consumerConfig.MaxRetries = 0
+
+	handler := NewDLQHandler(mockHandler, dlq, config, consumerConfig, nil)
+	event, _ := NewEvent("test.event", nil)
+
+	_ = handler(context.Background(), event)
+
+	lastEvent := dlq.LastEvent()
+	if lastEvent.StackTrace == "" {
+		t.Error("DLQEvent.StackTrace is empty, want stack trace")
+	}
+}
+
+// =============================================================================
+// DLQConfig Tests
+// =============================================================================
+
+func TestDLQConfig_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  DLQConfig
+		wantErr bool
+	}{
+		{"valid default", DefaultDLQConfig(), false},
+		{"invalid alert threshold", DLQConfig{AlertThreshold: -1}, true},
+		{"invalid retry delay", DLQConfig{RetryDelay: -1}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.config.Validate(); (err != nil) != tt.wantErr {
+				t.Errorf("DLQConfig.Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestDLQHandler_ContextCancelled(t *testing.T) {
+	// Arrange
+	mockHandler := func(ctx context.Context, event Event) error {
+		return errors.New("fail")
+	}
+	dlq := NewMockDeadLetterQueue()
+	config := DefaultDLQConfig()
+	config.RetryDelay = 100 * time.Millisecond // Long enough to cancel
+
+	consumerConfig := DefaultConsumerConfig()
+	consumerConfig.MaxRetries = 1 // 1 retry
+
+	handler := NewDLQHandler(mockHandler, dlq, config, consumerConfig, nil)
+	event, _ := NewEvent("test.event", nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Start handler in goroutine
+	errChan := make(chan error)
+	go func() {
+		errChan <- handler(ctx, event)
+	}()
+
+	// Wait a bit then cancel, to ensure we are in the retry loop
+	time.Sleep(10 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errChan:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("DLQHandler returned error = %v, want context.Canceled", err)
+		}
+	case <-time.After(1 * time.Second):
+		t.Error("DLQHandler did not return after context cancellation")
+	}
+}

@@ -798,6 +798,26 @@ func (c *RedisCache) Get(ctx context.Context, key string) ([]byte, error) {
 
 ---
 
+### Dead Letter Queue Interface
+
+**Location:** `internal/runtimeutil/events.go`
+
+```go
+type DeadLetterQueue interface {
+    Send(ctx context.Context, event DLQEvent) error
+    Close() error
+}
+```
+
+**Wrapper:** `runtimeutil.NewDLQHandler(handler, dlq, config)` wraps any `EventHandler` with automatic retry and DLQ forwarding logic.
+
+**Metrics:**
+- `event_dlq_total`: Counter
+- `event_dlq_errors_total`: Counter
+- `event_dlq_processing_attempts`: Histogram
+
+---
+
 ### RateLimiter Interface
 
 **Location:** `internal/runtimeutil/ratelimiter.go`

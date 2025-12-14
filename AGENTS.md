@@ -279,6 +279,29 @@ grpcurl -plaintext localhost:50051 describe {service}.v1.{Service}
 grpcurl -plaintext -d '{"field": "value"}' localhost:50051 {service}.v1.{Service}/{Method}
 ```
 
+grpcurl -plaintext -d '{"field": "value"}' localhost:50051 {service}.v1.{Service}/{Method}
+```
+
+### Dead Letter Queue Pattern (Story 13.4)
+
+The DLQ pattern ensures failed events are reliably captured for inspection.
+
+1. **Configure DLQ**: Use `runtimeutil.DefaultDLQConfig()` and set `TopicName`.
+2. **Wrap Handler**: Use `runtimeutil.NewDLQHandler` to wrap your existing `EventHandler`.
+3. **Behavior**: The wrapper automatically retries `ConsumerConfig.MaxRetries` times. If all fail, it sends a `DLQEvent` to the configured `DeadLetterQueue`.
+
+```go
+// 1. Configure
+dlqCfg := runtimeutil.DefaultDLQConfig()
+dlqCfg.TopicName = "dead_letters"
+
+// 2. Wrap
+secureHandler := runtimeutil.NewDLQHandler(myLogic, dlq, dlqCfg, consumerInfo)
+
+// 3. Subscribe
+consumer.Subscribe(ctx, "topic", secureHandler)
+```
+
 ### Proto File Patterns (Story 12.2)
 
 Protobuf service definitions provide strongly typed, versioned interfaces for gRPC services.
