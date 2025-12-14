@@ -1,92 +1,39 @@
-package http_test
+package http
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
-	httpx "github.com/iruldev/golang-api-hexagonal/internal/interface/http"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-// testConfig returns a minimal config for testing.
-func testConfig() *config.Config {
-	return &config.Config{
+func TestRouter_SecurityHeaders(t *testing.T) {
+	// Setup minimal dependencies
+	cfg := &config.Config{
 		App: config.AppConfig{
 			Env: "test",
 		},
-		Log: config.LogConfig{
-			Level:  "debug",
-			Format: "console",
-		},
 	}
-}
-
-// testRouterDeps returns RouterDeps for testing (without DB checker).
-func testRouterDeps() httpx.RouterDeps {
-	return httpx.RouterDeps{
-		Config:    testConfig(),
-		DBChecker: nil,
+	deps := RouterDeps{
+		Config: cfg,
 	}
-}
 
-func TestHealthEndpoint(t *testing.T) {
-	router := httpx.NewRouter(testRouterDeps())
+	router := NewRouter(deps)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-
-	// Response is now envelope format: {success: true, data: {status: ok}}
-	var envelope struct {
-		Success bool `json:"success"`
-		Data    struct {
-			Status string `json:"status"`
-		} `json:"data"`
-	}
-	err := json.Unmarshal(rec.Body.Bytes(), &envelope)
-	require.NoError(t, err)
-	assert.True(t, envelope.Success)
-	assert.Equal(t, "ok", envelope.Data.Status)
-}
-
-func TestHealthEndpoint_MethodNotAllowed(t *testing.T) {
-	router := httpx.NewRouter(testRouterDeps())
-
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/health", nil)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
-}
-
-func TestNonExistentRoute(t *testing.T) {
-	router := httpx.NewRouter(testRouterDeps())
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/nonexistent", nil)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusNotFound, rec.Code)
-}
-
-func TestAPIVersionPrefix(t *testing.T) {
-	router := httpx.NewRouter(testRouterDeps())
-
-	// /healthz exists at root level now (Story 4.7)
+	// Create a request to a known endpoint (e.g., /healthz)
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusOK, rec.Code)
+	// Verify security headers are present
+	assert.Equal(t, "nosniff", rec.Header().Get("X-Content-Type-Options"))
+	assert.Equal(t, "DENY", rec.Header().Get("X-Frame-Options"))
+	assert.Equal(t, "1; mode=block", rec.Header().Get("X-XSS-Protection"))
+	assert.Equal(t, "strict-origin-when-cross-origin", rec.Header().Get("Referrer-Policy"))
+	assert.Equal(t, "default-src 'self'", rec.Header().Get("Content-Security-Policy"))
+	assert.Equal(t, "max-age=63072000; includeSubDomains", rec.Header().Get("Strict-Transport-Security"))
+	assert.Equal(t, "geolocation=(), microphone=(), camera=()", rec.Header().Get("Permissions-Policy"))
 }

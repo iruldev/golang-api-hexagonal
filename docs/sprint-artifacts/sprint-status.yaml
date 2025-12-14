@@ -185,7 +185,7 @@ development_status:
   epic-14: in-progress
   14-1-implement-oidc-authenticator: done
   14-2-implement-rbac-middleware: done
-  14-3-add-security-headers-middleware: backlog
+  14-3-add-security-headers-middleware: done
   14-4-implement-audit-logging: backlog
 
   # Epic 15: Admin / Backoffice API (4 Stories)

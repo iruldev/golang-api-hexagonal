@@ -62,6 +62,7 @@ func NewRouter(deps RouterDeps) chi.Router {
 	// Global middleware (order matters!)
 	r.Use(middleware.Recovery(logger)) // Story 3.4 - FIRST to catch all panics
 	r.Use(middleware.RequestID)        // Story 3.2
+	r.Use(middleware.SecurityHeaders)  // Story 14.3 - Security Headers
 	r.Use(middleware.Metrics)          // Story 5.5 - HTTP metrics
 	r.Use(middleware.Otel("api"))      // Story 3.5 - OTEL tracing
 	r.Use(middleware.Logging(logger))  // Story 3.3
