@@ -154,11 +154,11 @@ development_status:
   epic-10-retrospective: completed
 
   # Epic 11: DX & Operability (6 FRs)
-  epic-11: in-progress
+  epic-11: done
   11-1-create-cli-tool-structure-bplat: done
   11-2-implement-bplat-init-service-command: done
   11-3-implement-bplat-generate-module-command: done
   11-4-create-prometheus-alerting-rules-template: done
   11-5-create-runbook-documentation-template: done
   11-6-update-readme-and-agents-md-with-v2-features: done
-  epic-11-retrospective: optional
+  epic-11-retrospective: completed
