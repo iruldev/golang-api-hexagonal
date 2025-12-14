@@ -13,6 +13,8 @@ import (
 type AdminDeps struct {
 	// FeatureFlagProvider for feature flag management (Story 15.2)
 	FeatureFlagProvider runtimeutil.AdminFeatureFlagProvider
+	// UserRoleProvider for user role management (Story 15.3)
+	UserRoleProvider runtimeutil.UserRoleProvider
 	// Logger for audit logging
 	Logger *zap.Logger
 }
@@ -58,6 +60,17 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 		r.Get("/features/{flag}", featuresHandler.GetFlag)
 		r.Post("/features/{flag}/enable", featuresHandler.EnableFlag)
 		r.Post("/features/{flag}/disable", featuresHandler.DisableFlag)
+	}
+
+	// -------------------------------------------------------------------------
+	// User Role Management (Story 15.3)
+	// -------------------------------------------------------------------------
+	if deps.UserRoleProvider != nil {
+		rolesHandler := admin.NewRolesHandler(deps.UserRoleProvider, deps.Logger)
+		r.Get("/users/{id}/roles", rolesHandler.GetUserRoles)
+		r.Post("/users/{id}/roles", rolesHandler.SetUserRoles)
+		r.Post("/users/{id}/roles/add", rolesHandler.AddUserRole)
+		r.Post("/users/{id}/roles/remove", rolesHandler.RemoveUserRole)
 	}
 
 	// -------------------------------------------------------------------------

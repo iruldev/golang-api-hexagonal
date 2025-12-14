@@ -28,6 +28,8 @@ type RouterDeps struct {
 	Authenticator   middleware.Authenticator // Optional, can be nil (Story 14.1)
 	// AdminFeatureFlagProvider for feature flag management API (Story 15.2)
 	AdminFeatureFlagProvider runtimeutil.AdminFeatureFlagProvider
+	// UserRoleProvider for user role management API (Story 15.3)
+	UserRoleProvider runtimeutil.UserRoleProvider
 }
 
 // NewRouter creates a new chi router with versioned API routes.
@@ -104,6 +106,7 @@ func NewRouter(deps RouterDeps) chi.Router {
 			r.Use(middleware.RequireRole("admin"))
 			adminDeps := AdminDeps{
 				FeatureFlagProvider: deps.AdminFeatureFlagProvider,
+				UserRoleProvider:    deps.UserRoleProvider,
 				Logger:              logger,
 			}
 			RegisterAdminRoutes(r, adminDeps)

@@ -192,6 +192,6 @@ development_status:
   epic-15: in-progress
   15-1-create-admin-api-route-group: done
   15-2-implement-feature-flag-management-api: done
-  15-3-implement-user-role-management-api: backlog
+  15-3-implement-user-role-management-api: done
   15-4-create-job-queue-inspection-api: backlog
 

@@ -1273,6 +1273,131 @@ store := runtimeutil.NewInMemoryFeatureFlagStore(
 
 ---
 
+## 👤 Admin User Role Management API (Story 15.3)
+
+The Admin User Role Management API enables dynamic role assignment for users via HTTP endpoints. Requires admin role.
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/admin/users/{id}/roles` | Get roles for a user |
+| `POST` | `/admin/users/{id}/roles` | Replace all roles for a user |
+| `POST` | `/admin/users/{id}/roles/add` | Add a single role to a user |
+| `POST` | `/admin/users/{id}/roles/remove` | Remove a single role from a user |
+
+### UserRoleProvider Interface
+
+```go
+type UserRoleProvider interface {
+    GetUserRoles(ctx context.Context, userID string) (*UserRoles, error)
+    SetUserRoles(ctx context.Context, userID string, roles []string) (*UserRoles, error)
+    AddUserRole(ctx context.Context, userID string, role string) (*UserRoles, error)
+    RemoveUserRole(ctx context.Context, userID string, role string) (*UserRoles, error)
+}
+```
+
+### UserRoles Struct
+
+```go
+type UserRoles struct {
+    UserID    string    `json:"user_id"`
+    Roles     []string  `json:"roles"`
+    UpdatedAt time.Time `json:"updated_at"`
+}
+```
+
+### Using InMemoryUserRoleStore
+
+```go
+store := runtimeutil.NewInMemoryUserRoleStore(
+    runtimeutil.WithInitialUserRoles(map[string][]string{
+        "admin-uuid": {"admin", "user"},
+        "user-uuid":  {"user"},
+    }),
+)
+```
+
+### Valid Roles
+
+Only roles defined in `internal/domain/auth/rbac.go` are allowed:
+
+| Role | Description |
+|------|-------------|
+| `admin` | Full system access |
+| `service` | Service-to-service auth |
+| `user` | Standard user access |
+
+### Response Examples
+
+**GET /admin/users/{id}/roles**
+```json
+{"success": true, "data": {
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "roles": ["admin", "user"],
+  "updated_at": "2025-12-14T23:00:00Z"
+}}
+```
+
+**POST /admin/users/{id}/roles** (Set all roles)
+```json
+// Request
+{"roles": ["admin", "user"]}
+
+// Response
+{"success": true, "data": {
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "roles": ["admin", "user"],
+  "updated_at": "2025-12-14T23:00:00Z"
+}}
+```
+
+**POST /admin/users/{id}/roles/add**
+```json
+// Request
+{"role": "admin"}
+
+// Response
+{"success": true, "data": {
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "roles": ["user", "admin"],
+  "updated_at": "2025-12-14T23:00:00Z"
+}}
+```
+
+**POST /admin/users/{id}/roles/remove**
+```json
+// Request
+{"role": "admin"}
+
+// Response
+{"success": true, "data": {
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "roles": ["user"],
+  "updated_at": "2025-12-14T23:00:00Z"
+}}
+```
+
+### Error Responses
+
+| Status | Error Code | Condition |
+|--------|------------|-----------|
+| 400 | `ERR_BAD_REQUEST` | Invalid UUID format or invalid role name |
+| 403 | `ERR_FORBIDDEN` | Non-admin user accessing endpoint |
+| 500 | `ERR_INTERNAL` | Server error |
+
+### Audit Logging
+
+Role changes are automatically logged with:
+- Actor ID (from JWT claims)
+- Action type (`set_roles`, `add_role`, `remove_role`)
+- Old roles and new roles
+- Timestamp
+
+> **Note:** InMemoryUserRoleStore state is lost on restart. For persistence, integrate with your user database.
+
+---
+
 ## 📤 Kafka Event Publisher (Story 13.1)
 
 
