@@ -840,7 +840,13 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
+---
+
+## 🔄 Async Job Patterns
+
 > **For comprehensive async job documentation, see [`docs/async-jobs.md`](docs/async-jobs.md)**
+
+### Creating New Async Jobs
 
 #### Step 1: Choose Your Pattern
 
@@ -971,6 +977,104 @@ sed -i '' 's/NoteID/YourFieldID/g' internal/worker/tasks/{name}.go
 | Prevent duplicate processing | `idempotency.IdempotentHandler()` | any |
 | Critical with confirmation | Standard enqueue | `critical` |
 
+#### Idempotency Pattern
+
+Prevent duplicate job processing using idempotency keys. Critical for payment processing, order creation, and other operations where duplicates cause issues.
+
+##### Core Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `Store` interface | `internal/worker/idempotency/store.go` | Port for idempotency storage |
+| `RedisStore` | `internal/worker/idempotency/redis_store.go` | Redis-backed implementation |
+| `InMemoryStore` | `internal/worker/idempotency/memory_store.go` | In-memory implementation (testing) |
+| `IdempotentHandler` | `internal/worker/idempotency/handler.go` | Handler wrapper |
+
+##### Basic Usage
+
+```go
+import (
+    "github.com/iruldev/golang-api-hexagonal/internal/worker/idempotency"
+)
+
+// Create Redis store
+store := idempotency.NewRedisStore(
+    redisClient.Client(),
+    idempotency.WithKeyPrefix("idem:"),
+)
+
+// Wrap handler with idempotency
+handler := idempotency.IdempotentHandler(
+    store,
+    func(t *asynq.Task) string {
+        // Extract unique key from payload
+        var p PaymentPayload
+        json.Unmarshal(t.Payload(), &p)
+        return fmt.Sprintf("payment:%s", p.TransactionID)
+    },
+    24*time.Hour, // TTL: how long to remember processed keys
+    originalHandler,
+    idempotency.WithHandlerLogger(logger),
+)
+
+// Register with asynq
+srv.HandleFunc(tasks.TypePayment, handler)
+```
+
+##### Key Extraction Strategies
+
+| Strategy | Example Key | Use When |
+|----------|-------------|----------|
+| Task ID | `task:<task-id>` | Default asynq task ID |
+| Payload field | `order:<order-id>` | Business entity identifier |
+| Combined | `payment:<user-id>:<tx-id>` | Per-user uniqueness |
+| Hash | `email:<hash(to+template)>` | Complex payload dedup |
+
+##### Fail Modes
+
+| Mode | Behavior on Store Error | Use When |
+|------|------------------------|----------|
+| `FailOpen` (default) | Process task anyway | Prefer availability |
+| `FailClosed` | Return error (retry later) | Prefer consistency |
+
+```go
+// Fail-closed for critical operations
+store := idempotency.NewRedisStore(
+    redisClient,
+    idempotency.WithFailMode(idempotency.FailClosed),
+)
+
+handler := idempotency.IdempotentHandler(
+    store,
+    keyExtractor,
+    ttl,
+    originalHandler,
+    idempotency.WithHandlerFailMode(idempotency.FailClosed),
+)
+```
+
+##### Testing with In-Memory Store
+
+```go
+func TestPaymentHandler_Idempotent(t *testing.T) {
+    store := idempotency.NewInMemoryStore()
+    handler := idempotency.IdempotentHandler(
+        store,
+        keyExtractor,
+        time.Hour,
+        paymentHandler,
+    )
+    
+    // First call - should process
+    err := handler(ctx, task)
+    require.NoError(t, err)
+    
+    // Second call - should skip (duplicate)
+    err = handler(ctx, task)
+    require.NoError(t, err) // No error, just skipped
+}
+```
+
 ---
 
 ## 📊 Prometheus Alerting
@@ -1057,6 +1161,63 @@ promtool check rules deploy/prometheus/alerts.yaml
 # Using yq for YAML validation
 yq '.' deploy/prometheus/alerts.yaml
 ```
+
+---
+
+## 📖 Runbook Documentation
+
+Runbooks provide standardized incident response procedures for Prometheus alerts. See `docs/runbook/`.
+
+### Runbook Structure
+
+Each runbook follows a standardized template:
+
+| Section | Purpose |
+|---------|---------|
+| **Metadata** | Alert name, severity, component, author |
+| **Overview** | What triggers the alert and business impact |
+| **Quick Response Checklist** | Step-by-step incident response checklist |
+| **Symptoms** | Observable indicators and metrics to check |
+| **Diagnosis** | Step-by-step investigation with commands |
+| **Common Causes** | Table of causes, symptoms, and resolutions |
+| **Remediation** | Immediate and post-incident actions |
+| **Escalation** | Timeline, path, and contacts |
+
+### Available Runbooks
+
+| Alert | Severity | Runbook |
+|-------|----------|---------|
+| HighErrorRate / HighErrorRateCritical | warning/critical | `docs/runbook/high-error-rate.md` |
+| HighLatency / HighLatencyCritical | warning/critical | `docs/runbook/high-latency.md` |
+| ServiceDown | critical | `docs/runbook/service-down.md` |
+| DBConnectionExhausted | warning | `docs/runbook/db-connection-exhausted.md` |
+| DBSlowQueries | warning | `docs/runbook/db-slow-queries.md` |
+| JobQueueBacklog / JobProcessingStalled | warning | `docs/runbook/job-queue-backlog.md` |
+| JobFailureRate / JobFailureRateCritical | warning/critical | `docs/runbook/job-failure-rate.md` |
+
+### Creating New Runbooks
+
+1. **Copy template:**
+   ```bash
+   cp docs/runbook/template.md docs/runbook/your-alert.md
+   ```
+
+2. **Fill sections:** Metadata, Overview, Symptoms, Diagnosis, Common Causes, Remediation, Escalation
+
+3. **Link from alerts.yaml:**
+   ```yaml
+   annotations:
+     runbook_url: "docs/runbook/your-alert.md"
+   ```
+
+4. **Update index:** Add entry to `docs/runbook/README.md`
+
+### Escalation Guidelines
+
+| Severity | Initial Response | Escalation Trigger |
+|----------|------------------|-------------------|
+| critical | Immediate | After 5-15 minutes |
+| warning | Within 30 minutes | After 1 hour |
 
 ---
 

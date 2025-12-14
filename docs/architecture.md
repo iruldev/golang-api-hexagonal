@@ -534,6 +534,18 @@ Limit/offset: `page`, `page_size` (default 20, max 100)
 | OTEL_ | ENDPOINT, SERVICE_NAME |
 | LOG_ | LEVEL, FORMAT |
 
+#### Operational Runbooks
+
+Incident response runbooks for each alert type are in `docs/runbook/`:
+
+| Category | Runbooks |
+|----------|----------|
+| HTTP Service | high-error-rate.md, high-latency.md, service-down.md |
+| Database | db-connection-exhausted.md, db-slow-queries.md |
+| Job Queue | job-queue-backlog.md, job-failure-rate.md |
+
+Each runbook includes: symptoms, diagnosis, common causes, remediation, and escalation paths. See `docs/runbook/README.md` for full index and `docs/runbook/template.md` for creating new runbooks.
+
 ---
 
 ## Implementation Patterns & Consistency Rules
