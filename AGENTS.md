@@ -1097,6 +1097,117 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 ---
 
+## 📤 Kafka Event Publisher (Story 13.1)
+
+The Kafka publisher implements the `EventPublisher` interface for high-throughput event-driven communication. See `internal/infra/kafka/publisher.go`.
+
+### Core Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `EventPublisher` interface | `runtimeutil/events.go` | Port for event publishing |
+| `Event` struct | `runtimeutil/events.go` | Domain event structure |
+| `KafkaPublisher` | `infra/kafka/publisher.go` | Kafka adapter implementation |
+| `NopEventPublisher` | `runtimeutil/events.go` | No-op implementation for testing |
+| `KafkaHealthChecker` | `infra/kafka/publisher.go` | Health check adapter |
+
+### Configuration
+
+| Env Variable | Default | Description |
+|--------------|---------|-------------|
+| `KAFKA_ENABLED` | `false` | Enable Kafka publisher |
+| `KAFKA_BROKERS` | `localhost:9092` | Comma-separated broker addresses |
+| `KAFKA_CLIENT_ID` | `golang-api-hexagonal` | Client identifier |
+| `KAFKA_PRODUCER_TIMEOUT` | `10s` | Producer operation timeout |
+| `KAFKA_PRODUCER_REQUIRED_ACKS` | `all` | Ack level: `all`, `local`, `none` |
+
+### Basic Usage
+
+```go
+import (
+    "github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
+    "github.com/iruldev/golang-api-hexagonal/internal/infra/kafka"
+)
+
+// Create event
+event, err := runtimeutil.NewEvent("user.created", map[string]string{
+    "user_id": "123",
+    "email":   "user@example.com",
+})
+
+// Publish synchronously (waits for ack)
+err = publisher.Publish(ctx, "users", event)
+
+// Publish asynchronously (fire-and-forget)
+err = publisher.PublishAsync(ctx, "analytics", event)
+```
+
+### Publisher Methods
+
+| Method | Behavior | Use When |
+|--------|----------|----------|
+| `Publish()` | Sync, waits for broker ack | Critical events, need confirmation |
+| `PublishAsync()` | Async, returns immediately | Non-critical, high-throughput |
+
+### Health Check Integration
+
+The `/readyz` endpoint includes Kafka connectivity check when enabled:
+
+```go
+// Automatic integration in main.go
+kafkaChecker = kafka.NewKafkaHealthChecker(pub)
+router := httpx.NewRouter(httpx.RouterDeps{
+    KafkaChecker: kafkaChecker,
+})
+```
+
+### Prometheus Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `kafka_publish_total` | Counter | `topic`, `status` | Total publish attempts |
+| `kafka_publish_errors_total` | Counter | `topic`, `error_type` | Failed publishes |
+| `kafka_publish_duration_seconds` | Histogram | `topic` | Publish latency |
+
+### Docker Compose Setup
+
+Kafka services are included in `docker-compose.yaml`:
+
+```bash
+docker-compose up -d zookeeper kafka
+```
+
+### Testing with Testcontainers
+
+```go
+import inttesting "github.com/iruldev/golang-api-hexagonal/internal/testing"
+
+func TestKafkaIntegration(t *testing.T) {
+    ctx := context.Background()
+    kafkaContainer, err := inttesting.NewKafkaContainer(ctx)
+    require.NoError(t, err)
+    defer kafkaContainer.Terminate(ctx)
+    
+    cfg := &config.KafkaConfig{
+        Enabled: true,
+        Brokers: kafkaContainer.Brokers,
+    }
+    publisher, _ := kafka.NewKafkaPublisher(cfg, logger)
+    // Use publisher...
+}
+```
+
+### Graceful Shutdown
+
+```go
+// KafkaPublisher implements Close() for graceful shutdown
+if closer, ok := eventPublisher.(kafka.Closeable); ok {
+    defer closer.Close()
+}
+```
+
+---
+
 ## 🔄 Async Job Patterns
 
 > **For comprehensive async job documentation, see [`docs/async-jobs.md`](docs/async-jobs.md)**

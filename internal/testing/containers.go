@@ -97,3 +97,67 @@ func (c *RedisContainer) Terminate(ctx context.Context) error {
 	}
 	return nil
 }
+
+// KafkaContainer wraps a testcontainers Kafka container.
+type KafkaContainer struct {
+	Container testcontainers.Container
+	Brokers   []string
+}
+
+// NewKafkaContainer starts a Kafka container for testing.
+// Returns the container wrapper with broker addresses for connecting.
+// Caller must call Terminate() when done.
+// Uses Redpanda (Kafka-compatible) for faster startup and simpler config.
+func NewKafkaContainer(ctx context.Context) (*KafkaContainer, error) {
+	req := testcontainers.ContainerRequest{
+		Image:        "redpandadata/redpanda:v24.1.1",
+		ExposedPorts: []string{"9092/tcp"},
+		Cmd: []string{
+			"redpanda", "start",
+			"--smp", "1",
+			"--memory", "512M",
+			"--reserve-memory", "0M",
+			"--overprovisioned",
+			"--node-id", "0",
+			"--kafka-addr", "PLAINTEXT://0.0.0.0:9092",
+			"--advertise-kafka-addr", "PLAINTEXT://localhost:9092",
+			"--set", "redpanda.auto_create_topics_enabled=true",
+		},
+		WaitingFor: wait.ForListeningPort("9092/tcp").WithStartupTimeout(60 * time.Second),
+	}
+
+	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: req,
+		Started:          true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("start kafka container: %w", err)
+	}
+
+	host, err := container.Host(ctx)
+	if err != nil {
+		_ = container.Terminate(ctx)
+		return nil, fmt.Errorf("get host: %w", err)
+	}
+
+	port, err := container.MappedPort(ctx, "9092")
+	if err != nil {
+		_ = container.Terminate(ctx)
+		return nil, fmt.Errorf("get port: %w", err)
+	}
+
+	broker := fmt.Sprintf("%s:%s", host, port.Port())
+
+	return &KafkaContainer{
+		Container: container,
+		Brokers:   []string{broker},
+	}, nil
+}
+
+// Terminate stops and removes the Kafka container.
+func (c *KafkaContainer) Terminate(ctx context.Context) error {
+	if c.Container != nil {
+		return c.Container.Terminate(ctx)
+	}
+	return nil
+}

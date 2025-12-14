@@ -22,6 +22,7 @@ type RouterDeps struct {
 	Config       *config.Config
 	DBChecker    handlers.DBHealthChecker // Optional, can be nil
 	RedisChecker handlers.DBHealthChecker // Optional, can be nil
+	KafkaChecker handlers.DBHealthChecker // Optional, can be nil (Story 13.1)
 }
 
 // NewRouter creates a new chi router with versioned API routes.
@@ -68,6 +69,9 @@ func NewRouter(deps RouterDeps) chi.Router {
 	readyzHandler := handlers.NewReadyzHandler(deps.DBChecker)
 	if deps.RedisChecker != nil {
 		readyzHandler = readyzHandler.WithRedis(deps.RedisChecker)
+	}
+	if deps.KafkaChecker != nil {
+		readyzHandler = readyzHandler.WithKafka(deps.KafkaChecker)
 	}
 	r.Handle("/readyz", readyzHandler)
 

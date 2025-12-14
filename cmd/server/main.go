@@ -13,6 +13,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/kafka"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/redis"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/graphql"
@@ -21,6 +22,7 @@ import (
 	grpcnote "github.com/iruldev/golang-api-hexagonal/internal/interface/grpc/note"
 	httpx "github.com/iruldev/golang-api-hexagonal/internal/interface/http"
 	"github.com/iruldev/golang-api-hexagonal/internal/observability"
+	"github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
 	noteuc "github.com/iruldev/golang-api-hexagonal/internal/usecase/note"
 	notev1 "github.com/iruldev/golang-api-hexagonal/proto/note/v1"
 )
@@ -78,6 +80,37 @@ func main() {
 		redisChecker = redisClient
 	}
 
+	// Initialize Kafka publisher if enabled (Story 13.1)
+	var eventPublisher runtimeutil.EventPublisher
+	var kafkaChecker *kafka.KafkaHealthChecker
+	if cfg.Kafka.IsEnabled() {
+		pub, err := kafka.NewKafkaPublisher(&cfg.Kafka, logger)
+		if err != nil {
+			logger.Error("Kafka initialization failed", observability.Err(err))
+		} else {
+			eventPublisher = pub
+			kafkaChecker = kafka.NewKafkaHealthChecker(pub)
+			logger.Info("Kafka publisher initialized",
+				observability.String("brokers", fmt.Sprintf("%v", cfg.Kafka.Brokers)),
+				observability.String("client_id", cfg.Kafka.ClientID))
+		}
+	} else {
+		eventPublisher = runtimeutil.NewNopEventPublisher()
+		logger.Info("Kafka publisher disabled, using noop publisher")
+	}
+
+	// Graceful shutdown for Kafka publisher (Story 13.1 - code review fix)
+	defer func() {
+		if kafkaPub, ok := eventPublisher.(*kafka.KafkaPublisher); ok {
+			if err := kafkaPub.Close(); err != nil {
+				logger.Error("Kafka publisher close error", observability.Err(err))
+			} else {
+				logger.Info("Kafka publisher closed gracefully")
+			}
+		}
+	}()
+	_ = eventPublisher // Available for use in future stories
+
 	// Use typed config instead of raw os.Getenv
 	port := fmt.Sprintf("%d", cfg.App.HTTPPort)
 
@@ -86,6 +119,7 @@ func main() {
 		Config:       cfg,
 		DBChecker:    dbChecker,
 		RedisChecker: redisChecker,
+		KafkaChecker: kafkaChecker,
 	})
 
 	server := &http.Server{

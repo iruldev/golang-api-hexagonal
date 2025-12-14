@@ -102,6 +102,30 @@ if enabled, _ := provider.IsEnabled(ctx, "new_dashboard"); enabled {
 }
 ```
 
+### 📤 Event Publishing (V3 Preview)
+
+| Type | Use Case | Location |
+|------|----------|----------|
+| **Kafka Publisher** | High-throughput event-driven communication | `internal/infra/kafka/publisher.go` |
+| **Nop Publisher** | Testing, disabled mode | `internal/runtimeutil/events.go` |
+
+```go
+// Publish event synchronously (waits for ack)
+event, _ := runtimeutil.NewEvent("user.created", map[string]string{"user_id": "123"})
+publisher.Publish(ctx, "users", event)
+
+// Publish asynchronously (fire-and-forget)
+publisher.PublishAsync(ctx, "analytics", event)
+```
+
+**Configuration:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `KAFKA_ENABLED` | `false` | Enable Kafka publisher |
+| `KAFKA_BROKERS` | `localhost:9092` | Broker addresses |
+| `KAFKA_CLIENT_ID` | `golang-api-hexagonal` | Client identifier |
+
 ### 🛠 CLI Tool (bplat)
 
 | Command | Purpose |

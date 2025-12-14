@@ -12,6 +12,7 @@ type Config struct {
 	Redis         RedisConfig         `koanf:"redis"`
 	Asynq         AsynqConfig         `koanf:"asynq"`
 	GRPC          GRPCConfig          `koanf:"grpc"`
+	Kafka         KafkaConfig         `koanf:"kafka"`
 	Observability ObservabilityConfig `koanf:"otel"`
 	Log           LogConfig           `koanf:"log"`
 }
@@ -99,4 +100,24 @@ type AsynqConfig struct {
 	Concurrency     int           `koanf:"concurrency"`      // default: 10
 	RetryMax        int           `koanf:"retry_max"`        // default: 3
 	ShutdownTimeout time.Duration `koanf:"shutdown_timeout"` // default: 30s
+}
+
+// KafkaConfig holds Kafka producer settings.
+type KafkaConfig struct {
+	Enabled      bool          `koanf:"enabled"`       // KAFKA_ENABLED, default: false
+	Brokers      []string      `koanf:"brokers"`       // KAFKA_BROKERS, default: localhost:9092
+	ClientID     string        `koanf:"client_id"`     // KAFKA_CLIENT_ID, default: golang-api-hexagonal
+	Timeout      time.Duration `koanf:"timeout"`       // KAFKA_PRODUCER_TIMEOUT, default: 10s
+	RequiredAcks string        `koanf:"required_acks"` // KAFKA_PRODUCER_REQUIRED_ACKS: all, local, none
+	// TLS/SASL config placeholders for production
+	TLSEnabled    bool   `koanf:"tls_enabled"`    // KAFKA_TLS_ENABLED, default: false
+	SASLEnabled   bool   `koanf:"sasl_enabled"`   // KAFKA_SASL_ENABLED, default: false
+	SASLUsername  string `koanf:"sasl_username"`  // KAFKA_SASL_USERNAME
+	SASLPassword  string `koanf:"sasl_password"`  // KAFKA_SASL_PASSWORD
+	SASLMechanism string `koanf:"sasl_mechanism"` // KAFKA_SASL_MECHANISM: PLAIN, SCRAM-SHA-256, SCRAM-SHA-512
+}
+
+// IsEnabled returns true if Kafka is enabled.
+func (c *KafkaConfig) IsEnabled() bool {
+	return c.Enabled
 }

@@ -28,6 +28,7 @@ type DBHealthChecker interface {
 type ReadyzHandler struct {
 	dbChecker    DBHealthChecker
 	redisChecker DBHealthChecker
+	kafkaChecker DBHealthChecker
 }
 
 // NewReadyzHandler creates a new ReadyzHandler with optional checkers.
@@ -38,6 +39,12 @@ func NewReadyzHandler(dbChecker DBHealthChecker) *ReadyzHandler {
 // WithRedis adds Redis health checker to the readiness handler.
 func (h *ReadyzHandler) WithRedis(redisChecker DBHealthChecker) *ReadyzHandler {
 	h.redisChecker = redisChecker
+	return h
+}
+
+// WithKafka adds Kafka health checker to the readiness handler.
+func (h *ReadyzHandler) WithKafka(kafkaChecker DBHealthChecker) *ReadyzHandler {
+	h.kafkaChecker = kafkaChecker
 	return h
 }
 
@@ -58,6 +65,14 @@ func (h *ReadyzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.redisChecker != nil {
 		if err := h.redisChecker.Ping(ctx); err != nil {
 			response.Error(w, http.StatusServiceUnavailable, response.ErrServiceUnavailable, "redis unavailable")
+			return
+		}
+	}
+
+	// Check Kafka if available (Story 13.1)
+	if h.kafkaChecker != nil {
+		if err := h.kafkaChecker.Ping(ctx); err != nil {
+			response.Error(w, http.StatusServiceUnavailable, response.ErrServiceUnavailable, "kafka unavailable")
 			return
 		}
 	}
