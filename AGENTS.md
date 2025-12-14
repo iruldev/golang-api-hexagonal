@@ -1214,7 +1214,67 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 ---
 
+## 🚩 Admin Feature Flag Management API (Story 15.2)
+
+The Admin Feature Flag API enables runtime toggling of feature flags via HTTP endpoints. Requires admin role.
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/admin/features` | List all configured flags |
+| `GET` | `/admin/features/{flag}` | Get specific flag state |
+| `POST` | `/admin/features/{flag}/enable` | Enable a flag |
+| `POST` | `/admin/features/{flag}/disable` | Disable a flag |
+
+### AdminFeatureFlagProvider Interface
+
+Extends `FeatureFlagProvider` with write operations:
+
+```go
+type AdminFeatureFlagProvider interface {
+    FeatureFlagProvider
+
+    SetEnabled(ctx context.Context, flag string, enabled bool) error
+    List(ctx context.Context) ([]FeatureFlagState, error)
+    Get(ctx context.Context, flag string) (FeatureFlagState, error)
+}
+```
+
+### Using InMemoryFeatureFlagStore
+
+```go
+store := runtimeutil.NewInMemoryFeatureFlagStore(
+    runtimeutil.WithInitialFlags(map[string]bool{
+        "new_dashboard": true,
+        "dark_mode": false,
+    }),
+    runtimeutil.WithFlagDescriptions(map[string]string{
+        "new_dashboard": "New dashboard UI",
+    }),
+)
+```
+
+### Response Examples
+
+**GET /admin/features**
+```json
+{"success": true, "data": [
+  {"name": "new_dashboard", "enabled": true, "description": "New dashboard UI", "updated_at": "2025-12-14T22:00:00Z"}
+]}
+```
+
+**POST /admin/features/new_dashboard/enable**
+```json
+{"success": true, "data": {"flag": "new_dashboard", "enabled": true}}
+```
+
+> **Note:** InMemoryFeatureFlagStore state is lost on restart. For persistence, use Redis or database-backed implementation.
+
+---
+
 ## 📤 Kafka Event Publisher (Story 13.1)
+
 
 The Kafka publisher implements the `EventPublisher` interface for high-throughput event-driven communication. See `internal/infra/kafka/publisher.go`.
 

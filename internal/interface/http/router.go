@@ -12,6 +12,7 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/handlers"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
 	"github.com/iruldev/golang-api-hexagonal/internal/observability"
+	"github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
 )
 
 // TracerShutdown holds the tracer shutdown function for graceful cleanup.
@@ -25,6 +26,8 @@ type RouterDeps struct {
 	KafkaChecker    handlers.DBHealthChecker // Optional, can be nil (Story 13.1)
 	RabbitMQChecker handlers.DBHealthChecker // Optional, can be nil (Story 13.2)
 	Authenticator   middleware.Authenticator // Optional, can be nil (Story 14.1)
+	// AdminFeatureFlagProvider for feature flag management API (Story 15.2)
+	AdminFeatureFlagProvider runtimeutil.AdminFeatureFlagProvider
 }
 
 // NewRouter creates a new chi router with versioned API routes.
@@ -99,7 +102,11 @@ func NewRouter(deps RouterDeps) chi.Router {
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(middleware.AuthMiddleware(deps.Authenticator))
 			r.Use(middleware.RequireRole("admin"))
-			RegisterAdminRoutes(r)
+			adminDeps := AdminDeps{
+				FeatureFlagProvider: deps.AdminFeatureFlagProvider,
+				Logger:              logger,
+			}
+			RegisterAdminRoutes(r, adminDeps)
 		})
 	}
 

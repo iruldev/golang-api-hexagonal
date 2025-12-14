@@ -3,8 +3,19 @@ package http
 
 import (
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
+
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/admin"
+	"github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
 )
+
+// AdminDeps holds dependencies for admin routes.
+type AdminDeps struct {
+	// FeatureFlagProvider for feature flag management (Story 15.2)
+	FeatureFlagProvider runtimeutil.AdminFeatureFlagProvider
+	// Logger for audit logging
+	Logger *zap.Logger
+}
 
 // RegisterAdminRoutes registers all Admin API routes under the /admin prefix.
 //
@@ -29,14 +40,25 @@ import (
 //
 // # Example Usage
 //
-//	func RegisterAdminRoutes(r chi.Router) {
+//	func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 //	    r.Get("/health", admin.HealthHandler)           // GET /admin/health
 //	    r.Get("/users", admin.ListUsersHandler)         // GET /admin/users
 //	    r.Post("/users/{id}/ban", admin.BanUserHandler) // POST /admin/users/{id}/ban
 //	}
-func RegisterAdminRoutes(r chi.Router) {
+func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 	// Admin health check - validates admin access is working (Story 15.1)
 	r.Get("/health", admin.HealthHandler)
+
+	// -------------------------------------------------------------------------
+	// Feature Flag Management (Story 15.2)
+	// -------------------------------------------------------------------------
+	if deps.FeatureFlagProvider != nil {
+		featuresHandler := admin.NewFeaturesHandler(deps.FeatureFlagProvider, deps.Logger)
+		r.Get("/features", featuresHandler.ListFlags)
+		r.Get("/features/{flag}", featuresHandler.GetFlag)
+		r.Post("/features/{flag}/enable", featuresHandler.EnableFlag)
+		r.Post("/features/{flag}/disable", featuresHandler.DisableFlag)
+	}
 
 	// -------------------------------------------------------------------------
 	// Add new admin routes below this line

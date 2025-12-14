@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"sync"
+	"time"
 )
 
 // ErrFlagNotFound indicates the feature flag was not found (used in strict mode).
@@ -236,4 +238,221 @@ func (p *NopFeatureFlagProvider) IsEnabled(ctx context.Context, flag string) (bo
 // Validates flag name for consistency with other providers.
 func (p *NopFeatureFlagProvider) IsEnabledForContext(ctx context.Context, flag string, _ EvalContext) (bool, error) {
 	return p.IsEnabled(ctx, flag)
+}
+
+// FeatureFlagState represents the state of a feature flag including metadata.
+type FeatureFlagState struct {
+	Name        string `json:"name"`
+	Enabled     bool   `json:"enabled"`
+	Description string `json:"description,omitempty"`
+	UpdatedAt   string `json:"updated_at"` // ISO 8601 format
+}
+
+// AdminFeatureFlagProvider extends FeatureFlagProvider with write operations
+// for administrative feature flag management.
+//
+// Usage Example:
+//
+//	// Enable a flag
+//	err := provider.SetEnabled(ctx, "new_dashboard", true)
+//
+//	// List all flags
+//	flags, err := provider.List(ctx)
+//
+//	// Get specific flag
+//	state, err := provider.Get(ctx, "new_dashboard")
+type AdminFeatureFlagProvider interface {
+	FeatureFlagProvider
+
+	// SetEnabled updates a flag's enabled state.
+	// Returns ErrFlagNotFound if the flag doesn't exist.
+	SetEnabled(ctx context.Context, flag string, enabled bool) error
+
+	// List returns all known feature flags with their current states.
+	List(ctx context.Context) ([]FeatureFlagState, error)
+
+	// Get returns a specific flag's state.
+	// Returns ErrFlagNotFound if the flag doesn't exist.
+	Get(ctx context.Context, flag string) (FeatureFlagState, error)
+}
+
+// InMemoryFeatureFlagStore implements AdminFeatureFlagProvider with in-memory storage.
+// Thread-safe via sync.RWMutex. State changes are lost on restart.
+//
+// This implementation is suitable for development and testing.
+// For production, use a persistent store (Redis, database).
+type InMemoryFeatureFlagStore struct {
+	mu          sync.RWMutex
+	flags       map[string]FeatureFlagState
+	envProvider *EnvFeatureFlagProvider
+}
+
+// InMemoryFFOption is a functional option for configuring InMemoryFeatureFlagStore.
+type InMemoryFFOption func(*InMemoryFeatureFlagStore)
+
+// NewInMemoryFeatureFlagStore creates a new InMemoryFeatureFlagStore.
+// It initializes from the provided EnvFeatureFlagProvider for reading initial env values.
+//
+// Example:
+//
+//	store := runtimeutil.NewInMemoryFeatureFlagStore(
+//	    runtimeutil.WithInitialFlags(map[string]bool{
+//	        "new_dashboard": true,
+//	        "dark_mode": false,
+//	    }),
+//	)
+func NewInMemoryFeatureFlagStore(opts ...InMemoryFFOption) *InMemoryFeatureFlagStore {
+	s := &InMemoryFeatureFlagStore{
+		flags: make(map[string]FeatureFlagState),
+		envProvider: &EnvFeatureFlagProvider{
+			prefix:       "FF_",
+			defaultValue: false,
+			strictMode:   false,
+		},
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// WithInitialFlags sets initial flags when creating the store.
+func WithInitialFlags(flags map[string]bool) InMemoryFFOption {
+	return func(s *InMemoryFeatureFlagStore) {
+		now := timeNow().Format("2006-01-02T15:04:05Z07:00")
+		for name, enabled := range flags {
+			s.flags[name] = FeatureFlagState{
+				Name:      name,
+				Enabled:   enabled,
+				UpdatedAt: now,
+			}
+		}
+	}
+}
+
+// WithFlagDescriptions sets descriptions for flags.
+func WithFlagDescriptions(descriptions map[string]string) InMemoryFFOption {
+	return func(s *InMemoryFeatureFlagStore) {
+		for name, desc := range descriptions {
+			if state, exists := s.flags[name]; exists {
+				state.Description = desc
+				s.flags[name] = state
+			}
+		}
+	}
+}
+
+// timeNow is a variable for testing purposes.
+var timeNow = time.Now
+
+// IsEnabled checks if a feature flag is enabled.
+// First checks dynamic state, falls back to env provider.
+func (s *InMemoryFeatureFlagStore) IsEnabled(ctx context.Context, flag string) (bool, error) {
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+
+	if err := validateFlagName(flag); err != nil {
+		return false, err
+	}
+
+	s.mu.RLock()
+	state, exists := s.flags[flag]
+	s.mu.RUnlock()
+
+	if exists {
+		return state.Enabled, nil
+	}
+
+	// Fall back to env provider
+	return s.envProvider.IsEnabled(ctx, flag)
+}
+
+// IsEnabledForContext checks if a feature flag is enabled with evaluation context.
+// Same as IsEnabled - context evaluation not supported in in-memory store.
+func (s *InMemoryFeatureFlagStore) IsEnabledForContext(ctx context.Context, flag string, _ EvalContext) (bool, error) {
+	return s.IsEnabled(ctx, flag)
+}
+
+// SetEnabled updates a flag's enabled state.
+// Creates the flag if it doesn't exist (auto-registration).
+func (s *InMemoryFeatureFlagStore) SetEnabled(ctx context.Context, flag string, enabled bool) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	if err := validateFlagName(flag); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := timeNow().Format("2006-01-02T15:04:05Z07:00")
+
+	state, exists := s.flags[flag]
+	if !exists {
+		// Auto-register unknown flags
+		state = FeatureFlagState{
+			Name: flag,
+		}
+	}
+
+	state.Enabled = enabled
+	state.UpdatedAt = now
+	s.flags[flag] = state
+
+	return nil
+}
+
+// List returns all known feature flags.
+func (s *InMemoryFeatureFlagStore) List(ctx context.Context) ([]FeatureFlagState, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]FeatureFlagState, 0, len(s.flags))
+	for _, state := range s.flags {
+		result = append(result, state)
+	}
+
+	return result, nil
+}
+
+// Get returns a specific flag's state.
+// Falls back to environment provider if not in store (read-only state).
+func (s *InMemoryFeatureFlagStore) Get(ctx context.Context, flag string) (FeatureFlagState, error) {
+	if ctx.Err() != nil {
+		return FeatureFlagState{}, ctx.Err()
+	}
+
+	if err := validateFlagName(flag); err != nil {
+		return FeatureFlagState{}, err
+	}
+
+	s.mu.RLock()
+	state, exists := s.flags[flag]
+	s.mu.RUnlock()
+
+	if exists {
+		return state, nil
+	}
+
+	// Fall back to env provider for consistency with IsEnabled behavior
+	enabled, err := s.envProvider.IsEnabled(ctx, flag)
+	if err != nil {
+		// If env provider returns ErrFlagNotFound, propagate it
+		return FeatureFlagState{}, err
+	}
+
+	// Synthesize read-only state from env
+	return FeatureFlagState{
+		Name:        flag,
+		Enabled:     enabled,
+		Description: "(from environment)",
+		UpdatedAt:   "", // Unknown for env-based flags
+	}, nil
 }

@@ -3,7 +3,9 @@ package runtimeutil
 import (
 	"context"
 	"os"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestEnvFeatureFlagProvider_IsEnabled(t *testing.T) {
@@ -471,5 +473,360 @@ func TestNopFeatureFlagProvider_IsEnabledForContext_InvalidFlag(t *testing.T) {
 	_, err := provider.IsEnabledForContext(context.Background(), "", evalCtx)
 	if err != ErrInvalidFlagName {
 		t.Errorf("IsEnabledForContext() error = %v, want ErrInvalidFlagName", err)
+	}
+}
+
+// =============================================================================
+// InMemoryFeatureFlagStore Tests (Story 15.2)
+// =============================================================================
+
+func TestInMemoryFeatureFlagStore_NewStore(t *testing.T) {
+	store := NewInMemoryFeatureFlagStore()
+
+	if store == nil {
+		t.Fatal("NewInMemoryFeatureFlagStore() returned nil")
+	}
+	if store.flags == nil {
+		t.Error("flags map should be initialized")
+	}
+}
+
+func TestInMemoryFeatureFlagStore_WithInitialFlags(t *testing.T) {
+	// Mock time for consistent testing
+	originalTimeNow := timeNow
+	fixedTime := time.Date(2025, 12, 14, 22, 0, 0, 0, time.UTC)
+	timeNow = func() time.Time { return fixedTime }
+	defer func() { timeNow = originalTimeNow }()
+
+	store := NewInMemoryFeatureFlagStore(
+		WithInitialFlags(map[string]bool{
+			"new_dashboard": true,
+			"dark_mode":     false,
+		}),
+	)
+
+	// Check new_dashboard is enabled
+	enabled, err := store.IsEnabled(context.Background(), "new_dashboard")
+	if err != nil {
+		t.Errorf("IsEnabled(new_dashboard) error = %v", err)
+	}
+	if !enabled {
+		t.Error("new_dashboard should be enabled")
+	}
+
+	// Check dark_mode is disabled
+	disabled, err := store.IsEnabled(context.Background(), "dark_mode")
+	if err != nil {
+		t.Errorf("IsEnabled(dark_mode) error = %v", err)
+	}
+	if disabled {
+		t.Error("dark_mode should be disabled")
+	}
+}
+
+func TestInMemoryFeatureFlagStore_SetEnabled(t *testing.T) {
+	// Mock time
+	originalTimeNow := timeNow
+	fixedTime := time.Date(2025, 12, 14, 22, 0, 0, 0, time.UTC)
+	timeNow = func() time.Time { return fixedTime }
+	defer func() { timeNow = originalTimeNow }()
+
+	store := NewInMemoryFeatureFlagStore(
+		WithInitialFlags(map[string]bool{
+			"feature_a": false,
+		}),
+	)
+
+	// Enable the flag
+	err := store.SetEnabled(context.Background(), "feature_a", true)
+	if err != nil {
+		t.Errorf("SetEnabled() error = %v", err)
+	}
+
+	// Verify it's now enabled
+	enabled, err := store.IsEnabled(context.Background(), "feature_a")
+	if err != nil {
+		t.Errorf("IsEnabled() error = %v", err)
+	}
+	if !enabled {
+		t.Error("feature_a should be enabled after SetEnabled(true)")
+	}
+
+	// Disable it again
+	err = store.SetEnabled(context.Background(), "feature_a", false)
+	if err != nil {
+		t.Errorf("SetEnabled() error = %v", err)
+	}
+
+	disabled, err := store.IsEnabled(context.Background(), "feature_a")
+	if err != nil {
+		t.Errorf("IsEnabled() error = %v", err)
+	}
+	if disabled {
+		t.Error("feature_a should be disabled after SetEnabled(false)")
+	}
+}
+
+func TestInMemoryFeatureFlagStore_SetEnabled_AutoRegisters(t *testing.T) {
+	store := NewInMemoryFeatureFlagStore()
+
+	// Set a flag that doesn't exist - should auto-register
+	err := store.SetEnabled(context.Background(), "new_flag", true)
+	if err != nil {
+		t.Errorf("SetEnabled() error = %v", err)
+	}
+
+	enabled, err := store.IsEnabled(context.Background(), "new_flag")
+	if err != nil {
+		t.Errorf("IsEnabled() error = %v", err)
+	}
+	if !enabled {
+		t.Error("new_flag should be enabled after SetEnabled")
+	}
+}
+
+func TestInMemoryFeatureFlagStore_SetEnabled_InvalidFlagName(t *testing.T) {
+	store := NewInMemoryFeatureFlagStore()
+
+	err := store.SetEnabled(context.Background(), "", true)
+	if err != ErrInvalidFlagName {
+		t.Errorf("SetEnabled() error = %v, want ErrInvalidFlagName", err)
+	}
+}
+
+func TestInMemoryFeatureFlagStore_List(t *testing.T) {
+	store := NewInMemoryFeatureFlagStore(
+		WithInitialFlags(map[string]bool{
+			"flag_a": true,
+			"flag_b": false,
+		}),
+	)
+
+	flags, err := store.List(context.Background())
+	if err != nil {
+		t.Errorf("List() error = %v", err)
+	}
+
+	if len(flags) != 2 {
+		t.Errorf("List() returned %d flags, want 2", len(flags))
+	}
+
+	// Check that both flags are present
+	flagMap := make(map[string]FeatureFlagState)
+	for _, f := range flags {
+		flagMap[f.Name] = f
+	}
+
+	if _, ok := flagMap["flag_a"]; !ok {
+		t.Error("flag_a should be in list")
+	}
+	if _, ok := flagMap["flag_b"]; !ok {
+		t.Error("flag_b should be in list")
+	}
+}
+
+func TestInMemoryFeatureFlagStore_Get(t *testing.T) {
+	// Mock time
+	originalTimeNow := timeNow
+	fixedTime := time.Date(2025, 12, 14, 22, 0, 0, 0, time.UTC)
+	timeNow = func() time.Time { return fixedTime }
+	defer func() { timeNow = originalTimeNow }()
+
+	store := NewInMemoryFeatureFlagStore(
+		WithInitialFlags(map[string]bool{
+			"existing_flag": true,
+		}),
+	)
+
+	state, err := store.Get(context.Background(), "existing_flag")
+	if err != nil {
+		t.Errorf("Get() error = %v", err)
+	}
+
+	if state.Name != "existing_flag" {
+		t.Errorf("Name = %v, want existing_flag", state.Name)
+	}
+	if !state.Enabled {
+		t.Error("Enabled should be true")
+	}
+	if state.UpdatedAt == "" {
+		t.Error("UpdatedAt should be set")
+	}
+}
+
+func TestInMemoryFeatureFlagStore_Get_NotFound_StrictMode(t *testing.T) {
+	// With default env provider (non-strict), Get() falls back to env and returns success
+	// To test ErrFlagNotFound, we need to test with a flag that doesn't exist in either store or env
+	// Since default EnvProvider returns false (not error) for missing flags,
+	// ErrFlagNotFound is only returned in strict mode
+	store := NewInMemoryFeatureFlagStore()
+
+	// Flag not in store, but env provider returns default (false, nil)
+	// So this should return a synthesized state, not ErrFlagNotFound
+	state, err := store.Get(context.Background(), "nonexistent")
+	if err != nil {
+		t.Errorf("Get() error = %v, want nil (env fallback)", err)
+	}
+	if state.Name != "nonexistent" {
+		t.Errorf("Name = %v, want nonexistent", state.Name)
+	}
+	if state.Enabled != false {
+		t.Error("Enabled should be false (default from env)")
+	}
+}
+
+func TestInMemoryFeatureFlagStore_Get_InvalidFlagName(t *testing.T) {
+	store := NewInMemoryFeatureFlagStore()
+
+	_, err := store.Get(context.Background(), "")
+	if err != ErrInvalidFlagName {
+		t.Errorf("Get() error = %v, want ErrInvalidFlagName", err)
+	}
+}
+
+func TestInMemoryFeatureFlagStore_WithFlagDescriptions(t *testing.T) {
+	store := NewInMemoryFeatureFlagStore(
+		WithInitialFlags(map[string]bool{
+			"new_dashboard": true,
+		}),
+		WithFlagDescriptions(map[string]string{
+			"new_dashboard": "New dashboard UI",
+		}),
+	)
+
+	state, err := store.Get(context.Background(), "new_dashboard")
+	if err != nil {
+		t.Errorf("Get() error = %v", err)
+	}
+
+	if state.Description != "New dashboard UI" {
+		t.Errorf("Description = %v, want 'New dashboard UI'", state.Description)
+	}
+}
+
+func TestInMemoryFeatureFlagStore_ConcurrentAccess(t *testing.T) {
+	store := NewInMemoryFeatureFlagStore(
+		WithInitialFlags(map[string]bool{
+			"concurrent_flag": false,
+		}),
+	)
+
+	var wg sync.WaitGroup
+	iterations := 100
+
+	// Concurrent writes
+	for i := 0; i < iterations; i++ {
+		wg.Add(1)
+		go func(enabled bool) {
+			defer wg.Done()
+			_ = store.SetEnabled(context.Background(), "concurrent_flag", enabled)
+		}(i%2 == 0)
+	}
+
+	// Concurrent reads
+	for i := 0; i < iterations; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = store.IsEnabled(context.Background(), "concurrent_flag")
+		}()
+	}
+
+	// Concurrent List
+	for i := 0; i < iterations; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = store.List(context.Background())
+		}()
+	}
+
+	wg.Wait()
+	// If we get here without deadlock/race, the test passes
+}
+
+func TestInMemoryFeatureFlagStore_ContextCancelled(t *testing.T) {
+	store := NewInMemoryFeatureFlagStore()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// All methods should return context.Canceled
+	_, err := store.IsEnabled(ctx, "any_flag")
+	if err != context.Canceled {
+		t.Errorf("IsEnabled() error = %v, want context.Canceled", err)
+	}
+
+	err = store.SetEnabled(ctx, "any_flag", true)
+	if err != context.Canceled {
+		t.Errorf("SetEnabled() error = %v, want context.Canceled", err)
+	}
+
+	_, err = store.List(ctx)
+	if err != context.Canceled {
+		t.Errorf("List() error = %v, want context.Canceled", err)
+	}
+
+	_, err = store.Get(ctx, "any_flag")
+	if err != context.Canceled {
+		t.Errorf("Get() error = %v, want context.Canceled", err)
+	}
+}
+
+func TestInMemoryFeatureFlagStore_ImplementsAdminInterface(t *testing.T) {
+	// Compile-time interface check
+	var _ AdminFeatureFlagProvider = NewInMemoryFeatureFlagStore()
+	var _ FeatureFlagProvider = NewInMemoryFeatureFlagStore()
+}
+
+func TestInMemoryFeatureFlagStore_IsEnabledForContext(t *testing.T) {
+	store := NewInMemoryFeatureFlagStore(
+		WithInitialFlags(map[string]bool{
+			"beta_feature": true,
+		}),
+	)
+
+	evalCtx := EvalContext{UserID: "user-123"}
+	enabled, err := store.IsEnabledForContext(context.Background(), "beta_feature", evalCtx)
+	if err != nil {
+		t.Errorf("IsEnabledForContext() error = %v", err)
+	}
+	if !enabled {
+		t.Error("beta_feature should be enabled")
+	}
+}
+
+func TestInMemoryFeatureFlagStore_FallsBackToEnv(t *testing.T) {
+	t.Setenv("FF_ENV_FLAG", "true")
+
+	store := NewInMemoryFeatureFlagStore()
+
+	// Flag not in store, should fall back to env
+	enabled, err := store.IsEnabled(context.Background(), "env_flag")
+	if err != nil {
+		t.Errorf("IsEnabled() error = %v", err)
+	}
+	if !enabled {
+		t.Error("env_flag should be enabled from environment")
+	}
+}
+
+func TestInMemoryFeatureFlagStore_Get_FallsBackToEnv(t *testing.T) {
+	t.Setenv("FF_ENV_FEATURE", "true")
+
+	store := NewInMemoryFeatureFlagStore()
+
+	// Get() should also fall back to env for consistency
+	state, err := store.Get(context.Background(), "env_feature")
+	if err != nil {
+		t.Errorf("Get() error = %v", err)
+	}
+	if state.Name != "env_feature" {
+		t.Errorf("Name = %v, want env_feature", state.Name)
+	}
+	if !state.Enabled {
+		t.Error("Enabled should be true (from environment)")
+	}
+	if state.Description != "(from environment)" {
+		t.Errorf("Description = %v, want '(from environment)'", state.Description)
 	}
 }
