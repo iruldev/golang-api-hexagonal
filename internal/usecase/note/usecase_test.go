@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain/note"
+	"go.uber.org/zap"
 )
 
 // MockRepository is a mock implementation of note.Repository.
@@ -98,7 +99,7 @@ func TestUsecase_Create(t *testing.T) {
 					return tt.repoErr
 				},
 			}
-			uc := NewUsecase(repo)
+			uc := NewUsecase(repo, zap.NewNop())
 
 			// Act
 			result, err := uc.Create(context.Background(), tt.title, tt.content)
@@ -158,7 +159,7 @@ func TestUsecase_Get(t *testing.T) {
 					return tt.note, tt.repoErr
 				},
 			}
-			uc := NewUsecase(repo)
+			uc := NewUsecase(repo, zap.NewNop())
 
 			// Act
 			result, err := uc.Get(context.Background(), tt.id)
@@ -185,7 +186,7 @@ func TestUsecase_List(t *testing.T) {
 			return notes, 2, nil
 		},
 	}
-	uc := NewUsecase(repo)
+	uc := NewUsecase(repo, zap.NewNop())
 
 	// Act
 	result, total, err := uc.List(context.Background(), 1, 10)
@@ -252,7 +253,7 @@ func TestUsecase_Update(t *testing.T) {
 					return tt.updErr
 				},
 			}
-			uc := NewUsecase(repo)
+			uc := NewUsecase(repo, zap.NewNop())
 
 			// Act
 			result, err := uc.Update(context.Background(), tt.id, tt.title, tt.content)
@@ -297,7 +298,7 @@ func TestUsecase_Delete(t *testing.T) {
 					return tt.repoErr
 				},
 			}
-			uc := NewUsecase(repo)
+			uc := NewUsecase(repo, zap.NewNop())
 
 			// Act
 			err := uc.Delete(context.Background(), tt.id)

@@ -202,7 +202,7 @@ func main() {
 	var noteUsecase *noteuc.Usecase
 	if pool != nil {
 		noteRepo := postgres.NewNoteRepository(pool)
-		noteUsecase = noteuc.NewUsecase(noteRepo)
+		noteUsecase = noteuc.NewUsecase(noteRepo, zapLogger)
 	}
 
 	// Initialize GraphQL handler (Story 12.3)

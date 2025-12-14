@@ -10,6 +10,7 @@ import (
 	notedom "github.com/iruldev/golang-api-hexagonal/internal/domain/note"
 	noteuc "github.com/iruldev/golang-api-hexagonal/internal/usecase/note"
 	notev1 "github.com/iruldev/golang-api-hexagonal/proto/note/v1"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -108,7 +109,7 @@ func TestHandler_CreateNote(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			uc := noteuc.NewUsecase(tt.mockRepo)
+			uc := noteuc.NewUsecase(tt.mockRepo, zap.NewNop())
 			handler := NewHandler(uc)
 
 			// Act
@@ -189,7 +190,7 @@ func TestHandler_GetNote(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			uc := noteuc.NewUsecase(tt.mockRepo)
+			uc := noteuc.NewUsecase(tt.mockRepo, zap.NewNop())
 			handler := NewHandler(uc)
 
 			resp, err := handler.GetNote(context.Background(), tt.req)
@@ -267,7 +268,7 @@ func TestHandler_ListNotes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			uc := noteuc.NewUsecase(tt.mockRepo)
+			uc := noteuc.NewUsecase(tt.mockRepo, zap.NewNop())
 			handler := NewHandler(uc)
 
 			resp, err := handler.ListNotes(context.Background(), tt.req)
@@ -368,7 +369,7 @@ func TestHandler_UpdateNote(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			uc := noteuc.NewUsecase(tt.mockRepo)
+			uc := noteuc.NewUsecase(tt.mockRepo, zap.NewNop())
 			handler := NewHandler(uc)
 
 			resp, err := handler.UpdateNote(context.Background(), tt.req)
@@ -432,7 +433,7 @@ func TestHandler_DeleteNote(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			uc := noteuc.NewUsecase(tt.mockRepo)
+			uc := noteuc.NewUsecase(tt.mockRepo, zap.NewNop())
 			handler := NewHandler(uc)
 
 			resp, err := handler.DeleteNote(context.Background(), tt.req)

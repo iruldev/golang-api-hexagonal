@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.uber.org/zap"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/domain/note"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/graphql"
@@ -53,7 +54,7 @@ func (m *MockRepository) List(ctx context.Context, limit, offset int) ([]*note.N
 
 func TestGraphQL_Integration(t *testing.T) {
 	mockRepo := new(MockRepository)
-	usecase := noteuc.NewUsecase(mockRepo)
+	usecase := noteuc.NewUsecase(mockRepo, zap.NewNop())
 
 	resolver := &graphql.Resolver{
 		NoteUsecase: usecase,

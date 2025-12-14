@@ -170,6 +170,12 @@ infra (DB, external)
 - Response: Generic messages
 - Logs: Full details, no secrets
 
+#### Audit Logging
+- **Actions**: Create, Update, Delete, Login, Access
+- **Fields**: Who (Actor), What (Action), Where (Resource), When (Timestamp)
+- **Masking**: Automatic redaction of sensitive keys (password, token)
+- **Storage**: Standard structured logs with `event_type="audit"` tag
+
 ---
 
 ## Security Architecture

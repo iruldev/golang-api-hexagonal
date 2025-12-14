@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain/note"
 	noteUsecase "github.com/iruldev/golang-api-hexagonal/internal/usecase/note"
+	"go.uber.org/zap"
 )
 
 func TestHandler_Create(t *testing.T) {
@@ -36,7 +37,7 @@ func TestHandler_Create(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
 			repo := &mockRepo{}
-			uc := noteUsecase.NewUsecase(repo)
+			uc := noteUsecase.NewUsecase(repo, zap.NewNop())
 			handler := NewHandler(uc)
 
 			req := httptest.NewRequest(http.MethodPost, "/notes", bytes.NewBufferString(tt.body))
@@ -83,7 +84,7 @@ func TestHandler_Get(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
 			repo := &mockRepo{getErr: tt.repoErr}
-			uc := noteUsecase.NewUsecase(repo)
+			uc := noteUsecase.NewUsecase(repo, zap.NewNop())
 			handler := NewHandler(uc)
 
 			req := httptest.NewRequest(http.MethodGet, "/notes/"+tt.id, nil)
@@ -108,7 +109,7 @@ func TestHandler_Get(t *testing.T) {
 func TestHandler_List(t *testing.T) {
 	// Arrange
 	repo := &mockRepo{}
-	uc := noteUsecase.NewUsecase(repo)
+	uc := noteUsecase.NewUsecase(repo, zap.NewNop())
 	handler := NewHandler(uc)
 
 	req := httptest.NewRequest(http.MethodGet, "/notes?page=1&page_size=10", nil)
@@ -163,7 +164,7 @@ func TestHandler_Update(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
 			repo := &mockRepo{getErr: tt.repoErr}
-			uc := noteUsecase.NewUsecase(repo)
+			uc := noteUsecase.NewUsecase(repo, zap.NewNop())
 			handler := NewHandler(uc)
 
 			req := httptest.NewRequest(http.MethodPut, "/notes/"+tt.id, bytes.NewBufferString(tt.body))
@@ -214,9 +215,10 @@ func TestHandler_Delete(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
 			repo := &mockRepo{deleteErr: tt.repoErr}
-			uc := noteUsecase.NewUsecase(repo)
+			uc := noteUsecase.NewUsecase(repo, zap.NewNop())
 			handler := NewHandler(uc)
 
+			// Act
 			req := httptest.NewRequest(http.MethodDelete, "/notes/"+tt.id, nil)
 			w := httptest.NewRecorder()
 
@@ -224,7 +226,6 @@ func TestHandler_Delete(t *testing.T) {
 			rctx.URLParams.Add("id", tt.id)
 			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 
-			// Act
 			handler.Delete(w, req)
 
 			// Assert

@@ -793,12 +793,51 @@ r.Group(func(r chi.Router) {
 
 ##### Combined Auth + RBAC Pattern
 
+##### Combined Auth + RBAC Pattern
+
 ```go
 r.Route("/api/v1", func(r chi.Router) {
     // Apply auth to all API routes
     r.Use(middleware.AuthMiddleware(jwtAuth))
     
-    // User-accessible routes
+    // ...
+})
+```
+
+### Audit Logging (Story 14.4)
+
+Audit logging records critical system actions for security and compliance.
+
+1. **Construct Event**: Use `observability.NewAuditEvent`.
+2. **Log**: Use `observability.LogAudit`.
+
+```go
+import "github.com/iruldev/golang-api-hexagonal/internal/observability"
+
+// In your Handler or Usecase
+actorID := "anonymous"
+if claims, err := middleware.FromContext(ctx); err == nil {
+    actorID = claims.UserID
+}
+
+event := observability.NewAuditEvent(
+    ctx,
+    observability.ActionCreate, // or ActionUpdate, ActionDelete, etc.
+    "resource-id-123",
+    actorID,
+    map[string]any{
+        "field": "value",
+        "sensitive": "password123", // Will be automatically masked
+    },
+)
+
+observability.LogAudit(ctx, logger, event)
+```
+
+**Key Principles:**
+- **Masking**: Sensitive fields (password, token, etc.) are automatically masked.
+- **Context**: Actor ID and standard fields are extracted.
+- **Destination**: Logs are written to standard logger with `event_type=audit`.    // User-accessible routes
     r.Get("/notes", noteHandler.List)
     
     // Admin-only routes

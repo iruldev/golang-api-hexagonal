@@ -9,6 +9,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/graphql"
@@ -64,7 +65,7 @@ func TestPlaygroundEnvironmentRestriction(t *testing.T) {
 
 			// Register GraphQL endpoint (always available)
 			mockRepo := new(MockRepository)
-			usecase := noteuc.NewUsecase(mockRepo)
+			usecase := noteuc.NewUsecase(mockRepo, zap.NewNop())
 			resolver := &graphql.Resolver{NoteUsecase: usecase}
 			srv := handler.NewDefaultServer(graphql.NewExecutableSchema(graphql.Config{
 				Resolvers: resolver,
@@ -108,7 +109,7 @@ func TestPlaygroundQueryEndpointConnectivity(t *testing.T) {
 
 	// Register GraphQL endpoint
 	mockRepo := new(MockRepository)
-	usecase := noteuc.NewUsecase(mockRepo)
+	usecase := noteuc.NewUsecase(mockRepo, zap.NewNop())
 	resolver := &graphql.Resolver{NoteUsecase: usecase}
 	srv := handler.NewDefaultServer(graphql.NewExecutableSchema(graphql.Config{
 		Resolvers: resolver,
