@@ -9,10 +9,10 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/response"
 )
 
-// envelopeResponse wraps the response for testing
+// envelopeResponse wraps the response for testing with new Envelope format
 type envelopeResponse struct {
-	Success bool            `json:"success"`
-	Data    json.RawMessage `json:"data"`
+	Data json.RawMessage `json:"data"`
+	Meta *response.Meta  `json:"meta"`
 }
 
 func TestExampleHandler_ReturnsJSON(t *testing.T) {
@@ -37,13 +37,13 @@ func TestExampleHandler_EnvelopeFormat(t *testing.T) {
 
 	ExampleHandler(rr, req)
 
-	var envelope response.SuccessResponse
+	var envelope envelopeResponse
 	if err := json.NewDecoder(rr.Body).Decode(&envelope); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	if !envelope.Success {
-		t.Error("Expected success to be true")
+	if envelope.Meta == nil {
+		t.Error("Expected meta to be present")
 	}
 
 	if envelope.Data == nil {
@@ -57,18 +57,24 @@ func TestExampleHandler_DataContent(t *testing.T) {
 
 	ExampleHandler(rr, req)
 
+	// ExampleHandler now uses new format
 	var envelope envelopeResponse
 	if err := json.NewDecoder(rr.Body).Decode(&envelope); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	var data ExampleData
-	if err := json.Unmarshal(envelope.Data, &data); err != nil {
+	data, err := json.Marshal(envelope.Data)
+	if err != nil {
+		t.Fatalf("Failed to marshal data: %v", err)
+	}
+
+	var exampleData ExampleData
+	if err := json.Unmarshal(data, &exampleData); err != nil {
 		t.Fatalf("Failed to unmarshal data: %v", err)
 	}
 
-	if data.Message != "Example handler working correctly" {
-		t.Errorf("Unexpected message: %s", data.Message)
+	if exampleData.Message != "Example handler working correctly" {
+		t.Errorf("Unexpected message: %s", exampleData.Message)
 	}
 }
 
@@ -99,8 +105,17 @@ func TestHealthHandler_EnvelopeFormat(t *testing.T) {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	if !envelope.Success {
-		t.Error("Expected success to be true")
+	// Check data is present
+	if envelope.Data == nil {
+		t.Error("Expected data to be present")
+	}
+
+	// Check meta is present with trace_id
+	if envelope.Meta == nil {
+		t.Fatal("Expected meta to be present")
+	}
+	if envelope.Meta.TraceID == "" {
+		t.Error("Expected meta.trace_id to be present")
 	}
 
 	var data HealthData

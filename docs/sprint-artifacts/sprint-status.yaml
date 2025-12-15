@@ -57,8 +57,8 @@ development_status:
   # ============================================
   # Epic 2: API Standards & Response Contract (MVP)
   # ============================================
-  epic-2: backlog
-  2-1-implement-response-envelope-package: backlog
+  epic-2: in-progress
+  2-1-implement-response-envelope-package: done
   2-2-create-central-error-code-registry: backlog
   2-3-implement-context-wrapper-package: backlog
   2-4-add-http-error-mapping-middleware: backlog

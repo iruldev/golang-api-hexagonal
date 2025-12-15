@@ -1,32 +1,46 @@
 package response
 
 // Standard error codes for API responses.
-// These codes are used in the error.code field of ErrorResponse.
+// These codes are used in the error.code field of API responses.
+// Format: UPPER_SNAKE_CASE without ERR_ prefix.
 const (
-	// ErrBadRequest indicates a malformed request (HTTP 400).
-	ErrBadRequest = "ERR_BAD_REQUEST"
+	// CodeBadRequest indicates a malformed request (HTTP 400).
+	CodeBadRequest = "BAD_REQUEST"
 
-	// ErrUnauthorized indicates missing or invalid authentication (HTTP 401).
-	ErrUnauthorized = "ERR_UNAUTHORIZED"
+	// CodeUnauthorized indicates missing or invalid authentication (HTTP 401).
+	CodeUnauthorized = "UNAUTHORIZED"
 
-	// ErrForbidden indicates insufficient permissions (HTTP 403).
-	ErrForbidden = "ERR_FORBIDDEN"
+	// CodeForbidden indicates insufficient permissions (HTTP 403).
+	CodeForbidden = "FORBIDDEN"
 
-	// ErrNotFound indicates the requested resource was not found (HTTP 404).
-	ErrNotFound = "ERR_NOT_FOUND"
+	// CodeNotFound indicates the requested resource was not found (HTTP 404).
+	CodeNotFound = "NOT_FOUND"
 
-	// ErrConflict indicates a conflict with current state (HTTP 409).
-	ErrConflict = "ERR_CONFLICT"
+	// CodeConflict indicates a conflict with current state (HTTP 409).
+	CodeConflict = "CONFLICT"
 
-	// ErrValidation indicates validation errors in request data (HTTP 422).
-	ErrValidation = "ERR_VALIDATION"
+	// CodeValidation indicates validation errors in request data (HTTP 422).
+	CodeValidation = "VALIDATION_FAILED"
 
-	// ErrInternalServer indicates an internal server error (HTTP 500).
-	ErrInternalServer = "ERR_INTERNAL_SERVER"
+	// CodeInternalServer indicates an internal server error (HTTP 500).
+	CodeInternalServer = "INTERNAL_ERROR"
 
-	// ErrTimeout indicates a gateway timeout (HTTP 504).
-	ErrTimeout = "ERR_TIMEOUT"
+	// CodeTimeout indicates a gateway timeout (HTTP 504).
+	CodeTimeout = "TIMEOUT"
 
-	// ErrServiceUnavailable indicates service is unavailable (HTTP 503).
+	// CodeServiceUnavailable indicates service is unavailable (HTTP 503).
+	CodeServiceUnavailable = "SERVICE_UNAVAILABLE"
+)
+
+// Deprecated: Use Code* constants instead. These will be removed in a future version.
+const (
+	ErrBadRequest         = "ERR_BAD_REQUEST"
+	ErrUnauthorized       = "ERR_UNAUTHORIZED"
+	ErrForbidden          = "ERR_FORBIDDEN"
+	ErrNotFound           = "ERR_NOT_FOUND"
+	ErrConflict           = "ERR_CONFLICT"
+	ErrValidation         = "ERR_VALIDATION"
+	ErrInternalServer     = "ERR_INTERNAL_SERVER"
+	ErrTimeout            = "ERR_TIMEOUT"
 	ErrServiceUnavailable = "ERR_SERVICE_UNAVAILABLE"
 )

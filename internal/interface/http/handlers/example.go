@@ -18,27 +18,19 @@ type ExampleData struct {
 // ExampleHandler demonstrates the handler pattern with context usage.
 //
 // This handler shows how to:
-// - Access request ID from RequestID middleware
-// - Access trace ID from OTEL middleware
-// - Create child spans for tracing operations
-// - Use response envelope pattern (Story 3.7)
-//
-// Endpoint: GET /api/v1/example
-// Response: {"success": true, "data": {...}}
+// ExampleHandler handles example requests.
 func ExampleHandler(w http.ResponseWriter, r *http.Request) {
+	// Example: Create child span for tracing (optional)
+	_, span := observability.StartSpan(r.Context(), "example-handler")
+	defer span.End()
+
 	// Access request ID from middleware (Story 3.2)
 	requestID := middleware.GetRequestID(r.Context())
 
 	// Access trace ID from OTEL middleware (Story 3.5)
 	traceID := observability.GetTraceID(r.Context())
 
-	// Example: Create child span for tracing (optional)
-	// Use the span context for downstream operations like database or API calls
-	_, span := observability.StartSpan(r.Context(), "example-handler")
-	defer span.End()
-
-	// Build response data and send with envelope pattern (Story 3.7)
-	response.Success(w, ExampleData{
+	response.SuccessEnvelope(w, r.Context(), ExampleData{
 		Message:   "Example handler working correctly",
 		RequestID: requestID,
 		TraceID:   traceID,

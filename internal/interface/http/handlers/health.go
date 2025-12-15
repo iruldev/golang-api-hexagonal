@@ -14,9 +14,9 @@ type HealthData struct {
 }
 
 // HealthHandler returns the health status of the service.
-// Response format: {"success": true, "data": {"status": "ok"}}
+// Response format: {"data": {"status": "ok"}, "meta": {"trace_id": "..."}}
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
-	response.Success(w, HealthData{Status: "ok"})
+	response.SuccessEnvelope(w, r.Context(), HealthData{Status: "ok"})
 }
 
 // DBHealthChecker checks database health.
@@ -63,7 +63,7 @@ func (h *ReadyzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check database if available
 	if h.dbChecker != nil {
 		if err := h.dbChecker.Ping(ctx); err != nil {
-			response.Error(w, http.StatusServiceUnavailable, response.ErrServiceUnavailable, "database unavailable")
+			response.ServiceUnavailableCtx(w, ctx, "database unavailable")
 			return
 		}
 	}
@@ -71,7 +71,7 @@ func (h *ReadyzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check Redis if available
 	if h.redisChecker != nil {
 		if err := h.redisChecker.Ping(ctx); err != nil {
-			response.Error(w, http.StatusServiceUnavailable, response.ErrServiceUnavailable, "redis unavailable")
+			response.ServiceUnavailableCtx(w, ctx, "redis unavailable")
 			return
 		}
 	}
@@ -79,7 +79,7 @@ func (h *ReadyzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check Kafka if available (Story 13.1)
 	if h.kafkaChecker != nil {
 		if err := h.kafkaChecker.Ping(ctx); err != nil {
-			response.Error(w, http.StatusServiceUnavailable, response.ErrServiceUnavailable, "kafka unavailable")
+			response.ServiceUnavailableCtx(w, ctx, "kafka unavailable")
 			return
 		}
 	}
@@ -87,10 +87,10 @@ func (h *ReadyzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check RabbitMQ if available (Story 13.2)
 	if h.rabbitmqChecker != nil {
 		if err := h.rabbitmqChecker.Ping(ctx); err != nil {
-			response.Error(w, http.StatusServiceUnavailable, response.ErrServiceUnavailable, "rabbitmq unavailable")
+			response.ServiceUnavailableCtx(w, ctx, "rabbitmq unavailable")
 			return
 		}
 	}
 
-	response.Success(w, HealthData{Status: "ready"})
+	response.SuccessEnvelope(w, ctx, HealthData{Status: "ready"})
 }
