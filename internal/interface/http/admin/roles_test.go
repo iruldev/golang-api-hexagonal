@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
 	"github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
 )
 
@@ -86,11 +86,11 @@ func setupRolesRouter(provider runtimeutil.UserRoleProvider) *chi.Mux {
 
 // withAdminClaims adds admin claims to the request context.
 func withAdminClaims(r *http.Request) *http.Request {
-	claims := middleware.Claims{
+	claims := ctxutil.Claims{
 		UserID: "admin-user-id",
 		Roles:  []string{"admin"},
 	}
-	ctx := middleware.NewContext(r.Context(), claims)
+	ctx := ctxutil.NewClaimsContext(r.Context(), claims)
 	return r.WithContext(ctx)
 }
 

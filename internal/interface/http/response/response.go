@@ -112,5 +112,5 @@ func ValidationError(w http.ResponseWriter, message string) {
 // InternalServerError writes a 500 Internal Server Error response.
 // Deprecated: Use InternalServerErrorCtx instead.
 func InternalServerError(w http.ResponseWriter, message string) {
-	Error(w, http.StatusInternalServerError, ErrInternalServer, message)
+	Error(w, http.StatusInternalServerError, "ERR_INTERNAL_SERVER", message)
 }

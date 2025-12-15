@@ -22,9 +22,6 @@ const (
 	// CodeValidation indicates validation errors in request data (HTTP 422).
 	CodeValidation = "VALIDATION_FAILED"
 
-	// CodeInternalServer indicates an internal server error (HTTP 500).
-	CodeInternalServer = "INTERNAL_ERROR"
-
 	// CodeTimeout indicates a gateway timeout (HTTP 504).
 	CodeTimeout = "TIMEOUT"
 
@@ -34,13 +31,13 @@ const (
 
 // Deprecated: Use Code* constants instead. These will be removed in a future version.
 const (
-	ErrBadRequest         = "ERR_BAD_REQUEST"
-	ErrUnauthorized       = "ERR_UNAUTHORIZED"
-	ErrForbidden          = "ERR_FORBIDDEN"
-	ErrNotFound           = "ERR_NOT_FOUND"
-	ErrConflict           = "ERR_CONFLICT"
-	ErrValidation         = "ERR_VALIDATION"
-	ErrInternalServer     = "ERR_INTERNAL_SERVER"
+	ErrBadRequest   = "ERR_BAD_REQUEST"
+	ErrUnauthorized = "ERR_UNAUTHORIZED"
+	ErrForbidden    = "ERR_FORBIDDEN"
+	ErrNotFound     = "ERR_NOT_FOUND"
+	ErrConflict     = "ERR_CONFLICT"
+	ErrValidation   = "ERR_VALIDATION"
+
 	ErrTimeout            = "ERR_TIMEOUT"
 	ErrServiceUnavailable = "ERR_SERVICE_UNAVAILABLE"
 )

@@ -3,7 +3,6 @@ package response
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
@@ -28,7 +27,7 @@ func MapError(err error) (status int, code string) {
 	case errors.Is(err, domain.ErrNotFound):
 		return http.StatusNotFound, CodeNotFound
 	case errors.Is(err, domain.ErrValidation):
-		return http.StatusUnprocessableEntity, CodeValidation
+		return http.StatusUnprocessableEntity, domainerrors.CodeValidationError
 	case errors.Is(err, domain.ErrUnauthorized):
 		return http.StatusUnauthorized, CodeUnauthorized
 	case errors.Is(err, domain.ErrForbidden):
@@ -36,12 +35,12 @@ func MapError(err error) (status int, code string) {
 	case errors.Is(err, domain.ErrConflict):
 		return http.StatusConflict, CodeConflict
 	case errors.Is(err, domain.ErrInternal):
-		return http.StatusInternalServerError, CodeInternalServer
+		return http.StatusInternalServerError, domainerrors.CodeInternalError
 	case errors.Is(err, domain.ErrTimeout):
 		return http.StatusGatewayTimeout, CodeTimeout
 	default:
 		// Unknown errors are treated as internal server errors
-		return http.StatusInternalServerError, CodeInternalServer
+		return http.StatusInternalServerError, domainerrors.CodeInternalError
 	}
 }
 
@@ -66,11 +65,13 @@ func mapDomainErrorCode(code string) int {
 		return http.StatusTooManyRequests
 	case domainerrors.CodeBadRequest:
 		return http.StatusBadRequest
+	case domainerrors.CodeTokenExpired:
+		return http.StatusUnauthorized
+	case domainerrors.CodeTokenInvalid:
+		return http.StatusUnauthorized
 	default:
 		// CRITICAL: Unmapped domain error code encountered.
 		// This indicates a developer forgot to add a mapping for a new error code.
-		// We log this to stderr so it's visible in logs.
-		log.Printf("[CRITICAL] Unmapped domain error code: %s", code)
 		return http.StatusInternalServerError
 	}
 }

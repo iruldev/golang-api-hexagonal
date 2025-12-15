@@ -2,10 +2,12 @@ package middleware
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
 )
 
 // MinSecretKeyLength is the minimum recommended length for HMAC-SHA256 secrets.
@@ -65,6 +67,8 @@ func WithAudience(audience string) JWTOption {
 //	})
 type JWTAuthenticator struct {
 	config JWTConfig
+	// Cached parser options to avoid re-allocation on every request
+	parserOptions []jwt.ParserOption
 }
 
 // NewJWTAuthenticator creates a new JWT authenticator with the given secret key.
@@ -91,33 +95,37 @@ func NewJWTAuthenticator(secretKey []byte, opts ...JWTOption) (*JWTAuthenticator
 	for _, opt := range opts {
 		opt(&config)
 	}
-	return &JWTAuthenticator{config: config}, nil
+
+	auth := &JWTAuthenticator{config: config}
+	auth.parserOptions = auth.buildParserOptions()
+
+	return auth, nil
 }
 
 // Authenticate implements the Authenticator interface.
 // It extracts and validates a JWT from the Authorization header.
 //
 // Returns:
-//   - Claims: The extracted user claims if authentication succeeds
+//   - ctxutil.Claims: The extracted user claims if authentication succeeds
 //   - ErrUnauthenticated: If Authorization header is missing or empty
 //   - ErrTokenInvalid: If token format, signature, or algorithm is invalid
 //   - ErrTokenExpired: If token has expired
-func (a *JWTAuthenticator) Authenticate(r *http.Request) (Claims, error) {
+func (a *JWTAuthenticator) Authenticate(r *http.Request) (ctxutil.Claims, error) {
 	// 1. Extract Authorization header
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
-		return Claims{}, ErrUnauthenticated
+		return ctxutil.Claims{}, ErrUnauthenticated
 	}
 
 	// 2. Strip "Bearer " prefix
 	if !strings.HasPrefix(authHeader, "Bearer ") {
-		return Claims{}, ErrUnauthenticated
+		return ctxutil.Claims{}, ErrUnauthenticated
 	}
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
 	// Empty token after stripping prefix
 	if tokenString == "" {
-		return Claims{}, ErrUnauthenticated
+		return ctxutil.Claims{}, ErrUnauthenticated
 	}
 
 	// 3. Parse and validate token
@@ -127,26 +135,27 @@ func (a *JWTAuthenticator) Authenticate(r *http.Request) (Claims, error) {
 			return nil, ErrTokenInvalid
 		}
 		return a.config.SecretKey, nil
-	}, a.buildParserOptions()...)
+	}, a.parserOptions...)
 
 	if err != nil {
 		// Map jwt library errors to our sentinel errors
 		if errors.Is(err, jwt.ErrTokenExpired) {
-			return Claims{}, ErrTokenExpired
+			return ctxutil.Claims{}, ErrTokenExpired
 		}
-		return Claims{}, ErrTokenInvalid
+		// Wrap the original error to preserve context for logging
+		return ctxutil.Claims{}, fmt.Errorf("%w: %v", ErrTokenInvalid, err)
 	}
 
 	// Defensive check: in practice jwt.Parse returns error for invalid tokens,
 	// but we keep this as a safety net for edge cases or library changes.
 	if !token.Valid {
-		return Claims{}, ErrTokenInvalid
+		return ctxutil.Claims{}, ErrTokenInvalid
 	}
 
 	// 4. Extract claims
 	mapClaims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return Claims{}, ErrTokenInvalid
+		return ctxutil.Claims{}, ErrTokenInvalid
 	}
 
 	return mapJWTClaims(mapClaims), nil
@@ -168,9 +177,9 @@ func (a *JWTAuthenticator) buildParserOptions() []jwt.ParserOption {
 	return opts
 }
 
-// mapJWTClaims converts JWT claims to middleware.Claims.
-func mapJWTClaims(jwtClaims jwt.MapClaims) Claims {
-	c := Claims{
+// mapJWTClaims converts JWT claims to ctxutil.Claims.
+func mapJWTClaims(jwtClaims jwt.MapClaims) ctxutil.Claims {
+	c := ctxutil.Claims{
 		Metadata: make(map[string]string),
 	}
 
@@ -193,6 +202,15 @@ func mapJWTClaims(jwtClaims jwt.MapClaims) Claims {
 		for _, p := range perms {
 			if perm, ok := p.(string); ok {
 				c.Permissions = append(c.Permissions, perm)
+			}
+		}
+	}
+
+	// Map metadata (map)
+	if meta, ok := jwtClaims["metadata"].(map[string]interface{}); ok {
+		for k, v := range meta {
+			if val, ok := v.(string); ok {
+				c.Metadata[k] = val
 			}
 		}
 	}

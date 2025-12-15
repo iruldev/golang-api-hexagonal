@@ -8,7 +8,9 @@ import (
 	"os"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
+	"github.com/iruldev/golang-api-hexagonal/internal/observability"
 )
 
 // ExampleNewAPIKeyAuthenticator demonstrates creating an API key authenticator
@@ -16,7 +18,11 @@ import (
 func ExampleNewAPIKeyAuthenticator() {
 	// Create a validator from environment variables
 	// Environment: API_KEYS="abc123:svc-payments,xyz789:svc-inventory"
-	validator := middleware.NewEnvKeyValidator("API_KEYS")
+	validator, err := middleware.NewEnvKeyValidator("API_KEYS_EXAMPLE")
+	if err != nil {
+		fmt.Printf("Error creating validator: %v\n", err)
+		return
+	}
 
 	// Create authenticator with default header (X-API-Key)
 	apiAuth, err := middleware.NewAPIKeyAuthenticator(validator)
@@ -80,12 +86,12 @@ func ExampleAPIKeyAuthenticator_withAuthMiddleware() {
 
 	// Create a protected handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		claims, _ := middleware.FromContext(r.Context())
+		claims, _ := ctxutil.ClaimsFromContext(r.Context())
 		fmt.Fprintf(w, "Hello, %s!", claims.UserID)
 	})
 
 	// Wrap with AuthMiddleware
-	protected := middleware.AuthMiddleware(apiAuth)(handler)
+	protected := middleware.AuthMiddleware(apiAuth, observability.NewNopLoggerInterface(), false)(handler)
 
 	// Make authenticated request
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -104,11 +110,15 @@ func ExampleEnvKeyValidator() {
 	os.Setenv("DEMO_API_KEYS", "key1:service-a,key2:service-b")
 	defer os.Unsetenv("DEMO_API_KEYS")
 
-	// Create validator
-	validator := middleware.NewEnvKeyValidator("DEMO_API_KEYS")
+	// Create validator from environment variables
+	validator, err := middleware.NewEnvKeyValidator("DEMO_API_KEYS")
+	if err != nil {
+		fmt.Printf("Error creating validator: %v\n", err)
+		return
+	}
 
 	// Validate a key
-	keyInfo, err := validator.Validate(context.TODO(), "key1")
+	keyInfo, err := validator.Validate(context.Background(), "key1")
 	if err != nil {
 		panic(err)
 	}
@@ -130,7 +140,7 @@ func ExampleMapKeyValidator() {
 		},
 	}
 
-	keyInfo, err := validator.Validate(context.TODO(), "test-key-1")
+	keyInfo, err := validator.Validate(context.Background(), "test-key-1")
 	if err != nil {
 		panic(err)
 	}
@@ -165,9 +175,9 @@ func ExampleAPIKeyAuthenticator_chiRouter() {
 
 	// Protected routes with API key auth
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.AuthMiddleware(apiAuth))
+		r.Use(middleware.AuthMiddleware(apiAuth, observability.NewNopLoggerInterface(), false))
 		r.Get("/api/v1/internal", func(w http.ResponseWriter, r *http.Request) {
-			claims, _ := middleware.FromContext(r.Context())
+			claims, _ := ctxutil.ClaimsFromContext(r.Context())
 			w.Write([]byte("Hello " + claims.UserID))
 		})
 	})

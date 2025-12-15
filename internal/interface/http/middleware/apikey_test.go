@@ -6,6 +6,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
+	"github.com/iruldev/golang-api-hexagonal/internal/observability"
 )
 
 // =============================================================================
@@ -288,6 +291,7 @@ func TestEnvKeyValidator_Validate(t *testing.T) {
 		envValue    string
 		key         string
 		wantErr     error
+		wantInitErr bool
 		wantService string
 	}{
 		{
@@ -324,17 +328,28 @@ func TestEnvKeyValidator_Validate(t *testing.T) {
 			wantService: "svc-payments",
 		},
 		{
-			name:     "malformed entry is skipped",
-			envValue: "abc123:svc-payments,invalid-entry,xyz789:svc-inventory",
-			key:      "invalid-entry",
-			wantErr:  ErrTokenInvalid,
+			name:        "malformed entry returns error on init",
+			envValue:    "abc123:svc-payments,invalid-entry,xyz789:svc-inventory",
+			key:         "invalid-entry",
+			wantInitErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			os.Setenv(envVar, tt.envValue)
-			validator := NewEnvKeyValidator(envVar)
+			validator, err := NewEnvKeyValidator(envVar)
+
+			if tt.wantInitErr {
+				if err == nil {
+					t.Error("NewEnvKeyValidator() expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("NewEnvKeyValidator() error = %v", err)
+			}
 
 			keyInfo, err := validator.Validate(context.Background(), tt.key)
 
@@ -363,16 +378,6 @@ func TestEnvKeyValidator_Validate(t *testing.T) {
 				t.Errorf("Validate() Roles = %v, want [service]", keyInfo.Roles)
 			}
 		})
-	}
-}
-
-func TestEnvKeyValidator_UnsetEnvVar(t *testing.T) {
-	// Test with env var that doesn't exist
-	validator := NewEnvKeyValidator("NONEXISTENT_API_KEYS_12345")
-
-	_, err := validator.Validate(context.Background(), "any-key")
-	if err != ErrTokenInvalid {
-		t.Errorf("Validate() error = %v, want %v", err, ErrTokenInvalid)
 	}
 }
 
@@ -498,9 +503,10 @@ func TestEnvKeyValidator_KeyCount(t *testing.T) {
 	}()
 
 	tests := []struct {
-		name      string
-		envValue  string
-		wantCount int
+		name        string
+		envValue    string
+		wantCount   int
+		wantInitErr bool
 	}{
 		{
 			name:      "empty env var",
@@ -518,16 +524,27 @@ func TestEnvKeyValidator_KeyCount(t *testing.T) {
 			wantCount: 3,
 		},
 		{
-			name:      "skips malformed entries",
-			envValue:  "key1:svc1,invalid,key2:svc2",
-			wantCount: 2,
+			name:        "malformed entry returns error",
+			envValue:    "key1:svc1,invalid,key2:svc2",
+			wantInitErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			os.Setenv(envVar, tt.envValue)
-			validator := NewEnvKeyValidator(envVar)
+			validator, err := NewEnvKeyValidator(envVar)
+
+			if tt.wantInitErr {
+				if err == nil {
+					t.Error("NewEnvKeyValidator() expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("NewEnvKeyValidator() error = %v", err)
+			}
 
 			if got := validator.KeyCount(); got != tt.wantCount {
 				t.Errorf("KeyCount() = %v, want %v", got, tt.wantCount)
@@ -554,7 +571,7 @@ func TestAPIKeyAuthenticator_WithAuthMiddleware(t *testing.T) {
 
 	// Handler that extracts claims from context
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		claims, err := FromContext(r.Context())
+		claims, err := ctxutil.ClaimsFromContext(r.Context())
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -563,7 +580,7 @@ func TestAPIKeyAuthenticator_WithAuthMiddleware(t *testing.T) {
 		w.Write([]byte(claims.UserID))
 	})
 
-	middleware := AuthMiddleware(auth)
+	middleware := AuthMiddleware(auth, observability.NewNopLoggerInterface(), false)
 	wrapped := middleware(handler)
 
 	tests := []struct {

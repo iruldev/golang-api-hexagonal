@@ -47,6 +47,12 @@ const (
 
 	// CodeBadRequest indicates a malformed request.
 	CodeBadRequest = "BAD_REQUEST"
+
+	// CodeTokenExpired indicates the JWT token has expired.
+	CodeTokenExpired = "TOKEN_EXPIRED"
+
+	// CodeTokenInvalid indicates the JWT token is invalid (bad format, signature, etc.).
+	CodeTokenInvalid = "TOKEN_INVALID"
 )
 
 // allCodes is a registry of all valid error codes.
@@ -60,10 +66,22 @@ var allCodes = map[string]struct{}{
 	CodeTimeout:           {},
 	CodeRateLimitExceeded: {},
 	CodeBadRequest:        {},
+	CodeTokenExpired:      {},
+	CodeTokenInvalid:      {},
 }
 
 // IsValidCode checks if the provided code is a valid registered error code.
 func IsValidCode(code string) bool {
 	_, ok := allCodes[code]
 	return ok
+}
+
+// GetAllCodes returns a slice of all registered error codes.
+// Useful for testing to ensure all codes have mappings.
+func GetAllCodes() []string {
+	codes := make([]string, 0, len(allCodes))
+	for code := range allCodes {
+		codes = append(codes, code)
+	}
+	return codes
 }

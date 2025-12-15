@@ -30,8 +30,9 @@ func TestMapError_Validation(t *testing.T) {
 	if status != http.StatusUnprocessableEntity {
 		t.Errorf("Expected status 422, got %d", status)
 	}
-	if code != CodeValidation {
-		t.Errorf("Expected code %s, got %s", CodeValidation, code)
+	// Use domainerrors.CodeValidationError (VALIDATION_ERROR) instead of legacy VALIDATION_FAILED
+	if code != domainerrors.CodeValidationError {
+		t.Errorf("Expected code %s, got %s", domainerrors.CodeValidationError, code)
 	}
 }
 
@@ -74,8 +75,8 @@ func TestMapError_Internal(t *testing.T) {
 	if status != http.StatusInternalServerError {
 		t.Errorf("Expected status 500, got %d", status)
 	}
-	if code != CodeInternalServer {
-		t.Errorf("Expected code %s, got %s", CodeInternalServer, code)
+	if code != domainerrors.CodeInternalError {
+		t.Errorf("Expected code %s, got %s", domainerrors.CodeInternalError, code)
 	}
 }
 
@@ -87,8 +88,8 @@ func TestMapError_Unknown(t *testing.T) {
 	if status != http.StatusInternalServerError {
 		t.Errorf("Expected status 500 for unknown error, got %d", status)
 	}
-	if code != CodeInternalServer {
-		t.Errorf("Expected code %s, got %s", CodeInternalServer, code)
+	if code != domainerrors.CodeInternalError {
+		t.Errorf("Expected code %s, got %s", domainerrors.CodeInternalError, code)
 	}
 }
 

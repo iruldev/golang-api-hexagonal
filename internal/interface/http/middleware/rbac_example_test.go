@@ -6,16 +6,18 @@ import (
 	"net/http/httptest"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain/auth"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
+	"github.com/iruldev/golang-api-hexagonal/internal/observability"
 )
 
 // rbacMockAuthenticator is a simple authenticator for RBAC examples
 type rbacMockAuthenticator struct {
-	claims middleware.Claims
+	claims ctxutil.Claims
 }
 
-func (m *rbacMockAuthenticator) Authenticate(r *http.Request) (middleware.Claims, error) {
+func (m *rbacMockAuthenticator) Authenticate(r *http.Request) (ctxutil.Claims, error) {
 	return m.claims, nil
 }
 
@@ -24,7 +26,7 @@ func (m *rbacMockAuthenticator) Authenticate(r *http.Request) (middleware.Claims
 func ExampleRequireRole() {
 	// Create a mock authenticator with admin role
 	mockAuth := &rbacMockAuthenticator{
-		claims: middleware.Claims{
+		claims: ctxutil.Claims{
 			UserID: "admin-user-123",
 			Roles:  []string{string(auth.RoleAdmin)},
 		},
@@ -32,11 +34,12 @@ func ExampleRequireRole() {
 
 	// Create chi router
 	r := chi.NewRouter()
+	logger := observability.NewNopLoggerInterface()
 
 	// Protected admin-only route
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.AuthMiddleware(mockAuth))
-		r.Use(middleware.RequireRole(string(auth.RoleAdmin)))
+		r.Use(middleware.AuthMiddleware(mockAuth, logger, false))
+		r.Use(middleware.RequireRole([]string{string(auth.RoleAdmin)}, logger))
 		r.Delete("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintln(w, "User deleted")
@@ -57,18 +60,19 @@ func ExampleRequireRole() {
 func ExampleRequireRole_multipleRoles() {
 	// Create a mock authenticator with service role
 	mockAuth := &rbacMockAuthenticator{
-		claims: middleware.Claims{
+		claims: ctxutil.Claims{
 			UserID: "service-account",
 			Roles:  []string{string(auth.RoleService)},
 		},
 	}
 
 	r := chi.NewRouter()
+	logger := observability.NewNopLoggerInterface()
 
 	// Allow either admin or service roles
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.AuthMiddleware(mockAuth))
-		r.Use(middleware.RequireRole(string(auth.RoleAdmin), string(auth.RoleService)))
+		r.Use(middleware.AuthMiddleware(mockAuth, logger, false))
+		r.Use(middleware.RequireRole([]string{string(auth.RoleAdmin), string(auth.RoleService)}, logger))
 		r.Get("/internal/metrics", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintln(w, "Metrics data")
@@ -88,20 +92,21 @@ func ExampleRequireRole_multipleRoles() {
 func ExampleRequirePermission() {
 	// Create a mock authenticator with multiple permissions
 	mockAuth := &rbacMockAuthenticator{
-		claims: middleware.Claims{
+		claims: ctxutil.Claims{
 			UserID:      "editor-user",
 			Permissions: []string{string(auth.PermNoteRead), string(auth.PermNoteUpdate)},
 		},
 	}
 
 	r := chi.NewRouter()
+	logger := observability.NewNopLoggerInterface()
 
 	// Require BOTH read and update permissions (AND logic)
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.AuthMiddleware(mockAuth))
+		r.Use(middleware.AuthMiddleware(mockAuth, logger, false))
 		r.Use(middleware.RequirePermission(
-			string(auth.PermNoteRead),
-			string(auth.PermNoteUpdate),
+			[]string{string(auth.PermNoteRead), string(auth.PermNoteUpdate)},
+			logger,
 		))
 		r.Put("/notes/{id}", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -122,20 +127,21 @@ func ExampleRequirePermission() {
 func ExampleRequireAnyPermission() {
 	// Create a mock authenticator with only delete permission
 	mockAuth := &rbacMockAuthenticator{
-		claims: middleware.Claims{
+		claims: ctxutil.Claims{
 			UserID:      "moderator-user",
 			Permissions: []string{string(auth.PermNoteDelete)},
 		},
 	}
 
 	r := chi.NewRouter()
+	logger := observability.NewNopLoggerInterface()
 
 	// Require ANY of update or delete permissions (OR logic)
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.AuthMiddleware(mockAuth))
+		r.Use(middleware.AuthMiddleware(mockAuth, logger, false))
 		r.Use(middleware.RequireAnyPermission(
-			string(auth.PermNoteUpdate),
-			string(auth.PermNoteDelete),
+			[]string{string(auth.PermNoteUpdate), string(auth.PermNoteDelete)},
+			logger,
 		))
 		r.Patch("/notes/{id}", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -156,7 +162,7 @@ func ExampleRequireAnyPermission() {
 func ExampleRequireRole_combinedMiddleware() {
 	// Create authenticator with user having admin role and multiple permissions
 	mockAuth := &rbacMockAuthenticator{
-		claims: middleware.Claims{
+		claims: ctxutil.Claims{
 			UserID:      "super-admin",
 			Roles:       []string{string(auth.RoleAdmin), string(auth.RoleUser)},
 			Permissions: []string{string(auth.PermNoteCreate), string(auth.PermNoteDelete)},
@@ -165,6 +171,7 @@ func ExampleRequireRole_combinedMiddleware() {
 	}
 
 	r := chi.NewRouter()
+	logger := observability.NewNopLoggerInterface()
 
 	// Public routes
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -174,7 +181,7 @@ func ExampleRequireRole_combinedMiddleware() {
 	// Protected API routes
 	r.Route("/api/v1", func(r chi.Router) {
 		// Apply auth middleware to all API routes
-		r.Use(middleware.AuthMiddleware(mockAuth))
+		r.Use(middleware.AuthMiddleware(mockAuth, logger, false))
 
 		// User-accessible routes (any authenticated user)
 		r.Get("/notes", func(w http.ResponseWriter, r *http.Request) {
@@ -183,7 +190,7 @@ func ExampleRequireRole_combinedMiddleware() {
 
 		// Admin-only routes
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole(string(auth.RoleAdmin)))
+			r.Use(middleware.RequireRole([]string{string(auth.RoleAdmin)}, logger))
 			r.Delete("/notes/{id}", func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 				fmt.Fprintln(w, "Note deleted by admin")

@@ -464,7 +464,8 @@ func TestIsValidRole(t *testing.T) {
 }
 
 func TestWithInitialUserRoles_SetsTimestamp(t *testing.T) {
-	t.Parallel()
+	// NOTE: DO NOT use t.Parallel() here - this test modifies the package-level
+	// variable userRolesTimeNow, which would race with other parallel tests.
 
 	// Arrange
 	fixedTime := time.Date(2025, 12, 14, 23, 0, 0, 0, time.UTC)

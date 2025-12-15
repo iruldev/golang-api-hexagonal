@@ -67,8 +67,8 @@ development_status:
   # ============================================
   # Epic 3: Authentication & Authorization (MVP)
   # ============================================
-  epic-3: backlog
-  3-1-implement-jwt-middleware: backlog
+  epic-3: in-progress
+  3-1-implement-jwt-middleware: done
   3-2-implement-rbac-middleware: backlog
   3-3-implement-api-key-store: backlog
   3-4-implement-rate-limiting-middleware: backlog

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -229,7 +230,7 @@ func TestJWTAuthenticator_Authenticate(t *testing.T) {
 
 			// Assert
 			if tt.wantErr != nil {
-				if err != tt.wantErr {
+				if !errors.Is(err, tt.wantErr) {
 					t.Errorf("expected error %v, got %v", tt.wantErr, err)
 				}
 				return
@@ -303,7 +304,7 @@ func TestJWTAuthenticator_IssuerValidation(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer "+token)
 
 		_, err := auth.Authenticate(req)
-		if err != ErrTokenInvalid {
+		if !errors.Is(err, ErrTokenInvalid) {
 			t.Errorf("expected ErrTokenInvalid, got %v", err)
 		}
 	})
@@ -346,7 +347,7 @@ func TestJWTAuthenticator_AudienceValidation(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer "+token)
 
 		_, err := auth.Authenticate(req)
-		if err != ErrTokenInvalid {
+		if !errors.Is(err, ErrTokenInvalid) {
 			t.Errorf("expected ErrTokenInvalid, got %v", err)
 		}
 	})
@@ -354,11 +355,12 @@ func TestJWTAuthenticator_AudienceValidation(t *testing.T) {
 
 func TestMapJWTClaims(t *testing.T) {
 	tests := []struct {
-		name      string
-		jwtClaims jwt.MapClaims
-		wantID    string
-		wantRoles []string
-		wantPerms []string
+		name         string
+		jwtClaims    jwt.MapClaims
+		wantID       string
+		wantRoles    []string
+		wantPerms    []string
+		wantMetadata map[string]string
 	}{
 		{
 			name: "all claims present",
@@ -367,34 +369,54 @@ func TestMapJWTClaims(t *testing.T) {
 				"roles":       []interface{}{"admin", "editor"},
 				"permissions": []interface{}{"create", "delete"},
 			},
-			wantID:    "user-abc",
-			wantRoles: []string{"admin", "editor"},
-			wantPerms: []string{"create", "delete"},
+			wantID:       "user-abc",
+			wantRoles:    []string{"admin", "editor"},
+			wantPerms:    []string{"create", "delete"},
+			wantMetadata: map[string]string{},
+		},
+		{
+			name: "all claims with metadata",
+			jwtClaims: jwt.MapClaims{
+				"sub":         "user-meta",
+				"roles":       []interface{}{"user"},
+				"permissions": []interface{}{"read"},
+				"metadata": map[string]interface{}{
+					"org":    "acme",
+					"tenant": "prod",
+				},
+			},
+			wantID:       "user-meta",
+			wantRoles:    []string{"user"},
+			wantPerms:    []string{"read"},
+			wantMetadata: map[string]string{"org": "acme", "tenant": "prod"},
 		},
 		{
 			name: "only sub claim",
 			jwtClaims: jwt.MapClaims{
 				"sub": "user-xyz",
 			},
-			wantID:    "user-xyz",
-			wantRoles: nil,
-			wantPerms: nil,
+			wantID:       "user-xyz",
+			wantRoles:    nil,
+			wantPerms:    nil,
+			wantMetadata: map[string]string{},
 		},
 		{
-			name:      "empty claims",
-			jwtClaims: jwt.MapClaims{},
-			wantID:    "",
-			wantRoles: nil,
-			wantPerms: nil,
+			name:         "empty claims",
+			jwtClaims:    jwt.MapClaims{},
+			wantID:       "",
+			wantRoles:    nil,
+			wantPerms:    nil,
+			wantMetadata: map[string]string{},
 		},
 		{
 			name: "non-string sub claim ignored",
 			jwtClaims: jwt.MapClaims{
 				"sub": 12345,
 			},
-			wantID:    "",
-			wantRoles: nil,
-			wantPerms: nil,
+			wantID:       "",
+			wantRoles:    nil,
+			wantPerms:    nil,
+			wantMetadata: map[string]string{},
 		},
 		{
 			name: "roles with non-string elements skipped",
@@ -402,9 +424,24 @@ func TestMapJWTClaims(t *testing.T) {
 				"sub":   "user-1",
 				"roles": []interface{}{"admin", 123, "user"},
 			},
-			wantID:    "user-1",
-			wantRoles: []string{"admin", "user"},
-			wantPerms: nil,
+			wantID:       "user-1",
+			wantRoles:    []string{"admin", "user"},
+			wantPerms:    nil,
+			wantMetadata: map[string]string{},
+		},
+		{
+			name: "metadata with non-string values skipped",
+			jwtClaims: jwt.MapClaims{
+				"sub": "user-2",
+				"metadata": map[string]interface{}{
+					"valid":   "value",
+					"invalid": 12345,
+				},
+			},
+			wantID:       "user-2",
+			wantRoles:    nil,
+			wantPerms:    nil,
+			wantMetadata: map[string]string{"valid": "value"},
 		},
 	}
 
@@ -427,6 +464,16 @@ func TestMapJWTClaims(t *testing.T) {
 			// Verify Metadata is initialized
 			if claims.Metadata == nil {
 				t.Error("expected Metadata to be initialized, got nil")
+			}
+
+			// Verify Metadata contents
+			if len(claims.Metadata) != len(tt.wantMetadata) {
+				t.Errorf("expected %d metadata entries, got %d", len(tt.wantMetadata), len(claims.Metadata))
+			}
+			for k, v := range tt.wantMetadata {
+				if claims.Metadata[k] != v {
+					t.Errorf("expected Metadata[%q] = %q, got %q", k, v, claims.Metadata[k])
+				}
 			}
 		})
 	}

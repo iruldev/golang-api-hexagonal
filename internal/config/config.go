@@ -36,9 +36,10 @@ const (
 
 // AppConfig holds application settings.
 type AppConfig struct {
-	Name     string `koanf:"name"`
-	Env      string `koanf:"env"` // development, local, staging, production
-	HTTPPort int    `koanf:"http_port"`
+	Name              string `koanf:"name"`
+	Env               string `koanf:"env"` // development, local, staging, production
+	HTTPPort          int    `koanf:"http_port"`
+	TrustProxyHeaders bool   `koanf:"trust_proxy_headers"` // Security: Only enable if behind trusted proxy (e.g. Nginx, LB) to prevent IP spoofing
 }
 
 // IsDevelopment returns true if the environment is development or local.

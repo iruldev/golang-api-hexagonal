@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
+	"github.com/iruldev/golang-api-hexagonal/internal/observability"
 )
 
 // ExampleNewJWTAuthenticator demonstrates creating a JWT authenticator.
@@ -88,7 +90,7 @@ func ExampleAuthMiddleware_withJWT() {
 
 	// Create a protected handler
 	protectedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		claims, err := middleware.FromContext(r.Context())
+		claims, err := ctxutil.ClaimsFromContext(r.Context())
 		if err != nil {
 			http.Error(w, "No claims", http.StatusInternalServerError)
 			return
@@ -97,7 +99,7 @@ func ExampleAuthMiddleware_withJWT() {
 	})
 
 	// Wrap handler with auth middleware
-	handler := middleware.AuthMiddleware(jwtAuth)(protectedHandler)
+	handler := middleware.AuthMiddleware(jwtAuth, observability.NewNopLoggerInterface(), false)(protectedHandler)
 
 	// Generate test token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -130,7 +132,7 @@ func ExampleAuthMiddleware_unauthorized() {
 		fmt.Fprint(w, "Protected content")
 	})
 
-	handler := middleware.AuthMiddleware(jwtAuth)(protectedHandler)
+	handler := middleware.AuthMiddleware(jwtAuth, observability.NewNopLoggerInterface(), false)(protectedHandler)
 
 	// Request without token
 	req := httptest.NewRequest(http.MethodGet, "/", nil)

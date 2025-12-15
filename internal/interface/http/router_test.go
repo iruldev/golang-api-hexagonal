@@ -6,19 +6,20 @@ import (
 	"testing"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
 	"github.com/stretchr/testify/assert"
 )
 
 // mockAuthenticator is a test double for the Authenticator interface.
 type mockAuthenticator struct {
-	claims *middleware.Claims
+	claims *ctxutil.Claims
 	err    error
 }
 
-func (m *mockAuthenticator) Authenticate(r *http.Request) (middleware.Claims, error) {
+func (m *mockAuthenticator) Authenticate(r *http.Request) (ctxutil.Claims, error) {
 	if m.err != nil {
-		return middleware.Claims{}, m.err
+		return ctxutil.Claims{}, m.err
 	}
 	return *m.claims, nil
 }
@@ -40,7 +41,7 @@ func TestRouter_AdminRoutes_WithAuthenticator(t *testing.T) {
 		{
 			name: "valid_token_no_admin_role_returns_403",
 			auth: &mockAuthenticator{
-				claims: &middleware.Claims{
+				claims: &ctxutil.Claims{
 					UserID: "user-123",
 					Roles:  []string{"user"},
 				},
@@ -50,7 +51,7 @@ func TestRouter_AdminRoutes_WithAuthenticator(t *testing.T) {
 		{
 			name: "valid_token_with_admin_role_returns_200",
 			auth: &mockAuthenticator{
-				claims: &middleware.Claims{
+				claims: &ctxutil.Claims{
 					UserID: "admin-123",
 					Roles:  []string{"admin"},
 				},

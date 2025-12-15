@@ -4,19 +4,18 @@ package middleware
 import (
 	"context"
 	"math"
-	"net"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
+	domainerrors "github.com/iruldev/golang-api-hexagonal/internal/domain/errors"
+	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/request"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/response"
+	"github.com/iruldev/golang-api-hexagonal/internal/observability"
 	"github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
 )
-
-// ErrRateLimited error code for rate limiting responses.
-const ErrRateLimited = "ERR_RATE_LIMITED"
 
 // TokenBucket implements the token bucket algorithm for rate limiting.
 // It is thread-safe and can be used concurrently.
@@ -198,6 +197,30 @@ func (l *InMemoryRateLimiter) RetryAfter(key string) int {
 	return 0
 }
 
+// GetStats returns the current rate limit statistics for the key.
+// Implements runtimeutil.RateLimiterWithStats.
+func (l *InMemoryRateLimiter) GetStats(_ context.Context, key string) (int, int, time.Duration, error) {
+	entry := l.getOrCreateEntry(key)
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+
+	// Recalculate tokens to get current state
+	now := time.Now()
+	elapsed := now.Sub(entry.bucket.lastRefill).Seconds()
+	currentTokens := math.Min(entry.bucket.capacity, entry.bucket.tokens+elapsed*entry.bucket.rate)
+	remaining := int(currentTokens)
+
+	// Calculate reset time (time to full capacity)
+	var reset time.Duration
+	if currentTokens < entry.bucket.capacity {
+		tokensNeeded := entry.bucket.capacity - currentTokens
+		seconds := tokensNeeded / entry.bucket.rate
+		reset = time.Duration(seconds * float64(time.Second))
+	}
+
+	return int(entry.bucket.capacity), remaining, reset, nil
+}
+
 // Stop stops the cleanup goroutine. Call this when done with the limiter.
 func (l *InMemoryRateLimiter) Stop() {
 	l.mu.Lock()
@@ -268,6 +291,7 @@ type MiddlewareConfig struct {
 	keyExtractor      func(*http.Request) string
 	retryAfterSeconds int
 	onLimitExceeded   func(http.ResponseWriter, *http.Request, int) // optional custom handler
+	trustProxyHeaders bool                                          // whether to trust X-Forwarded-For etc
 }
 
 // MiddlewareOption configures RateLimitMiddleware.
@@ -302,30 +326,13 @@ func WithLimitExceededHandler(fn func(http.ResponseWriter, *http.Request, int)) 
 // Security note: X-Forwarded-For can be spoofed. In high-security scenarios,
 // consider using the direct IP or a trusted proxy header.
 func IPKeyExtractor(r *http.Request) string {
-	// Check X-Forwarded-For first (behind proxy)
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// First IP in the list is the original client
-		parts := strings.Split(xff, ",")
-		return strings.TrimSpace(parts[0])
-	}
-
-	// Check X-Real-IP
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
-	}
-
-	// Fall back to RemoteAddr
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr // Return as-is if parsing fails
-	}
-	return host
+	return request.GetRealIP(r, false)
 }
 
 // UserIDKeyExtractor extracts the user ID from authenticated claims.
 // Falls back to IP address if no claims are present.
 func UserIDKeyExtractor(r *http.Request) string {
-	claims, err := FromContext(r.Context())
+	claims, err := ctxutil.ClaimsFromContext(r.Context())
 	if err != nil {
 		return IPKeyExtractor(r) // Fallback to IP
 	}
@@ -338,8 +345,9 @@ func UserIDKeyExtractor(r *http.Request) string {
 // defaultMiddlewareConfig returns the default middleware configuration.
 func defaultMiddlewareConfig() MiddlewareConfig {
 	return MiddlewareConfig{
-		keyExtractor:      IPKeyExtractor,
-		retryAfterSeconds: 0, // 0 means calculate dynamically
+		keyExtractor:      nil, // nil means use default behavior with trustProxyHeaders config
+		retryAfterSeconds: 0,   // 0 means calculate dynamically
+		trustProxyHeaders: false,
 	}
 }
 
@@ -361,11 +369,11 @@ type RateLimiterWithRetryAfter interface {
 // Usage:
 //
 //	limiter := NewInMemoryRateLimiter()
-//	r.Use(RateLimitMiddleware(limiter))
+//	r.Use(RateLimitMiddleware(limiter, logger))
 //
 //	// With custom key extractor
-//	r.Use(RateLimitMiddleware(limiter, WithKeyExtractor(UserIDKeyExtractor)))
-func RateLimitMiddleware(limiter runtimeutil.RateLimiter, opts ...MiddlewareOption) func(http.Handler) http.Handler {
+//	r.Use(RateLimitMiddleware(limiter, logger, WithKeyExtractor(UserIDKeyExtractor)))
+func RateLimitMiddleware(limiter runtimeutil.RateLimiter, logger observability.Logger, opts ...MiddlewareOption) func(http.Handler) http.Handler {
 	cfg := defaultMiddlewareConfig()
 	for _, opt := range opts {
 		opt(&cfg)
@@ -373,12 +381,22 @@ func RateLimitMiddleware(limiter runtimeutil.RateLimiter, opts ...MiddlewareOpti
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			key := cfg.keyExtractor(r)
+			var key string
+			if cfg.keyExtractor != nil {
+				key = cfg.keyExtractor(r)
+			} else {
+				// Default behavior: IP extraction with configured trust setting
+				key = request.GetRealIP(r, cfg.trustProxyHeaders)
+			}
 
 			allowed, err := limiter.Allow(r.Context(), key)
 			if err != nil {
 				// Fail-open: if rate limiter errors, allow request
-				// Log error in production (using structured logger if available)
+				// Log error in production (using structured logger)
+				logger.Error("rate limit error (fail-open)",
+					observability.Err(err),
+					observability.String("key", key),
+				)
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -399,15 +417,36 @@ func RateLimitMiddleware(limiter runtimeutil.RateLimiter, opts ...MiddlewareOpti
 				// Set Retry-After header
 				w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 
+				// Set standard X-RateLimit headers if supported
+				if statsLimiter, ok := limiter.(runtimeutil.RateLimiterWithStats); ok {
+					limit, remaining, reset, err := statsLimiter.GetStats(r.Context(), key)
+					if err == nil {
+						w.Header().Set("X-RateLimit-Limit", strconv.Itoa(limit))
+						w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+						w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(int64(reset.Seconds()), 10))
+					}
+				}
+
 				// Custom handler if provided
 				if cfg.onLimitExceeded != nil {
 					cfg.onLimitExceeded(w, r, retryAfter)
 					return
 				}
 
-				// Default response using project's response package
-				response.Error(w, http.StatusTooManyRequests, ErrRateLimited, "Rate limit exceeded")
+				// Default response using project's response package with Envelope format
+				domainErr := domainerrors.NewDomain(domainerrors.CodeRateLimitExceeded, "Rate limit exceeded")
+				response.HandleErrorCtx(w, r.Context(), domainErr)
 				return
+			}
+
+			// Request allowed, but we still might want to set headers for visibility
+			if statsLimiter, ok := limiter.(runtimeutil.RateLimiterWithStats); ok {
+				limit, remaining, reset, err := statsLimiter.GetStats(r.Context(), key)
+				if err == nil {
+					w.Header().Set("X-RateLimit-Limit", strconv.Itoa(limit))
+					w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+					w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(int64(reset.Seconds()), 10))
+				}
 			}
 
 			next.ServeHTTP(w, r)

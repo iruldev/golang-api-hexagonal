@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
+	domainerrors "github.com/iruldev/golang-api-hexagonal/internal/domain/errors"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/response"
 )
 
@@ -51,8 +52,8 @@ func TestErrorHandler(t *testing.T) {
 			t.Error("expected error in response")
 		}
 
-		if envelope.Error != nil && envelope.Error.Code != response.CodeInternalServer {
-			t.Errorf("expected code %s, got %s", response.CodeInternalServer, envelope.Error.Code)
+		if envelope.Error != nil && envelope.Error.Code != domainerrors.CodeInternalError {
+			t.Errorf("expected code %s, got %s", domainerrors.CodeInternalError, envelope.Error.Code)
 		}
 	})
 

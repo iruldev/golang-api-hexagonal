@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
 )
 
 // DefaultAPIKeyHeader is the default header name for API key authentication.
@@ -133,34 +135,34 @@ func NewAPIKeyAuthenticator(validator KeyValidator, opts ...APIKeyOption) (*APIK
 // SECURITY WARNING: Never log the API key value. Use key identifiers for debugging.
 //
 // Returns:
-//   - Claims: The extracted service claims if authentication succeeds
+//   - ctxutil.Claims: The extracted service claims if authentication succeeds
 //   - ErrUnauthenticated: If API key header is missing or empty
 //   - ErrTokenInvalid: If API key is invalid, revoked, or validator returns nil
-func (a *APIKeyAuthenticator) Authenticate(r *http.Request) (Claims, error) {
+func (a *APIKeyAuthenticator) Authenticate(r *http.Request) (ctxutil.Claims, error) {
 	// 1. Extract API key from header
 	// SECURITY: Do not log apiKey value
 	apiKey := r.Header.Get(a.config.HeaderName)
 	if apiKey == "" {
-		return Claims{}, ErrUnauthenticated
+		return ctxutil.Claims{}, ErrUnauthenticated
 	}
 
 	// 2. Validate key using validator
 	keyInfo, err := a.config.Validator.Validate(r.Context(), apiKey)
 	if err != nil {
-		return Claims{}, ErrTokenInvalid
+		return ctxutil.Claims{}, ErrTokenInvalid
 	}
 
 	// 3. Defensive check: validator returned nil KeyInfo without error
 	if keyInfo == nil {
-		return Claims{}, ErrTokenInvalid
+		return ctxutil.Claims{}, ErrTokenInvalid
 	}
 
-	// 4. Map KeyInfo to Claims
+	// 4. Map KeyInfo to ctxutil.Claims
 	return mapKeyInfoToClaims(keyInfo), nil
 }
 
-// mapKeyInfoToClaims converts KeyInfo to middleware.Claims.
-func mapKeyInfoToClaims(info *KeyInfo) Claims {
+// mapKeyInfoToClaims converts KeyInfo to ctxutil.Claims.
+func mapKeyInfoToClaims(info *KeyInfo) ctxutil.Claims {
 	roles := info.Roles
 	// Default to "service" role if no roles specified
 	if len(roles) == 0 {
@@ -173,7 +175,7 @@ func mapKeyInfoToClaims(info *KeyInfo) Claims {
 		metadata = make(map[string]string)
 	}
 
-	return Claims{
+	return ctxutil.Claims{
 		UserID:      info.ServiceID,
 		Roles:       roles,
 		Permissions: info.Permissions,
@@ -203,17 +205,18 @@ type EnvKeyValidator struct {
 
 // NewEnvKeyValidator creates a validator from an environment variable.
 // The environment variable should contain comma-separated "key:service_id" pairs.
+// Returns error if the environment variable format is invalid (e.g. missing service_id).
 //
 // Example:
 //
 //	// Environment: API_KEYS="abc123:svc-payments,xyz789:svc-inventory"
-//	validator := middleware.NewEnvKeyValidator("API_KEYS")
-func NewEnvKeyValidator(envVar string) *EnvKeyValidator {
+//	validator, err := middleware.NewEnvKeyValidator("API_KEYS")
+func NewEnvKeyValidator(envVar string) (*EnvKeyValidator, error) {
 	v := &EnvKeyValidator{keys: make(map[string]string)}
 
 	rawKeys := os.Getenv(envVar)
 	if rawKeys == "" {
-		return v
+		return v, nil
 	}
 
 	for _, pair := range strings.Split(rawKeys, ",") {
@@ -222,16 +225,18 @@ func NewEnvKeyValidator(envVar string) *EnvKeyValidator {
 			continue
 		}
 		parts := strings.SplitN(pair, ":", 2)
-		if len(parts) == 2 {
-			key := strings.TrimSpace(parts[0])
-			serviceID := strings.TrimSpace(parts[1])
-			if key != "" && serviceID != "" {
-				v.keys[key] = serviceID
-			}
+		if len(parts) != 2 {
+			return nil, errors.New("invalid API key format: expected key:service_id")
 		}
+		key := strings.TrimSpace(parts[0])
+		serviceID := strings.TrimSpace(parts[1])
+		if key == "" || serviceID == "" {
+			return nil, errors.New("invalid API key format: empty key or service_id")
+		}
+		v.keys[key] = serviceID
 	}
 
-	return v
+	return v, nil
 }
 
 // Validate implements KeyValidator interface.

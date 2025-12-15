@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/response"
 	"github.com/iruldev/golang-api-hexagonal/internal/observability"
 	"github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
@@ -287,7 +287,7 @@ func (h *RolesHandler) RemoveUserRole(w http.ResponseWriter, r *http.Request) {
 // logRoleChange logs a role change event with audit logging.
 func (h *RolesHandler) logRoleChange(r *http.Request, userID, actionType string, oldRoles, newRoles []string) {
 	// Get actor from claims
-	claims, err := middleware.FromContext(r.Context())
+	claims, err := ctxutil.ClaimsFromContext(r.Context())
 	actorID := claims.UserID
 	if actorID == "" {
 		actorID = "unknown"

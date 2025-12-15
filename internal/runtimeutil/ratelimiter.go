@@ -61,6 +61,18 @@ type RateLimiter interface {
 	Limit(ctx context.Context, key string, rate Rate) error
 }
 
+// RateLimiterWithStats extends RateLimiter to provide usage statistics.
+// This allows middleware to set standard rate limit headers (X-RateLimit-*).
+type RateLimiterWithStats interface {
+	RateLimiter
+
+	// GetStats returns the current rate limit statistics for the key.
+	// limit: total requests allowed in the period
+	// remaining: requests remaining in the current period
+	// reset: duration until the limit resets (or full refill)
+	GetStats(ctx context.Context, key string) (limit int, remaining int, reset time.Duration, err error)
+}
+
 // NopRateLimiter is a no-op rate limiter that always allows requests.
 // Use for testing or when rate limiting is disabled.
 type NopRateLimiter struct{}
@@ -78,4 +90,9 @@ func (r *NopRateLimiter) Allow(_ context.Context, _ string) (bool, error) {
 // Limit is a no-op and always returns nil.
 func (r *NopRateLimiter) Limit(_ context.Context, _ string, _ Rate) error {
 	return nil
+}
+
+// GetStats returns dummy statistics (limit=MaxInt, remaining=MaxInt, reset=0).
+func (r *NopRateLimiter) GetStats(_ context.Context, _ string) (int, int, time.Duration, error) {
+	return 1000000, 1000000, 0, nil
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
+	"github.com/iruldev/golang-api-hexagonal/internal/domain/auth"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/handlers"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
 	"github.com/iruldev/golang-api-hexagonal/internal/observability"
@@ -42,7 +43,8 @@ type RouterDeps struct {
 // - DBChecker is used for the /readyz endpoint (can be nil)
 //
 // Route Registration:
-// All routes are registered via RegisterRoutes() in routes.go (Story 3.6)
+// Route Registration:
+// All routes are registered via RegisterRoutes() in routes.go.
 // See routes.go for documentation on adding new handlers.
 func NewRouter(deps RouterDeps) chi.Router {
 	cfg := deps.Config
@@ -53,6 +55,9 @@ func NewRouter(deps RouterDeps) chi.Router {
 		log.Printf("Failed to initialize logger, using nop: %v", err)
 		logger = observability.NewNopLogger()
 	}
+
+	// Create structured logger wrapper once to avoid repeated allocations in middleware
+	zapLogger := observability.NewZapLogger(logger)
 
 	// Initialize tracer if configured (Story 3.5)
 	if cfg.Observability.ExporterEndpoint != "" {
@@ -95,7 +100,7 @@ func NewRouter(deps RouterDeps) chi.Router {
 	r.Route("/api/v1", func(r chi.Router) {
 		// Apply authentication middleware if authenticator is provided (Story 14.1)
 		if deps.Authenticator != nil {
-			r.Use(middleware.AuthMiddleware(deps.Authenticator))
+			r.Use(middleware.AuthMiddleware(deps.Authenticator, zapLogger, cfg.App.TrustProxyHeaders))
 		}
 		RegisterRoutes(r)
 	})
@@ -104,8 +109,8 @@ func NewRouter(deps RouterDeps) chi.Router {
 	// Requires authentication + admin role to access any endpoint
 	if deps.Authenticator != nil {
 		r.Route("/admin", func(r chi.Router) {
-			r.Use(middleware.AuthMiddleware(deps.Authenticator))
-			r.Use(middleware.RequireRole("admin"))
+			r.Use(middleware.AuthMiddleware(deps.Authenticator, zapLogger, cfg.App.TrustProxyHeaders))
+			r.Use(middleware.RequireRole([]string{string(auth.RoleAdmin)}, zapLogger))
 			adminDeps := AdminDeps{
 				FeatureFlagProvider: deps.AdminFeatureFlagProvider,
 				UserRoleProvider:    deps.UserRoleProvider,

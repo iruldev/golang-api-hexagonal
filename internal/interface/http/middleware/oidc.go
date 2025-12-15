@@ -1,11 +1,13 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/iruldev/golang-api-hexagonal/internal/config"
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
 )
 
 // OIDCAuthenticator implements Authenticator using OpenID Connect.
@@ -24,15 +26,15 @@ func NewOIDCAuthenticator(cfg config.OIDCConfig, verifier *oidc.IDTokenVerifier)
 }
 
 // Authenticate validates the request using OIDC.
-func (a *OIDCAuthenticator) Authenticate(r *http.Request) (Claims, error) {
+func (a *OIDCAuthenticator) Authenticate(r *http.Request) (ctxutil.Claims, error) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
-		return Claims{}, ErrUnauthenticated
+		return ctxutil.Claims{}, ErrUnauthenticated
 	}
 
 	parts := strings.Split(authHeader, " ")
 	if len(parts) != 2 || parts[0] != "Bearer" {
-		return Claims{}, ErrUnauthenticated
+		return ctxutil.Claims{}, ErrUnauthenticated
 	}
 
 	tokenStr := parts[1]
@@ -45,37 +47,61 @@ func (a *OIDCAuthenticator) Authenticate(r *http.Request) (Claims, error) {
 	if err != nil {
 		// Simple string matching for error mapping as go-oidc error types aren't always exposed
 		if strings.Contains(err.Error(), "expired") || strings.Contains(err.Error(), "exp not satisfied") {
-			return Claims{}, ErrTokenExpired
+			return ctxutil.Claims{}, ErrTokenExpired
 		}
-		return Claims{}, ErrTokenInvalid
+		// Wrap the original error to preserve context for logging (consistent with JWT)
+		return ctxutil.Claims{}, fmt.Errorf("%w: %v", ErrTokenInvalid, err)
 	}
 
 	// Manual Audience Validation if multiple audiences configured
 	if len(a.config.Audience) > 0 {
 		if !containsAny(idToken.Audience, a.config.Audience) {
-			return Claims{}, ErrTokenInvalid
+			return ctxutil.Claims{}, ErrTokenInvalid
 		}
 	}
 
 	// Extract all claims into a map to support flexible mapping
 	var allClaims map[string]interface{}
 	if err := idToken.Claims(&allClaims); err != nil {
-		return Claims{}, ErrTokenInvalid
+		return ctxutil.Claims{}, ErrTokenInvalid
 	}
 
 	// Extract sub (UserID)
 	sub, ok := allClaims["sub"].(string)
 	if !ok {
-		return Claims{}, ErrTokenInvalid
+		return ctxutil.Claims{}, ErrTokenInvalid
 	}
 
 	// Extract Roles based on configuration
 	roles := a.extractRoles(allClaims)
 
-	return Claims{
-		UserID: sub,
-		Roles:  roles,
+	// Extract Permissions (consistent with JWT authenticator)
+	permissions := a.extractPermissions(allClaims)
+
+	// Initialize metadata map for consistency with other authenticators
+	metadata := make(map[string]string)
+	if meta, ok := allClaims["metadata"].(map[string]interface{}); ok {
+		for k, v := range meta {
+			if val, ok := v.(string); ok {
+				metadata[k] = val
+			}
+		}
+	}
+
+	return ctxutil.Claims{
+		UserID:      sub,
+		Roles:       roles,
+		Permissions: permissions,
+		Metadata:    metadata,
 	}, nil
+}
+
+// extractPermissions extracts permissions from the claims map.
+func (a *OIDCAuthenticator) extractPermissions(claims map[string]interface{}) []string {
+	if perms, ok := claims["permissions"]; ok {
+		return toCheck(perms)
+	}
+	return nil
 }
 
 // extractRoles extracts roles from the claims map based on the configured RolesClaim.

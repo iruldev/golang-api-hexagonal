@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
+	"github.com/iruldev/golang-api-hexagonal/internal/observability"
 )
 
 // ExampleAuthenticator demonstrates how to implement the Authenticator interface.
@@ -13,11 +15,11 @@ import (
 func ExampleAuthenticator() {
 	// Define a simple API key authenticator
 	type APIKeyAuth struct {
-		validKeys map[string]middleware.Claims
+		validKeys map[string]ctxutil.Claims
 	}
 
 	apiKeyAuth := &APIKeyAuth{
-		validKeys: map[string]middleware.Claims{
+		validKeys: map[string]ctxutil.Claims{
 			"secret-key-123": {
 				UserID:      "service-account-1",
 				Roles:       []string{"service"},
@@ -27,14 +29,14 @@ func ExampleAuthenticator() {
 	}
 
 	// The Authenticate method would be implemented like this:
-	_ = func(r *http.Request) (middleware.Claims, error) {
+	_ = func(r *http.Request) (ctxutil.Claims, error) {
 		key := r.Header.Get("X-API-Key")
 		if key == "" {
-			return middleware.Claims{}, middleware.ErrUnauthenticated
+			return ctxutil.Claims{}, middleware.ErrUnauthenticated
 		}
 		claims, ok := apiKeyAuth.validKeys[key]
 		if !ok {
-			return middleware.Claims{}, middleware.ErrTokenInvalid
+			return ctxutil.Claims{}, middleware.ErrTokenInvalid
 		}
 		return claims, nil
 	}
@@ -47,7 +49,7 @@ func ExampleAuthenticator() {
 func ExampleAuthMiddleware() {
 	// Create a mock authenticator for demonstration
 	mockAuth := &mockAuthenticator{
-		claims: middleware.Claims{
+		claims: ctxutil.Claims{
 			UserID:      "user-123",
 			Roles:       []string{"admin", "user"},
 			Permissions: []string{"read", "write", "delete"},
@@ -56,12 +58,12 @@ func ExampleAuthMiddleware() {
 
 	// Create protected handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		claims, _ := middleware.FromContext(r.Context())
+		claims, _ := ctxutil.ClaimsFromContext(r.Context())
 		fmt.Printf("Authenticated user: %s\n", claims.UserID)
 	})
 
 	// Wrap with auth middleware
-	protected := middleware.AuthMiddleware(mockAuth)(handler)
+	protected := middleware.AuthMiddleware(mockAuth, observability.NewNopLoggerInterface(), false)(handler)
 
 	// Test the protected endpoint
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/notes", nil)
@@ -71,11 +73,11 @@ func ExampleAuthMiddleware() {
 	// Output: Authenticated user: user-123
 }
 
-// ExampleFromContext demonstrates extracting claims from context in a handler.
-func ExampleFromContext() {
+// ExampleClaimsFromContext demonstrates extracting claims from context in a handler.
+func ExampleClaimsFromContext() {
 	// In a real handler, you would get context from the request
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		claims, err := middleware.FromContext(r.Context())
+		claims, err := ctxutil.ClaimsFromContext(r.Context())
 		if err != nil {
 			// This shouldn't happen if AuthMiddleware is applied
 			http.Error(w, "Internal error", http.StatusInternalServerError)
@@ -96,14 +98,14 @@ func ExampleFromContext() {
 
 	// Simulate authenticated request
 	mockAuth := &mockAuthenticator{
-		claims: middleware.Claims{
+		claims: ctxutil.Claims{
 			UserID:      "user-456",
 			Roles:       []string{"admin"},
 			Permissions: []string{"delete"},
 		},
 	}
 
-	protected := middleware.AuthMiddleware(mockAuth)(handler)
+	protected := middleware.AuthMiddleware(mockAuth, observability.NewNopLoggerInterface(), false)(handler)
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	rec := httptest.NewRecorder()
 	protected.ServeHTTP(rec, req)
@@ -116,7 +118,7 @@ func ExampleFromContext() {
 
 // ExampleClaims_HasRole demonstrates checking user roles.
 func ExampleClaims_HasRole() {
-	claims := middleware.Claims{
+	claims := ctxutil.Claims{
 		UserID: "user-789",
 		Roles:  []string{"admin", "editor", "viewer"},
 	}
@@ -131,7 +133,7 @@ func ExampleClaims_HasRole() {
 
 // ExampleClaims_HasPermission demonstrates checking user permissions.
 func ExampleClaims_HasPermission() {
-	claims := middleware.Claims{
+	claims := ctxutil.Claims{
 		UserID:      "user-789",
 		Permissions: []string{"notes:read", "notes:write", "notes:delete"},
 	}
@@ -146,10 +148,10 @@ func ExampleClaims_HasPermission() {
 
 // mockAuthenticator is a test helper that implements Authenticator.
 type mockAuthenticator struct {
-	claims middleware.Claims
+	claims ctxutil.Claims
 	err    error
 }
 
-func (m *mockAuthenticator) Authenticate(r *http.Request) (middleware.Claims, error) {
+func (m *mockAuthenticator) Authenticate(r *http.Request) (ctxutil.Claims, error) {
 	return m.claims, m.err
 }

@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
+	"github.com/iruldev/golang-api-hexagonal/internal/observability"
 	"github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
 )
 
@@ -20,7 +22,7 @@ func ExampleRateLimitMiddleware() {
 
 	// Create router with rate limiting
 	r := chi.NewRouter()
-	r.Use(middleware.RateLimitMiddleware(limiter))
+	r.Use(middleware.RateLimitMiddleware(limiter, observability.NewNopLoggerInterface()))
 
 	r.Get("/api/data", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("OK"))
@@ -47,7 +49,7 @@ func ExampleRateLimitMiddleware_perEndpoint() {
 
 	// Public endpoints with normal rate limit
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.RateLimitMiddleware(normalLimiter))
+		r.Use(middleware.RateLimitMiddleware(normalLimiter, observability.NewNopLoggerInterface()))
 		r.Get("/api/v1/notes", func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("notes list"))
 		})
@@ -55,7 +57,7 @@ func ExampleRateLimitMiddleware_perEndpoint() {
 
 	// Sensitive endpoints with strict rate limit
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.RateLimitMiddleware(strictLimiter))
+		r.Use(middleware.RateLimitMiddleware(strictLimiter, observability.NewNopLoggerInterface()))
 		r.Post("/api/v1/auth/login", func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("login"))
 		})
@@ -76,7 +78,7 @@ func ExampleRateLimitMiddleware_withUserID() {
 
 	// Public routes: rate limit by IP
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.RateLimitMiddleware(limiter))
+		r.Use(middleware.RateLimitMiddleware(limiter, observability.NewNopLoggerInterface()))
 		r.Get("/api/v1/public", func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("public data"))
 		})
@@ -85,7 +87,7 @@ func ExampleRateLimitMiddleware_withUserID() {
 	// Protected routes: rate limit by UserID (after auth)
 	r.Group(func(r chi.Router) {
 		// Auth middleware first, then rate limit by user
-		r.Use(middleware.RateLimitMiddleware(limiter,
+		r.Use(middleware.RateLimitMiddleware(limiter, observability.NewNopLoggerInterface(),
 			middleware.WithKeyExtractor(middleware.UserIDKeyExtractor),
 		))
 		r.Get("/api/v1/me", func(w http.ResponseWriter, r *http.Request) {
@@ -113,9 +115,9 @@ func ExampleRateLimitMiddleware_withAuthMiddleware() {
 	// Protected route with auth + rate limiting
 	r.Group(func(r chi.Router) {
 		// 1. First authenticate
-		r.Use(middleware.AuthMiddleware(jwtAuth))
+		r.Use(middleware.AuthMiddleware(jwtAuth, observability.NewNopLoggerInterface(), false))
 		// 2. Then rate limit by user ID
-		r.Use(middleware.RateLimitMiddleware(limiter,
+		r.Use(middleware.RateLimitMiddleware(limiter, observability.NewNopLoggerInterface(),
 			middleware.WithKeyExtractor(middleware.UserIDKeyExtractor),
 		))
 
@@ -145,7 +147,7 @@ func ExampleRateLimitMiddleware_customKeyExtractor() {
 	}
 
 	r := chi.NewRouter()
-	r.Use(middleware.RateLimitMiddleware(limiter,
+	r.Use(middleware.RateLimitMiddleware(limiter, observability.NewNopLoggerInterface(),
 		middleware.WithKeyExtractor(apiKeyExtractor),
 	))
 
@@ -160,8 +162,8 @@ func ExampleRateLimitMiddleware_customKeyExtractor() {
 // rateLimitMockAuth is a mock authenticator for rate limit examples.
 type rateLimitMockAuth struct{}
 
-func (m *rateLimitMockAuth) Authenticate(r *http.Request) (middleware.Claims, error) {
-	return middleware.Claims{
+func (m *rateLimitMockAuth) Authenticate(r *http.Request) (ctxutil.Claims, error) {
+	return ctxutil.Claims{
 		UserID: "test-user",
 		Roles:  []string{"user"},
 	}, nil

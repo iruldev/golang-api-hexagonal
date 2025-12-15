@@ -2,48 +2,53 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
+
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
+	domainerrors "github.com/iruldev/golang-api-hexagonal/internal/domain/errors"
+	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/response"
+	"github.com/iruldev/golang-api-hexagonal/internal/observability"
 )
 
-// TestClaims_HasRole tests the HasRole method of Claims struct.
+// TestClaims_HasRole tests the HasRole method of ctxutil.Claims struct.
 func TestClaims_HasRole(t *testing.T) {
 	tests := []struct {
 		name     string
-		claims   Claims
+		claims   ctxutil.Claims
 		role     string
 		expected bool
 	}{
 		{
 			name:     "has role returns true",
-			claims:   Claims{Roles: []string{"admin", "user"}},
+			claims:   ctxutil.Claims{Roles: []string{"admin", "user"}},
 			role:     "admin",
 			expected: true,
 		},
 		{
 			name:     "does not have role returns false",
-			claims:   Claims{Roles: []string{"user"}},
+			claims:   ctxutil.Claims{Roles: []string{"user"}},
 			role:     "admin",
 			expected: false,
 		},
 		{
 			name:     "empty roles returns false",
-			claims:   Claims{Roles: nil},
+			claims:   ctxutil.Claims{Roles: nil},
 			role:     "admin",
 			expected: false,
 		},
 		{
 			name:     "empty role string returns false",
-			claims:   Claims{Roles: []string{"admin", "user"}},
+			claims:   ctxutil.Claims{Roles: []string{"admin", "user"}},
 			role:     "",
 			expected: false,
 		},
 		{
 			name:     "exactly matches role",
-			claims:   Claims{Roles: []string{"administrator"}},
+			claims:   ctxutil.Claims{Roles: []string{"administrator"}},
 			role:     "admin",
 			expected: false,
 		},
@@ -59,41 +64,41 @@ func TestClaims_HasRole(t *testing.T) {
 	}
 }
 
-// TestClaims_HasPermission tests the HasPermission method of Claims struct.
+// TestClaims_HasPermission tests the HasPermission method of ctxutil.Claims struct.
 func TestClaims_HasPermission(t *testing.T) {
 	tests := []struct {
 		name       string
-		claims     Claims
+		claims     ctxutil.Claims
 		permission string
 		expected   bool
 	}{
 		{
 			name:       "has permission returns true",
-			claims:     Claims{Permissions: []string{"read", "write", "delete"}},
+			claims:     ctxutil.Claims{Permissions: []string{"read", "write", "delete"}},
 			permission: "write",
 			expected:   true,
 		},
 		{
 			name:       "does not have permission returns false",
-			claims:     Claims{Permissions: []string{"read"}},
+			claims:     ctxutil.Claims{Permissions: []string{"read"}},
 			permission: "write",
 			expected:   false,
 		},
 		{
 			name:       "empty permissions returns false",
-			claims:     Claims{Permissions: nil},
+			claims:     ctxutil.Claims{Permissions: nil},
 			permission: "read",
 			expected:   false,
 		},
 		{
 			name:       "empty permission string",
-			claims:     Claims{Permissions: []string{"read", "write"}},
+			claims:     ctxutil.Claims{Permissions: []string{"read", "write"}},
 			permission: "",
 			expected:   false,
 		},
 		{
 			name:       "partial match returns false",
-			claims:     Claims{Permissions: []string{"read:notes"}},
+			claims:     ctxutil.Claims{Permissions: []string{"read:notes"}},
 			permission: "read",
 			expected:   false,
 		},
@@ -111,16 +116,16 @@ func TestClaims_HasPermission(t *testing.T) {
 
 // TestNewContext tests storing claims in context.
 func TestNewContext(t *testing.T) {
-	claims := Claims{
+	claims := ctxutil.Claims{
 		UserID:      "user-123",
 		Roles:       []string{"admin"},
 		Permissions: []string{"read", "write"},
 	}
 
-	ctx := NewContext(context.Background(), claims)
+	ctx := ctxutil.NewClaimsContext(context.Background(), claims)
 
 	// Verify claims can be retrieved
-	storedClaims, err := FromContext(ctx)
+	storedClaims, err := ctxutil.ClaimsFromContext(ctx)
 	if err != nil {
 		t.Fatalf("expected claims to be retrievable from context, got error: %v", err)
 	}
@@ -133,15 +138,15 @@ func TestNewContext(t *testing.T) {
 // TestFromContext tests extracting claims from context.
 func TestFromContext(t *testing.T) {
 	t.Run("returns claims when present", func(t *testing.T) {
-		expectedClaims := Claims{
+		expectedClaims := ctxutil.Claims{
 			UserID:      "user-456",
 			Roles:       []string{"user", "editor"},
 			Permissions: []string{"read", "write:notes"},
 			Metadata:    map[string]string{"org": "acme"},
 		}
 
-		ctx := NewContext(context.Background(), expectedClaims)
-		claims, err := FromContext(ctx)
+		ctx := ctxutil.NewClaimsContext(context.Background(), expectedClaims)
+		claims, err := ctxutil.ClaimsFromContext(ctx)
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -162,27 +167,27 @@ func TestFromContext(t *testing.T) {
 
 	t.Run("returns error when claims missing", func(t *testing.T) {
 		ctx := context.Background()
-		_, err := FromContext(ctx)
+		_, err := ctxutil.ClaimsFromContext(ctx)
 
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
-		if !errors.Is(err, ErrNoClaimsInContext) {
-			t.Errorf("error = %v, want %v", err, ErrNoClaimsInContext)
+		if !errors.Is(err, ctxutil.ErrNoClaimsInContext) {
+			t.Errorf("error = %v, want %v", err, ctxutil.ErrNoClaimsInContext)
 		}
 	})
 
 	t.Run("returns error for wrong type in context", func(t *testing.T) {
-		// Use FromContext on a context without claims
+		// Use ctxutil.ClaimsFromContext on a context without claims
 		// This tests the same behavior without accessing internal key
 		ctx := context.Background()
-		_, err := FromContext(ctx)
+		_, err := ctxutil.ClaimsFromContext(ctx)
 
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
-		if !errors.Is(err, ErrNoClaimsInContext) {
-			t.Errorf("error = %v, want %v", err, ErrNoClaimsInContext)
+		if !errors.Is(err, ctxutil.ErrNoClaimsInContext) {
+			t.Errorf("error = %v, want %v", err, ctxutil.ErrNoClaimsInContext)
 		}
 	})
 }
@@ -197,7 +202,7 @@ func TestSentinelErrors(t *testing.T) {
 		{"ErrUnauthenticated", ErrUnauthenticated, "unauthenticated"},
 		{"ErrTokenExpired", ErrTokenExpired, "token expired"},
 		{"ErrTokenInvalid", ErrTokenInvalid, "token invalid"},
-		{"ErrNoClaimsInContext", ErrNoClaimsInContext, "no claims in context"},
+		{"ErrNoctxutil.ClaimsInContext", ctxutil.ErrNoClaimsInContext, "no claims in context"},
 	}
 
 	for _, tt := range tests {
@@ -220,12 +225,12 @@ func TestSentinelErrors_ErrorsIs(t *testing.T) {
 
 // mockAuthenticator is a test implementation of Authenticator.
 type mockAuthenticator struct {
-	claims    Claims
+	claims    ctxutil.Claims
 	err       error
 	callCount int
 }
 
-func (m *mockAuthenticator) Authenticate(r *http.Request) (Claims, error) {
+func (m *mockAuthenticator) Authenticate(r *http.Request) (ctxutil.Claims, error) {
 	m.callCount++
 	return m.claims, m.err
 }
@@ -242,7 +247,7 @@ func TestAuthMiddleware(t *testing.T) {
 		{
 			name: "successful authentication",
 			mockAuth: &mockAuthenticator{
-				claims: Claims{
+				claims: ctxutil.Claims{
 					UserID:      "user-123",
 					Roles:       []string{"admin"},
 					Permissions: []string{"read"},
@@ -289,18 +294,18 @@ func TestAuthMiddleware(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Track if handler was called and what claims it received
-			var handlerClaims Claims
+			var handlerClaims ctxutil.Claims
 			var handlerClaimsErr error
 			handlerCalled := false
 
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				handlerCalled = true
-				handlerClaims, handlerClaimsErr = FromContext(r.Context())
+				handlerClaims, handlerClaimsErr = ctxutil.ClaimsFromContext(r.Context())
 				w.WriteHeader(http.StatusOK)
 				w.Write([]byte("OK"))
 			})
 
-			middleware := AuthMiddleware(tt.mockAuth)
+			middleware := AuthMiddleware(tt.mockAuth, observability.NewNopLoggerInterface(), false)
 			wrappedHandler := middleware(handler)
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -335,7 +340,7 @@ func TestAuthMiddleware(t *testing.T) {
 	}
 }
 
-// TestAuthMiddleware_ErrorResponseBody tests error response bodies.
+// TestAuthMiddleware_ErrorResponseBody tests error response bodies with new format.
 func TestAuthMiddleware_ErrorResponseBody(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -345,17 +350,17 @@ func TestAuthMiddleware_ErrorResponseBody(t *testing.T) {
 		{
 			name:         "token expired has specific error code",
 			err:          ErrTokenExpired,
-			expectedCode: "ERR_TOKEN_EXPIRED",
+			expectedCode: domainerrors.CodeTokenExpired, // "TOKEN_EXPIRED"
 		},
 		{
 			name:         "token invalid has specific error code",
 			err:          ErrTokenInvalid,
-			expectedCode: "ERR_TOKEN_INVALID",
+			expectedCode: domainerrors.CodeTokenInvalid, // "TOKEN_INVALID"
 		},
 		{
-			name:         "unauthenticated has generic error code",
+			name:         "unauthenticated has unauthorized error code",
 			err:          ErrUnauthenticated,
-			expectedCode: "ERR_UNAUTHORIZED",
+			expectedCode: domainerrors.CodeUnauthorized, // "UNAUTHORIZED"
 		},
 	}
 
@@ -366,7 +371,7 @@ func TestAuthMiddleware_ErrorResponseBody(t *testing.T) {
 				t.Error("handler should not be called")
 			})
 
-			middleware := AuthMiddleware(auth)
+			middleware := AuthMiddleware(auth, observability.NewNopLoggerInterface(), false)
 			wrappedHandler := middleware(handler)
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -384,15 +389,143 @@ func TestAuthMiddleware_ErrorResponseBody(t *testing.T) {
 				t.Errorf("Content-Type = %q, want %q", contentType, "application/json")
 			}
 
-			// Check response body contains expected error code
-			body := rec.Body.String()
-			if body == "" {
-				t.Error("expected non-empty response body")
+			// Parse response body as Envelope
+			var env response.TestEnvelopeResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+				t.Fatalf("failed to parse response body: %v", err)
 			}
-			// The body should contain the error code (JSON formatted)
-			if !strings.Contains(body, tt.expectedCode) {
-				t.Errorf("body should contain %q, got %q", tt.expectedCode, body)
+
+			// Check error code matches expected (UPPER_SNAKE format without ERR_ prefix)
+			if env.Error == nil {
+				t.Fatal("expected error in response body")
+			}
+			if env.Error.Code != tt.expectedCode {
+				t.Errorf("error.code = %q, want %q", env.Error.Code, tt.expectedCode)
+			}
+
+			// Verify meta.trace_id is present (AC #2, #3)
+			if env.Meta == nil {
+				t.Fatal("expected meta in response body")
+			}
+			if env.Meta.TraceID == "" {
+				t.Error("expected meta.trace_id to be present")
 			}
 		})
+	}
+}
+
+// TestAuthMiddleware_TraceIDPropagation tests that trace_id is propagated in error responses.
+func TestAuthMiddleware_TraceIDPropagation(t *testing.T) {
+	auth := &mockAuthenticator{err: ErrTokenExpired}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler should not be called")
+	})
+
+	middleware := AuthMiddleware(auth, observability.NewNopLoggerInterface(), false)
+	wrappedHandler := middleware(handler)
+
+	// Create request with trace_id in context
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	testTraceID := "test-trace-id-12345"
+	ctx := ctxutil.NewRequestIDContext(req.Context(), testTraceID)
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	wrappedHandler.ServeHTTP(rec, req)
+
+	// Parse response body
+	var env response.TestEnvelopeResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("failed to parse response body: %v", err)
+	}
+
+	// Verify trace_id matches what we set in context
+	if env.Meta == nil {
+		t.Fatal("expected meta in response body")
+	}
+	if env.Meta.TraceID != testTraceID {
+		t.Errorf("meta.trace_id = %q, want %q", env.Meta.TraceID, testTraceID)
+	}
+}
+
+// TestAuthMiddleware_UnexpectedErrorLogging tests that unexpected errors are logged.
+func TestAuthMiddleware_UnexpectedErrorLogging(t *testing.T) {
+	// Arrange
+	mockAuth := &mockAuthenticator{
+		err: errors.New("db connection failed"), // Unexpected error
+	}
+	mockLogger := &response.MockLogger{}
+
+	// Act
+	middleware := AuthMiddleware(mockAuth, mockLogger, false)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	wrapped := middleware(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+	wrapped.ServeHTTP(rec, req)
+	// Assert
+	if !mockLogger.ErrorCalled {
+		t.Error("Expected logger.Error to be called for unexpected error")
+	}
+	if mockLogger.ErrorMsg != "unexpected authentication error" {
+		t.Errorf("Expected log message 'unexpected authentication error', got '%s'", mockLogger.ErrorMsg)
+	}
+	// Verify trace_id and ip are logged
+	foundTrace := false
+	foundIP := false
+	for _, f := range mockLogger.Fields {
+		if f.Key == "trace_id" {
+			foundTrace = true
+		}
+		if f.Key == "ip" {
+			foundIP = true
+		}
+	}
+	if !foundTrace {
+		t.Error("Expected trace_id field in log")
+	}
+	if !foundIP {
+		t.Error("Expected ip field in log")
+	}
+}
+
+// TestAuthMiddleware_IssuerAudienceValidation tests AC #5 - issuer/audience mismatch.
+// Verifies that mismatched issuer/audience returns HTTP 401 with TOKEN_INVALID code.
+func TestAuthMiddleware_IssuerAudienceValidation(t *testing.T) {
+	// Arrange: Create authenticator that returns TokenInvalid (simulating issuer/audience mismatch)
+	auth := &mockAuthenticator{err: ErrTokenInvalid}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler should not be called")
+	})
+
+	middleware := AuthMiddleware(auth, observability.NewNopLoggerInterface(), false)
+	wrappedHandler := middleware(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+
+	// Act
+	wrappedHandler.ServeHTTP(rec, req)
+
+	// Assert: AC #5 - HTTP 401 with TOKEN_INVALID code
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+
+	// Parse response body
+	var env response.TestEnvelopeResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("failed to parse response body: %v", err)
+	}
+
+	if env.Error == nil {
+		t.Fatal("expected error in response body")
+	}
+	if env.Error.Code != domainerrors.CodeTokenInvalid {
+		t.Errorf("error.code = %q, want %q", env.Error.Code, domainerrors.CodeTokenInvalid)
+	}
+	if env.Meta == nil || env.Meta.TraceID == "" {
+		t.Error("expected meta.trace_id to be present")
 	}
 }

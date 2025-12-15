@@ -9,19 +9,21 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/admin"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
+	"github.com/iruldev/golang-api-hexagonal/internal/observability"
 )
 
 // mockAuthenticator is a test double for the Authenticator interface.
 type mockAuthenticator struct {
-	claims *middleware.Claims
+	claims *ctxutil.Claims
 	err    error
 }
 
-func (m *mockAuthenticator) Authenticate(r *http.Request) (middleware.Claims, error) {
+func (m *mockAuthenticator) Authenticate(r *http.Request) (ctxutil.Claims, error) {
 	if m.err != nil {
-		return middleware.Claims{}, m.err
+		return ctxutil.Claims{}, m.err
 	}
 	return *m.claims, nil
 }
@@ -32,8 +34,8 @@ func setupTestRouter(authenticator middleware.Authenticator) chi.Router {
 
 	// Apply middleware in correct order: Auth before RBAC
 	r.Route("/admin", func(r chi.Router) {
-		r.Use(middleware.AuthMiddleware(authenticator))
-		r.Use(middleware.RequireRole("admin"))
+		r.Use(middleware.AuthMiddleware(authenticator, observability.NewNopLoggerInterface(), false))
+		r.Use(middleware.RequireRole([]string{"admin"}, observability.NewNopLoggerInterface()))
 		r.Get("/health", admin.HealthHandler)
 	})
 
@@ -60,7 +62,7 @@ func TestAdminRoutes_NoToken_Returns401(t *testing.T) {
 func TestAdminRoutes_ValidTokenNoAdminRole_Returns403(t *testing.T) {
 	// Arrange: User is authenticated but has no admin role
 	auth := &mockAuthenticator{
-		claims: &middleware.Claims{
+		claims: &ctxutil.Claims{
 			UserID: "user-123",
 			Roles:  []string{"user"},
 		},
@@ -80,7 +82,7 @@ func TestAdminRoutes_ValidTokenNoAdminRole_Returns403(t *testing.T) {
 func TestAdminRoutes_ValidTokenWithAdminRole_Returns200(t *testing.T) {
 	// Arrange: User is authenticated with admin role
 	auth := &mockAuthenticator{
-		claims: &middleware.Claims{
+		claims: &ctxutil.Claims{
 			UserID: "admin-123",
 			Roles:  []string{"admin"},
 		},

@@ -108,6 +108,7 @@ func Example_integrateWithMiddleware() {
 		// Create middleware with Redis limiter
 		rateLimitMw := middleware.RateLimitMiddleware(
 			redisLimiter,
+			observability.NewNopLoggerInterface(),
 			middleware.WithKeyExtractor(middleware.IPKeyExtractor),
 		)
 

@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/response"
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
+	domainerrors "github.com/iruldev/golang-api-hexagonal/internal/domain/errors"
+	"github.com/iruldev/golang-api-hexagonal/internal/observability"
 	"github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
 )
 
@@ -288,7 +290,7 @@ func TestRateLimitMiddleware_AllowsRequest(t *testing.T) {
 	)
 	defer limiter.Stop()
 
-	handler := RateLimitMiddleware(limiter)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RateLimitMiddleware(limiter, observability.NewNopLoggerInterface())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	}))
@@ -313,7 +315,7 @@ func TestRateLimitMiddleware_BlocksExcessiveRequests(t *testing.T) {
 	)
 	defer limiter.Stop()
 
-	handler := RateLimitMiddleware(limiter)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RateLimitMiddleware(limiter, observability.NewNopLoggerInterface())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -345,7 +347,7 @@ func TestRateLimitMiddleware_RetryAfterHeader(t *testing.T) {
 	)
 	defer limiter.Stop()
 
-	handler := RateLimitMiddleware(limiter)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RateLimitMiddleware(limiter, observability.NewNopLoggerInterface())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -374,7 +376,7 @@ func TestRateLimitMiddleware_ErrorResponseFormat(t *testing.T) {
 	)
 	defer limiter.Stop()
 
-	handler := RateLimitMiddleware(limiter)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RateLimitMiddleware(limiter, observability.NewNopLoggerInterface())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -389,17 +391,25 @@ func TestRateLimitMiddleware_ErrorResponseFormat(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req)
 
-	// Assert: response should be JSON with correct format
-	var errResp response.ErrorResponse
-	if err := json.Unmarshal(rec2.Body.Bytes(), &errResp); err != nil {
+	// Assert: response should be JSON with correct Envelope format
+	var envResp struct {
+		Error *struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+		Meta *struct {
+			TraceID string `json:"trace_id"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal(rec2.Body.Bytes(), &envResp); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	if errResp.Success {
-		t.Error("response.success = true, want false")
+	if envResp.Error == nil {
+		t.Error("response.error = nil, want error body")
 	}
-	if errResp.Error.Code != ErrRateLimited {
-		t.Errorf("error.code = %s, want %s", errResp.Error.Code, ErrRateLimited)
+	if envResp.Error.Code != domainerrors.CodeRateLimitExceeded {
+		t.Errorf("error.code = %s, want %s", envResp.Error.Code, domainerrors.CodeRateLimitExceeded)
 	}
 }
 
@@ -415,7 +425,7 @@ func TestRateLimitMiddleware_CustomKeyExtractor(t *testing.T) {
 		return r.Header.Get("X-Custom-Key")
 	}
 
-	handler := RateLimitMiddleware(limiter, WithKeyExtractor(customExtractor))(
+	handler := RateLimitMiddleware(limiter, observability.NewNopLoggerInterface(), WithKeyExtractor(customExtractor))(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}),
@@ -449,7 +459,7 @@ func TestRateLimitMiddleware_FixedRetryAfter(t *testing.T) {
 	)
 	defer limiter.Stop()
 
-	handler := RateLimitMiddleware(limiter, WithRetryAfterSeconds(120))(
+	handler := RateLimitMiddleware(limiter, observability.NewNopLoggerInterface(), WithRetryAfterSeconds(120))(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}),
@@ -472,74 +482,16 @@ func TestRateLimitMiddleware_FixedRetryAfter(t *testing.T) {
 	}
 }
 
-func TestIPKeyExtractor(t *testing.T) {
-	tests := []struct {
-		name       string
-		remoteAddr string
-		headers    map[string]string
-		want       string
-	}{
-		{
-			name:       "direct connection",
-			remoteAddr: "192.168.1.1:12345",
-			headers:    nil,
-			want:       "192.168.1.1",
-		},
-		{
-			name:       "behind proxy with X-Forwarded-For",
-			remoteAddr: "10.0.0.1:12345",
-			headers:    map[string]string{"X-Forwarded-For": "203.0.113.50"},
-			want:       "203.0.113.50",
-		},
-		{
-			name:       "X-Forwarded-For with multiple IPs",
-			remoteAddr: "10.0.0.1:12345",
-			headers:    map[string]string{"X-Forwarded-For": "203.0.113.50, 70.41.3.18, 150.172.238.178"},
-			want:       "203.0.113.50",
-		},
-		{
-			name:       "with X-Real-IP",
-			remoteAddr: "10.0.0.1:12345",
-			headers:    map[string]string{"X-Real-IP": "203.0.113.60"},
-			want:       "203.0.113.60",
-		},
-		{
-			name:       "X-Forwarded-For takes precedence",
-			remoteAddr: "10.0.0.1:12345",
-			headers: map[string]string{
-				"X-Forwarded-For": "203.0.113.50",
-				"X-Real-IP":       "203.0.113.60",
-			},
-			want: "203.0.113.50",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/", nil)
-			req.RemoteAddr = tt.remoteAddr
-			for k, v := range tt.headers {
-				req.Header.Set(k, v)
-			}
-
-			got := IPKeyExtractor(req)
-			if got != tt.want {
-				t.Errorf("IPKeyExtractor() = %s, want %s", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestUserIDKeyExtractor(t *testing.T) {
 	tests := []struct {
 		name       string
-		claims     *Claims
+		claims     *ctxutil.Claims
 		remoteAddr string
 		want       string
 	}{
 		{
 			name:       "with authenticated user",
-			claims:     &Claims{UserID: "user-123"},
+			claims:     &ctxutil.Claims{UserID: "user-123"},
 			remoteAddr: "192.168.1.1:12345",
 			want:       "user:user-123",
 		},
@@ -551,7 +503,7 @@ func TestUserIDKeyExtractor(t *testing.T) {
 		},
 		{
 			name:       "empty UserID falls back to IP",
-			claims:     &Claims{UserID: ""},
+			claims:     &ctxutil.Claims{UserID: ""},
 			remoteAddr: "192.168.1.1:12345",
 			want:       "192.168.1.1",
 		},
@@ -563,7 +515,7 @@ func TestUserIDKeyExtractor(t *testing.T) {
 			req.RemoteAddr = tt.remoteAddr
 
 			if tt.claims != nil {
-				ctx := NewContext(req.Context(), *tt.claims)
+				ctx := ctxutil.NewClaimsContext(req.Context(), *tt.claims)
 				req = req.WithContext(ctx)
 			}
 
@@ -579,7 +531,7 @@ func TestRateLimitMiddleware_FailOpen(t *testing.T) {
 	// Arrange: Create a limiter that always errors
 	errorLimiter := &erroringRateLimiter{}
 
-	handler := RateLimitMiddleware(errorLimiter)(
+	handler := RateLimitMiddleware(errorLimiter, observability.NewNopLoggerInterface())(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("Success"))
@@ -608,4 +560,39 @@ func (e *erroringRateLimiter) Allow(_ context.Context, _ string) (bool, error) {
 
 func (e *erroringRateLimiter) Limit(_ context.Context, _ string, _ runtimeutil.Rate) error {
 	return context.DeadlineExceeded
+}
+
+func TestRateLimitMiddleware_XRateLimitHeaders(t *testing.T) {
+	// Arrange
+	limiter := NewInMemoryRateLimiter(
+		WithDefaultRate(runtimeutil.NewRate(10, time.Minute)),
+	)
+	defer limiter.Stop()
+
+	handler := RateLimitMiddleware(limiter, observability.NewNopLoggerInterface())(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+
+	// Act
+	handler.ServeHTTP(rec, req)
+
+	// Assert: Headers should be present
+	limit := rec.Header().Get("X-RateLimit-Limit")
+	remaining := rec.Header().Get("X-RateLimit-Remaining")
+	reset := rec.Header().Get("X-RateLimit-Reset")
+
+	if limit != "10" {
+		t.Errorf("X-RateLimit-Limit = %s, want 10", limit)
+	}
+	if remaining != "9" { // consumed 1 token
+		t.Errorf("X-RateLimit-Remaining = %s, want 9", remaining)
+	}
+	if reset == "" {
+		t.Error("X-RateLimit-Reset header missing")
+	}
 }

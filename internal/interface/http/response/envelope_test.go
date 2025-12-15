@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
+	domainerrors "github.com/iruldev/golang-api-hexagonal/internal/domain/errors"
 )
 
 // TestEnvelopeStructure tests that Envelope serializes correctly.
@@ -266,7 +267,7 @@ func TestErrorCodeFormat(t *testing.T) {
 		{"CodeNotFound", CodeNotFound, true, false},
 		{"CodeConflict", CodeConflict, true, false},
 		{"CodeValidation", CodeValidation, true, false},
-		{"CodeInternalServer", CodeInternalServer, true, false},
+		{"CodeInternalServer", domainerrors.CodeInternalError, true, false},
 		{"CodeTimeout", CodeTimeout, true, false},
 		{"CodeServiceUnavailable", CodeServiceUnavailable, true, false},
 		// Deprecated codes should still work
@@ -380,7 +381,7 @@ func TestConvenienceFunctions(t *testing.T) {
 		{"NotFoundCtx", func(w http.ResponseWriter, ctx context.Context) { NotFoundCtx(w, ctx, "msg") }, http.StatusNotFound, CodeNotFound},
 		{"ConflictCtx", func(w http.ResponseWriter, ctx context.Context) { ConflictCtx(w, ctx, "msg") }, http.StatusConflict, CodeConflict},
 		{"ValidationErrorCtx", func(w http.ResponseWriter, ctx context.Context) { ValidationErrorCtx(w, ctx, "msg") }, http.StatusUnprocessableEntity, CodeValidation},
-		{"InternalServerErrorCtx", func(w http.ResponseWriter, ctx context.Context) { InternalServerErrorCtx(w, ctx, "msg") }, http.StatusInternalServerError, CodeInternalServer},
+		{"InternalServerErrorCtx", func(w http.ResponseWriter, ctx context.Context) { InternalServerErrorCtx(w, ctx, "msg") }, http.StatusInternalServerError, domainerrors.CodeInternalError},
 		{"ServiceUnavailableCtx", func(w http.ResponseWriter, ctx context.Context) { ServiceUnavailableCtx(w, ctx, "msg") }, http.StatusServiceUnavailable, CodeServiceUnavailable},
 		{"TimeoutCtx", func(w http.ResponseWriter, ctx context.Context) { TimeoutCtx(w, ctx, "msg") }, http.StatusGatewayTimeout, CodeTimeout},
 	}

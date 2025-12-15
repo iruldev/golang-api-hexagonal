@@ -11,7 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
+	"github.com/iruldev/golang-api-hexagonal/internal/observability"
 	"github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
 )
 
@@ -111,7 +113,7 @@ func TestFeaturesHandler_EnableFlag(t *testing.T) {
 
 	// Add claims to context for audit logging
 	req := httptest.NewRequest(http.MethodPost, "/features/my_flag/enable", nil)
-	ctx := middleware.NewContext(req.Context(), middleware.Claims{UserID: "admin-user"})
+	ctx := ctxutil.NewClaimsContext(req.Context(), ctxutil.Claims{UserID: "admin-user"})
 	req = req.WithContext(ctx)
 
 	rec := httptest.NewRecorder()
@@ -149,7 +151,7 @@ func TestFeaturesHandler_DisableFlag(t *testing.T) {
 	r.Post("/features/{flag}/disable", handler.DisableFlag)
 
 	req := httptest.NewRequest(http.MethodPost, "/features/my_flag/disable", nil)
-	ctx := middleware.NewContext(req.Context(), middleware.Claims{UserID: "admin-user"})
+	ctx := ctxutil.NewClaimsContext(req.Context(), ctxutil.Claims{UserID: "admin-user"})
 	req = req.WithContext(ctx)
 
 	rec := httptest.NewRecorder()
@@ -230,13 +232,13 @@ func TestFeaturesHandler_NoClaims_DefaultsToUnknown(t *testing.T) {
 
 // mockAuthenticator is a test double for the Authenticator interface.
 type mockAuthenticator struct {
-	claims *middleware.Claims
+	claims *ctxutil.Claims
 	err    error
 }
 
-func (m *mockAuthenticator) Authenticate(r *http.Request) (middleware.Claims, error) {
+func (m *mockAuthenticator) Authenticate(r *http.Request) (ctxutil.Claims, error) {
 	if m.err != nil {
-		return middleware.Claims{}, m.err
+		return ctxutil.Claims{}, m.err
 	}
 	return *m.claims, nil
 }
@@ -253,7 +255,7 @@ func TestFeaturesRoutes_NonAdminUser_Returns403(t *testing.T) {
 
 	// Create mock authenticator returning non-admin user
 	auth := &mockAuthenticator{
-		claims: &middleware.Claims{
+		claims: &ctxutil.Claims{
 			UserID: "user-123",
 			Roles:  []string{"user"}, // No "admin" role
 		},
@@ -262,8 +264,8 @@ func TestFeaturesRoutes_NonAdminUser_Returns403(t *testing.T) {
 	// Create router with full middleware stack (auth + RBAC)
 	r := chi.NewRouter()
 	r.Route("/admin", func(r chi.Router) {
-		r.Use(middleware.AuthMiddleware(auth))
-		r.Use(middleware.RequireRole("admin"))
+		r.Use(middleware.AuthMiddleware(auth, observability.NewNopLoggerInterface(), false))
+		r.Use(middleware.RequireRole([]string{"admin"}, observability.NewNopLoggerInterface()))
 		r.Get("/features", handler.ListFlags)
 		r.Get("/features/{flag}", handler.GetFlag)
 		r.Post("/features/{flag}/enable", handler.EnableFlag)

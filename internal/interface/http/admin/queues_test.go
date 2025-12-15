@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
 	"github.com/iruldev/golang-api-hexagonal/internal/runtimeutil"
 )
 
@@ -89,11 +89,11 @@ func setupQueuesRouter(inspector runtimeutil.QueueInspector) *chi.Mux {
 
 // withQueueAdminClaims adds admin claims to the request context.
 func withQueueAdminClaims(r *http.Request) *http.Request {
-	claims := middleware.Claims{
+	claims := ctxutil.Claims{
 		UserID: "admin-user-id",
 		Roles:  []string{"admin"},
 	}
-	ctx := middleware.NewContext(r.Context(), claims)
+	ctx := ctxutil.NewClaimsContext(r.Context(), claims)
 	return r.WithContext(ctx)
 }
 

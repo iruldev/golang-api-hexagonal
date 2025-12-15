@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
+	domainerrors "github.com/iruldev/golang-api-hexagonal/internal/domain/errors"
 )
 
 // UnknownTraceID is used when trace_id cannot be extracted from context.
@@ -169,7 +170,7 @@ func ValidationErrorCtx(w http.ResponseWriter, ctx context.Context, message stri
 
 // InternalServerErrorCtx writes a 500 Internal Server Error response with context.
 func InternalServerErrorCtx(w http.ResponseWriter, ctx context.Context, message string) {
-	ErrorEnvelope(w, ctx, http.StatusInternalServerError, CodeInternalServer, message)
+	ErrorEnvelope(w, ctx, http.StatusInternalServerError, domainerrors.CodeInternalError, message)
 }
 
 // ServiceUnavailableCtx writes a 503 Service Unavailable error response with context.
