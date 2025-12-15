@@ -1,25 +1,61 @@
-.PHONY: help dev build test test-integration lint clean migrate-up migrate-down migrate-down-all migrate-create gen sqlc-check
+.PHONY: help dev build test test-integration lint clean migrate-up migrate-down migrate-down-all migrate-create gen sqlc-check up verify reset
 
 # Help (default target)
 help:
 	@echo "Available targets:"
-	@echo "  dev            - Start dependencies and run app"
-	@echo "  test           - Run tests with coverage"
-	@echo "  test-integration - Run integration tests (requires Docker)"
-	@echo "  lint           - Run golangci-lint"
-	@echo "  build          - Build binary to bin/"
-	@echo "  clean          - Stop containers and clean build"
-	@echo "  migrate-up     - Apply all pending migrations"
-	@echo "  migrate-down N=1 - Rollback N migrations (default: 1)"
-	@echo "  migrate-down-all - Rollback ALL migrations"
-	@echo "  migrate-create NAME=x - Create new migration"
-	@echo "  gen            - Generate sqlc code"
+	@echo ""
+	@echo "  Development Workflow:"
+	@echo "    up             - Start all services (postgres, redis, kafka, etc.)"
+	@echo "    dev            - Start dependencies and run app"
+	@echo "    verify         - Run lint + unit tests (fail-fast)"
+	@echo "    reset          - Clean slate: stop containers, remove volumes, clean build"
+	@echo ""
+	@echo "  Testing:"
+	@echo "    test           - Run tests with coverage"
+	@echo "    test-integration - Run integration tests (requires Docker)"
+	@echo "    lint           - Run golangci-lint"
+	@echo ""
+	@echo "  Build:"
+	@echo "    build          - Build binary to bin/"
+	@echo ""
+	@echo "  Database:"
+	@echo "    migrate-up     - Apply all pending migrations"
+	@echo "    migrate-down N=1 - Rollback N migrations (default: 1)"
+	@echo "    migrate-down-all - Rollback ALL migrations"
+	@echo "    migrate-create NAME=x - Create new migration"
+	@echo ""
+	@echo "  Code Generation:"
+	@echo "    gen            - Generate sqlc, protobuf, and GraphQL code"
+	@echo ""
+	@echo "  Other:"
+	@echo "    clean          - Stop containers and clean build"
+	@echo "    worker         - Run background job worker"
+	@echo "    scheduler      - Run periodic job scheduler"
 
 # Development
 dev:
 	@test -f .env || cp .env.example .env 2>/dev/null || true
 	docker compose up -d
 	go run cmd/server/main.go
+
+# Start all services (containers only, no app) - waits for health checks
+up:
+	@test -f .env || (test -f .env.example && cp .env.example .env && echo "Created .env from example") || echo "WARNING: .env not found and .env.example missing. Defaults may fail."
+	@echo "Starting all services..."
+	docker compose up -d --wait
+	@echo "✓ All services are up and healthy"
+
+# Verify code quality: lint + unit tests (fail-fast)
+verify: lint
+	@$(MAKE) test
+	@echo "✓ Verification complete: lint and tests passed"
+
+# Clean slate: stop containers, remove volumes, clean build artifacts
+reset:
+	docker compose down -v
+	rm -rf bin/
+
+	@echo "✓ Reset complete: containers stopped, volumes removed, artifacts cleaned"
 
 # Build
 build:
@@ -77,8 +113,7 @@ sqlc-check:
 
 # Cleanup
 clean:
-	docker compose down -v
-	rm -rf bin/
+	@$(MAKE) reset
 
 # Worker (Story 8.2)
 .PHONY: worker
