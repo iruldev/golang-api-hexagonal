@@ -5,6 +5,75 @@
 
 set -e
 
+# Initialize PATH for Go tools
+# Git hooks run in a minimal shell environment, so we need to ensure Go is in PATH
+# This script supports macOS, Linux, and Windows (Git Bash/MSYS2/WSL)
+
+# Detect OS type
+OS_TYPE="$(uname -s)"
+
+# Common Unix paths (Linux/macOS)
+export PATH="$PATH:/usr/local/go/bin:$HOME/go/bin:$HOME/.local/bin"
+
+# Linux-specific paths
+if [ "$OS_TYPE" = "Linux" ]; then
+    # Snap installation
+    if [ -d "/snap/bin" ]; then
+        export PATH="$PATH:/snap/bin"
+    fi
+    # Linuxbrew
+    if [ -d "/home/linuxbrew/.linuxbrew/bin" ]; then
+        export PATH="$PATH:/home/linuxbrew/.linuxbrew/bin"
+    fi
+fi
+
+# macOS-specific paths (Homebrew)
+if [ "$OS_TYPE" = "Darwin" ]; then
+    if [ -d "/opt/homebrew/opt/go/libexec/bin" ]; then
+        export PATH="$PATH:/opt/homebrew/opt/go/libexec/bin"
+    fi
+    if [ -d "/opt/homebrew/bin" ]; then
+        export PATH="$PATH:/opt/homebrew/bin"
+    fi
+    # Intel Mac Homebrew
+    if [ -d "/usr/local/opt/go/libexec/bin" ]; then
+        export PATH="$PATH:/usr/local/opt/go/libexec/bin"
+    fi
+fi
+
+# Windows-specific paths (Git Bash/MSYS2/Cygwin)
+if [[ "$OS_TYPE" == MINGW* ]] || [[ "$OS_TYPE" == MSYS* ]] || [[ "$OS_TYPE" == CYGWIN* ]]; then
+    # Standard Go installation paths on Windows (converted to MSYS format)
+    if [ -d "/c/Go/bin" ]; then
+        export PATH="$PATH:/c/Go/bin"
+    fi
+    if [ -d "/c/Program Files/Go/bin" ]; then
+        export PATH="$PATH:/c/Program Files/Go/bin"
+    fi
+    # User's Go bin directory on Windows
+    if [ -d "$USERPROFILE/go/bin" ]; then
+        export PATH="$PATH:$USERPROFILE/go/bin"
+    fi
+    # Scoop installation
+    if [ -d "$USERPROFILE/scoop/shims" ]; then
+        export PATH="$PATH:$USERPROFILE/scoop/shims"
+    fi
+    # Chocolatey
+    if [ -d "/c/ProgramData/chocolatey/bin" ]; then
+        export PATH="$PATH:/c/ProgramData/chocolatey/bin"
+    fi
+fi
+
+# Source shell profile if available (for custom Go installations)
+if [ -f "$HOME/.zshrc" ]; then
+    # Extract PATH-related exports from zshrc (avoid sourcing entire file which may have interactive elements)
+    eval "$(grep -E '^export (PATH|GOPATH|GOROOT)=' "$HOME/.zshrc" 2>/dev/null || true)"
+elif [ -f "$HOME/.bashrc" ]; then
+    eval "$(grep -E '^export (PATH|GOPATH|GOROOT)=' "$HOME/.bashrc" 2>/dev/null || true)"
+elif [ -f "$HOME/.profile" ]; then
+    eval "$(grep -E '^export (PATH|GOPATH|GOROOT)=' "$HOME/.profile" 2>/dev/null || true)"
+fi
+
 echo "🔍 Running pre-commit lint check..."
 
 # Check if golangci-lint is installed
