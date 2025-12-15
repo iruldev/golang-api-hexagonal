@@ -252,10 +252,116 @@ func TestValidationError_ErrorMessage(t *testing.T) {
 
 	msg := err.Error()
 	assert.Contains(t, msg, "config validation failed:")
-	assert.Contains(t, msg, "error1")
-	assert.Contains(t, msg, "error2")
-	assert.Contains(t, msg, "error3")
-	assert.Contains(t, msg, "; ") // Semicolon separator
+	assert.Contains(t, msg, "- error1")
+	assert.Contains(t, msg, "- error2")
+	assert.Contains(t, msg, "- error3")
+	assert.Contains(t, msg, "\n") // Newline separator
+}
+
+func TestValidate_Redis(t *testing.T) {
+	tests := []struct {
+		name      string
+		redis     RedisConfig
+		expectErr string
+	}{
+		{
+			name: "Invalid Port - Too Low",
+			redis: RedisConfig{
+				Host: "localhost",
+				Port: -1,
+			},
+			expectErr: "REDIS_PORT must be between 0 and 65535",
+		},
+		{
+			name: "Invalid Port - Too High",
+			redis: RedisConfig{
+				Host: "localhost",
+				Port: 70000,
+			},
+			expectErr: "REDIS_PORT must be between 0 and 65535",
+		},
+		{
+			name: "Invalid DB - Too Low",
+			redis: RedisConfig{
+				Host: "localhost",
+				Port: 6379,
+				DB:   -1,
+			},
+			expectErr: "REDIS_DB must be between 0 and 15",
+		},
+		{
+			name: "Invalid DB - Too High",
+			redis: RedisConfig{
+				Host: "localhost",
+				Port: 6379,
+				DB:   16,
+			},
+			expectErr: "REDIS_DB must be between 0 and 15",
+		},
+		{
+			name: "Invalid PoolSize",
+			redis: RedisConfig{
+				Host:     "localhost",
+				Port:     6379,
+				PoolSize: -1,
+			},
+			expectErr: "REDIS_POOL_SIZE must be >= 0",
+		},
+		{
+			name: "Invalid MinIdleConns",
+			redis: RedisConfig{
+				Host:         "localhost",
+				Port:         6379,
+				MinIdleConns: -1,
+			},
+			expectErr: "REDIS_MIN_IDLE_CONNS must be >= 0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				App:      AppConfig{HTTPPort: 8080},
+				Database: DatabaseConfig{Host: "localhost", Port: 5432, User: "test", Name: "db"},
+				Redis:    tt.redis,
+			}
+			err := cfg.Validate()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.expectErr)
+		})
+	}
+}
+
+func TestValidate_Asynq(t *testing.T) {
+	tests := []struct {
+		name      string
+		asynq     AsynqConfig
+		expectErr string
+	}{
+		{
+			name:      "Invalid Concurrency",
+			asynq:     AsynqConfig{Concurrency: -1},
+			expectErr: "ASYNQ_CONCURRENCY must be >= 0",
+		},
+		{
+			name:      "Invalid ShutdownTimeout",
+			asynq:     AsynqConfig{ShutdownTimeout: -1},
+			expectErr: "ASYNQ_SHUTDOWN_TIMEOUT must be >= 0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				App:      AppConfig{HTTPPort: 8080},
+				Database: DatabaseConfig{Host: "localhost", Port: 5432, User: "test", Name: "db"},
+				Asynq:    tt.asynq,
+			}
+			err := cfg.Validate()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.expectErr)
+		})
+	}
 }
 
 func TestLoad_WithInvalidConfig(t *testing.T) {
@@ -291,4 +397,101 @@ func TestLoad_WithValidConfig(t *testing.T) {
 	assert.Equal(t, 5432, cfg.Database.Port)
 	assert.Equal(t, "test", cfg.Database.User)
 	assert.Equal(t, "testdb", cfg.Database.Name)
+}
+
+// TestValidationError_SecretSafe verifies that error messages never contain secret values.
+// This satisfies AC#5: error messages must NOT contain sensitive values.
+func TestValidationError_SecretSafe(t *testing.T) {
+	testCases := []struct {
+		name             string
+		cfg              *Config
+		secretValue      string
+		secretField      string
+		shouldNotLeakVia string
+	}{
+		{
+			name: "DB_PASSWORD not in error message",
+			cfg: &Config{
+				Database: DatabaseConfig{
+					// All required fields are empty to trigger errors
+					Password: "super_secret_password_123",
+				},
+			},
+			secretValue:      "super_secret_password_123",
+			secretField:      "DB_PASSWORD",
+			shouldNotLeakVia: "validation error string",
+		},
+		{
+			name: "REDIS_PASSWORD not in error message",
+			cfg: &Config{
+				Database: DatabaseConfig{
+					Host: "localhost",
+					Port: 5432,
+					User: "test",
+					Name: "testdb",
+				},
+				App: AppConfig{HTTPPort: 8080},
+				Redis: RedisConfig{
+					Host:     "localhost",
+					Port:     6379,
+					Password: "redis_secret_password",
+					DB:       -1, // Invalid to trigger error
+				},
+			},
+			secretValue:      "redis_secret_password",
+			secretField:      "REDIS_PASSWORD",
+			shouldNotLeakVia: "validation error string",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.cfg.Validate()
+			require.Error(t, err, "expected validation error")
+
+			errMsg := err.Error()
+
+			// CRITICAL: Secret values must NEVER appear in error messages
+			assert.NotContains(t, errMsg, tc.secretValue,
+				"%s should not leak secret value in %s", tc.secretField, tc.shouldNotLeakVia)
+
+			// Error messages should contain field NAMES, not VALUES
+			// This is the expected behavior - identify config issues by key name only
+			assert.Contains(t, errMsg, "config validation failed:",
+				"error should have standard prefix")
+		})
+	}
+}
+
+// TestValidationError_MultipleErrorCollection verifies FR40 requirement:
+// ALL missing config values are reported in a single error, not just the first.
+func TestValidationError_MultipleErrorCollection(t *testing.T) {
+	// Completely empty config should trigger multiple validation errors
+	cfg := &Config{}
+
+	err := cfg.Validate()
+	require.Error(t, err)
+
+	validErr, ok := err.(*ValidationError)
+	require.True(t, ok, "error should be *ValidationError type")
+
+	// FR40: Developer can fix all issues in one attempt
+	// This means we need at least 5 errors: DB_HOST, DB_PORT, DB_USER, DB_NAME, APP_HTTP_PORT
+	assert.GreaterOrEqual(t, len(validErr.Errors), 5,
+		"should collect ALL validation errors for single-attempt fix (FR40)")
+
+	// Verify each required field is mentioned
+	errStr := err.Error()
+	requiredFields := []string{
+		"DB_HOST is required",
+		"DB_PORT must be between 1 and 65535",
+		"DB_USER is required",
+		"DB_NAME is required",
+		"APP_HTTP_PORT must be between 1 and 65535",
+	}
+
+	for _, field := range requiredFields {
+		assert.Contains(t, errStr, field,
+			"error message should identify all missing required config")
+	}
 }

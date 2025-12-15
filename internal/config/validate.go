@@ -19,7 +19,7 @@ type ValidationError struct {
 
 // Error implements the error interface.
 func (e *ValidationError) Error() string {
-	return fmt.Sprintf("config validation failed: %s", strings.Join(e.Errors, "; "))
+	return fmt.Sprintf("config validation failed:\n- %s", strings.Join(e.Errors, "\n- "))
 }
 
 // Is supports errors.Is() pattern for type checking.

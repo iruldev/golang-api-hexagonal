@@ -51,7 +51,7 @@ development_status:
   1-3-implement-makefile-developer-commands: done
   1-4-add-pre-commit-hook-support: done
   1-5-setup-ci-pipeline-with-quality-gates: done
-  1-6-implement-fail-fast-config-validation: backlog
+  1-6-implement-fail-fast-config-validation: done
   epic-1-retrospective: optional
 
   # ============================================
