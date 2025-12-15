@@ -1,10 +1,19 @@
 # System-Level Test Design
 
-**Project:** Backend Service Golang Boilerplate
-**Date:** 2025-12-10
+**Date:** 2025-12-15
 **Author:** Gan
-**Mode:** System-Level (Phase 3 - Solutioning)
-**Status:** Draft
+**Project:** Backend Service Golang Boilerplate (Go Golden Template)
+**Status:** Approved
+
+---
+
+## Executive Summary
+
+**Mode:** System-Level Testability Review (Phase 3 - Solutioning)
+**Architecture:** Hexagonal (Clean Architecture) Brownfield Upgrade
+**Purpose:** Assess architecture testability before sprint planning
+
+**Overall Assessment:** ✅ PASS - Architecture is testable with minor recommendations
 
 ---
 
@@ -12,220 +21,217 @@
 
 ### Controllability ✅ PASS
 
-| Criterion | Status | Evidence |
-|-----------|--------|----------|
-| State control | ✅ | sqlc + golang-migrate, factory patterns |
-| External deps mockable | ✅ | Interface-based (TxManager, Logger, Cache, etc.) |
-| Error injection | ✅ | AppError model, sentinel errors per domain |
-| Dependency injection | ✅ | Composition root in `internal/app/app.go` |
+| Aspect | Status | Evidence |
+|--------|--------|----------|
+| State Control | ✅ | `make reset` clears DB, Redis, containers |
+| API Seeding | ✅ | sqlc + pgx enables programmatic data setup |
+| Dependency Injection | ✅ | Constructor injection in all layers |
+| Mockable Interfaces | ✅ | Repository pattern with domain interfaces |
+| Error Injection | ⚠️ | Wrapper pattern in Epic 2 enables this |
+| External Mocks | ✅ | Interface-based design supports mocking |
 
-**Details:**
-- Database state controllable via migrations and test fixtures
-- All external dependencies defined as interfaces in domain layer
-- Error conditions can be simulated via mock implementations
-- No global state, all dependencies injected at composition root
+**Recommendations:**
+- Implement fault injection via `internal/infra/wrapper/` context wrappers
+- Create test factories in `tests/testutil/factories.go`
 
 ### Observability ✅ PASS
 
-| Criterion | Status | Evidence |
-|-----------|--------|----------|
-| State inspection | ✅ | zap structured logging, OTEL tracing |
-| Deterministic results | ✅ | Table-driven tests, AAA pattern |
-| NFR validation | ✅ | /metrics, trace_id in logs, healthchecks |
-| Test debugging | ✅ | Structured logs with context fields |
+| Aspect | Status | Evidence |
+|--------|--------|----------|
+| Structured Logging | ✅ | Zap JSON logs with consistent field names |
+| Distributed Tracing | ✅ | OpenTelemetry spans (Epic 4) |
+| Metrics | ✅ | Prometheus `/metrics` endpoint |
+| Audit Logging | ✅ | Story 4.4 implements audit trail |
+| Test Results | ✅ | `make verify` with clear exit codes |
 
-**Details:**
-- All operations logged with trace_id and request_id
-- Metrics exposed at /metrics endpoint (Prometheus)
-- Health checks at /healthz and /readyz
-- OpenTelemetry spans for request tracing
+**Recommendations:**
+- Ensure trace_id propagates to all async workers
+- Add test-specific log levels
 
 ### Reliability ✅ PASS
 
-| Criterion | Status | Evidence |
-|-----------|--------|----------|
-| Test isolation | ✅ | t.Parallel(), no shared state |
-| Failure reproduction | ✅ | Deterministic patterns, runtimeutil.Clock |
-| Loose coupling | ✅ | Hexagonal boundaries, layer import rules |
-| Clean boundaries | ✅ | domain→usecase→infra→interface |
+| Aspect | Status | Evidence |
+|--------|--------|----------|
+| Test Isolation | ✅ | Hybrid: unit collocated, integration separate |
+| Parallel Safety | ⚠️ | Needs transaction isolation for DB tests |
+| Reproducibility | ✅ | sqlc queries versioned, deterministic |
+| Cleanup | ✅ | `make reset`, test transaction rollback |
+| Loose Coupling | ✅ | Hexagonal layers with depguard enforcement |
 
-**Details:**
-- Tests can run in parallel without interference
-- Clock abstraction enables deterministic time testing
-- Layer boundaries prevent tight coupling
-- Import rules documented and enforceable
+**Recommendations:**
+- Use transaction wrapping for integration tests
+- Build tag: `//go:build integration`
 
 ---
 
 ## Architecturally Significant Requirements (ASRs)
 
-| ID | Requirement | Category | Prob | Impact | Score | Testing Approach |
-|----|-------------|----------|------|--------|-------|------------------|
-| ASR-001 | Setup <30min | PERF | 2 | 2 | 4 | Integration: clone→run timer |
-| ASR-002 | p95 <100ms | PERF | 2 | 3 | **6** | Load test with k6 |
-| ASR-003 | Panic recovery 100% | TECH | 2 | 3 | **6** | Integration: panic handler test |
-| ASR-004 | Graceful shutdown | TECH | 2 | 3 | **6** | Integration: SIGTERM handling |
-| ASR-005 | Unit coverage ≥70% | TECH | 2 | 2 | 4 | CI coverage gate |
-| ASR-006 | No hardcoded secrets | SEC | 2 | 3 | **6** | Static analysis + scanning |
+| ASR ID | Requirement | Category | Prob | Impact | Score | Mitigation |
+|--------|-------------|----------|------|--------|-------|------------|
+| ASR-1 | Context propagation mandatory | TECH | 2 | 2 | 4 | contextcheck linter + wrappers |
+| ASR-2 | Coverage ≥80% domain/usecase | TECH | 2 | 2 | 4 | CI coverage gate in `make verify` |
+| ASR-3 | CI p50 ≤8min, p95 ≤15min | PERF | 2 | 3 | **6** | Parallel jobs, caching, selective tests |
+| ASR-4 | 0 Critical vulnerabilities | SEC | 1 | 3 | 3 | govulncheck in CI pipeline |
+| ASR-5 | make lint ≤60sec | PERF | 2 | 2 | 4 | golangci-lint caching |
+| ASR-6 | Test flake rate <1% | TECH | 2 | 2 | 4 | Deterministic tests, isolation |
+| ASR-7 | Rate limiting works under load | PERF | 2 | 2 | 4 | API integration tests with Redis |
 
-**High-Priority ASRs (Score ≥6):** 4 items require immediate attention
+**High Priority (Score ≥6):** ASR-3 (CI performance) requires immediate attention
 
 ---
 
 ## Test Levels Strategy
 
-Based on **backend service boilerplate** architecture:
+| Level | Percentage | Framework | Target |
+|-------|------------|-----------|--------|
+| **Unit** | 70% | `go test` + testify | Domain logic, usecase |
+| **Integration** | 25% | `go test` + dockertest | DB, Redis, HTTP clients |
+| **E2E** | 5% | httptest | Critical API paths |
 
-| Level | Target % | Rationale |
-|-------|----------|-----------|
-| **Unit** | 60% | Business logic, error handling, mappers, validators |
-| **Integration** | 30% | DB queries (sqlc), HTTP handlers, middleware chain |
-| **E2E** | 10% | Full request flow through example module |
+**Rationale (API-Heavy Platform):**
+- High unit percentage for fast feedback on domain logic
+- Integration tests for infrastructure boundaries (DB, cache)
+- Minimal E2E for critical user journeys only
 
-### Unit Tests (60%)
-- Domain entity validations
-- Usecase business logic
-- Error mapping functions
-- JSON struct serialization
-- Config validation
+### Test Framework Decisions
 
-### Integration Tests (30%)
-- Repository implementations (pgx + sqlc)
-- HTTP handler request/response cycle
-- Middleware chain behavior
-- Database migrations
-- Health check endpoints
-
-### E2E Tests (10%)
-- Example module full flow (create note → list notes)
-- Error response verification
-- Observability validation (logs, traces)
+| Purpose | Tool | Notes |
+|---------|------|-------|
+| Unit Tests | `testing` + `testify/assert` | Standard Go, familiar |
+| Mocking | `testify/mock` or mockery | Interface-based |
+| DB Tests | `dockertest` or `testcontainers-go` | Real PostgreSQL in container |
+| HTTP Tests | `httptest` | Built-in, chi-compatible |
+| Load Tests | `k6` | Performance NFRs validation |
+| Coverage | `go test -cover` | CI gate enforcement |
 
 ---
 
 ## NFR Testing Approach
 
-### Security (SEC)
-| Test | Tool | Frequency |
-|------|------|-----------|
-| No hardcoded secrets | gitleaks | Every commit |
-| Dependency CVE scan | govulncheck | Weekly |
-| Error sanitization | Integration test | PR |
-| Input validation | Unit test | PR |
+### Security (NFR-S1 to NFR-S3)
 
-### Performance (PERF)
-| Test | Tool | Threshold |
-|------|------|-----------|
-| Response time p95 | k6 | <100ms |
-| Startup time | Integration | <5s |
-| Memory usage | pprof | Baseline +10% |
+| NFR | Test Approach | Tool |
+|-----|---------------|------|
+| 0 Critical vulns | CI vulnerability scan | govulncheck |
+| Secrets via env only | Config validation tests | Unit test + gitleaks CI |
+| Auth/RBAC | Middleware unit tests | Go testing + httptest |
 
-### Reliability (TECH)
-| Test | Type | Validation |
-|------|------|------------|
-| Panic recovery | Integration | No 5xx leak |
-| Graceful shutdown | Integration | In-flight complete |
-| DB connection retry | Integration | Reconnect success |
+### Performance (NFR-P1 to NFR-P5)
 
-### Maintainability
-| Metric | Tool | Threshold |
-|--------|------|-----------|
-| Unit coverage | go test -cover | ≥70% |
-| Lint pass | golangci-lint | 100% |
-| Cyclomatic complexity | golangci-lint | ≤15 |
+| NFR | Test Approach | Tool |
+|-----|---------------|------|
+| CI p50 ≤8min | CI duration tracking | GitHub Actions timing |
+| make lint ≤60sec | Lint benchmark | `time make lint` in CI |
+| make verify ≤3min | Test suite timing | CI step timing |
+
+### Reliability (NFR-R1 to NFR-R4)
+
+| NFR | Test Approach | Tool |
+|-----|---------------|------|
+| Flake rate <1% | Test stability tracking | CI flake detection |
+| Pass rate >95% | CI success metrics | GitHub Actions dashboard |
+| Reproducibility | Deterministic seed data | Test fixtures with factories |
+
+### Maintainability (NFR-M1 to NFR-M5)
+
+| NFR | Test Approach | Tool |
+|-----|---------------|------|
+| Coverage ≥80% | Coverage gate | `go test -cover` |
+| Complexity ≤15 | Static analysis | gocyclo in golangci-lint |
 
 ---
 
 ## Test Environment Requirements
 
-### Local Development
-```
-docker-compose:
-  - postgres (primary)
-  - jaeger (optional, tracing)
-```
+| Environment | Purpose | Infrastructure |
+|-------------|---------|----------------|
+| **Local** | Dev testing | docker-compose (postgres, redis) |
+| **CI** | Automated tests | GitHub Actions + Docker services |
+| **Staging** | Integration validation | Kubernetes (optional) |
 
-### CI/CD Pipeline
-```
-GitHub Actions:
-  - go test ./...
-  - golangci-lint run
-  - govulncheck
-  - coverage report
-```
-
-### Staging (Optional)
-- Full observability stack
-- Performance testing with k6
+**Required Services:**
+- PostgreSQL 16+ (via docker-compose or testcontainers)
+- Redis 7+ (via docker-compose or testcontainers)
 
 ---
 
-## Testability Concerns
+## Testability Concerns (Minor)
 
-### No Blockers Found ✅
+| Concern | Severity | Status | Recommendation |
+|---------|----------|--------|----------------|
+| No fault injection | Medium | Planned | Story 2.3 wrappers enable this |
+| Integration test isolation | Low | Planned | Transaction rollback pattern |
+| Test fixtures missing | Medium | Planned | Create `tests/testutil/factories.go` |
+| Async worker testing | Low | Future | Add test hooks for worker queues |
 
-The architecture is well-designed for testability:
-- Interface-based dependencies
-- Composition root pattern
-- Hexagonal layer separation
-- Deterministic time via Clock abstraction
-
-### Minor Recommendations
-
-1. **Add testcontainers-go** for real Postgres in integration tests
-2. **Consider goleak** for goroutine leak detection
-3. **Add httptest** utilities in `internal/interface/http/httpx/testing.go`
+**No blockers identified.** All concerns are addressable in MVP stories.
 
 ---
 
-## Recommendations for Sprint 0
+## Recommendations for Sprint 0 / Epic 1
 
-### Test Infrastructure Setup
+### Test Framework Setup (Story 1.5 CI Pipeline)
 
-| Task | Priority | Owner |
-|------|----------|-------|
-| Configure go test with coverage | P0 | Dev |
-| Setup golangci-lint config | P0 | Dev |
-| Create test fixtures for note module | P0 | Dev |
-| Add Makefile targets (test, lint, coverage) | P0 | Dev |
-| Configure CI workflow | P1 | DevOps |
+1. **Configure coverage gate** in CI to block PRs below 80%
+2. **Add test caching** to improve CI performance
+3. **Setup parallel test execution** for faster feedback
 
-### Framework Recommendations
+### Test Infrastructure (New Stories Optional)
 
-| Framework | Purpose |
-|-----------|---------|
-| testify | Assertions (require/assert) |
-| gomock or mockery | Mock generation |
-| testcontainers-go | Real DB in tests |
-| httptest | HTTP handler testing |
-| k6 | Performance testing |
+1. **Create test factories** in `tests/testutil/factories.go`
+   - User, Note, API Key factories
+   - Auto-cleanup with t.Cleanup()
+
+2. **Setup dockertest** for integration tests
+   - PostgreSQL container per test suite
+   - Redis container for rate limit tests
+
+3. **Add build tags** for test organization
+   - `//go:build unit` (default)
+   - `//go:build integration`
 
 ---
 
 ## Quality Gate Criteria
 
-### Sprint 0 Gate
+### Pass/Fail Thresholds
+
+| Metric | Threshold | Enforcement |
+|--------|-----------|-------------|
+| P0 tests | 100% pass | CI blocks merge |
+| P1 tests | ≥95% pass | CI warning |
+| Coverage (domain/usecase) | ≥80% | CI blocks merge |
+| Lint | 0 errors | CI blocks merge |
+| Security scan | 0 critical vulns | CI blocks merge |
+
+### Non-Negotiable Requirements
+
 - [ ] All unit tests pass
-- [ ] golangci-lint passes
-- [ ] Coverage ≥70% on example module
-- [ ] No CVE vulnerabilities (govulncheck)
-
-### Pre-Release Gate
-- [ ] All P0 tests pass (100%)
-- [ ] All P1 tests pass (≥95%)
-- [ ] Performance targets met
-- [ ] Security scan clean
+- [ ] Coverage ≥80% for `internal/domain/`, `internal/usecase/`
+- [ ] No golangci-lint errors
+- [ ] No critical security vulnerabilities
+- [ ] CI completes in <15min (p95)
 
 ---
 
-## Related Documents
+## Summary
 
-- PRD: `docs/prd.md`
-- Architecture: `docs/architecture.md`
-- Project Context: `docs/project_context.md`
+| Dimension | Assessment |
+|-----------|------------|
+| **Controllability** | ✅ PASS |
+| **Observability** | ✅ PASS |
+| **Reliability** | ✅ PASS |
+| **Overall** | ✅ **READY FOR IMPLEMENTATION** |
+
+**High Priority ASRs:** ASR-3 (CI performance ≤8min p50) requires attention during Epic 1.
+
+**Next Steps:**
+1. Run `/bmad-bmm-workflows-sprint-planning` to create sprint status
+2. Start Epic 1: Foundation & Quality Gates
+3. Implement test infrastructure in Story 1.5
 
 ---
 
-**Generated by:** TEA Agent - Test Architect Module
-**Workflow:** `.bmad/bmm/testarch/test-design`
-**Mode:** System-Level (Phase 3)
+**Generated by:** BMad TEA Agent - Test Architect Module
+**Workflow:** `.bmad/bmm/testarch/test-design` (System-Level Mode)
+**Version:** 4.0 (BMad v6)
