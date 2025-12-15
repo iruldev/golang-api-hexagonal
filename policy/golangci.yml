@@ -102,3 +102,11 @@ linters:
       - path: "_test\\.go"
         linters:
           - errcheck
+
+      # Exclude deprecation warnings for domain errors during migration period (Story 2.2)
+      # The deprecated sentinel errors are kept for backward compatibility
+      # TODO: Remove this exclusion after migrating all usages to new DomainError pattern
+      - linters:
+          - staticcheck
+        text: "SA1019.*deprecated.*"
+
