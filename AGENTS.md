@@ -117,6 +117,23 @@ internal/
 | SQLC queries | `db/queries/{name}.sql` |
 | Generated code | `internal/infra/postgres/{name}/` |
 
+### Policy Pack Directory
+
+The `policy/` directory is the **single source of truth** for project-wide configurations:
+
+| File | Purpose | Used By |
+|------|---------|---------|
+| `golangci.yml` | golangci-lint v2 configuration | `make lint` |
+| `depguard.yml` | Layer boundary rules (hexagonal architecture) | Story 1.2 |
+| `error-codes.yml` | Public error code registry | Story 2.2 |
+| `log-fields.yml` | Approved log field names for structured logging | Story 4.1 |
+| `README.md` | Policy pack documentation | - |
+
+**Usage:**
+```bash
+make lint  # Uses policy/golangci.yml explicitly
+```
+
 ---
 
 ## 🧪 Testing Requirements

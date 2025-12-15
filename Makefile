@@ -42,9 +42,9 @@ test:
 test-integration:
 	go test -v -tags=integration ./...
 
-# Linting
+# Linting with policy pack
 lint:
-	golangci-lint run ./...
+	golangci-lint run --config policy/golangci.yml ./...
 
 # Database migrations (Story 4.4)
 # Load env vars for database URL
@@ -123,6 +123,3 @@ gen-proto: ## Generate Go code from .proto files
 gen-gql: ## Generate GraphQL code from schema
 	go run github.com/99designs/gqlgen generate
 
-# Updated gen target to include all generations
-gen: gen-proto gen-gql
-	sqlc generate

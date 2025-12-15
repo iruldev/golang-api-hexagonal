@@ -1,0 +1,19 @@
+# Error Code Registry
+# Story 2.2: Create Central Error Code Registry
+#
+# This file defines the canonical list of public error codes for API responses.
+# All error codes MUST be registered here before use.
+#
+# Placeholder - will be configured in Story 2.2
+
+# Error Code Format:
+# - Prefix indicates domain: AUTH_, VAL_, DB_, INT_ (internal), etc.
+# - Codes should be stable across versions (no renaming)
+# - Each code maps to: HTTP status, message template, and severity
+
+# Example structure (to be implemented):
+# codes:
+#   AUTH_INVALID_TOKEN:
+#     http_status: 401
+#     message: "Invalid or expired authentication token"
+#     severity: error

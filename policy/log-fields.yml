@@ -1,0 +1,24 @@
+# Approved Log Field Names
+# Story 4.1: Structured Logging with Zap
+#
+# This file defines the approved log field names for structured logging.
+# Using consistent field names ensures log aggregation and querying works correctly.
+#
+# Placeholder - will be configured in Story 4.1
+
+# Categories:
+# - Request context: request_id, trace_id, user_id, etc.
+# - Timing: duration_ms, latency_ms, etc.
+# - HTTP: http_method, http_path, http_status, etc.
+# - Error: error_code, error_message, stack_trace, etc.
+
+# Example structure (to be implemented):
+# approved_fields:
+#   context:
+#     - request_id
+#     - trace_id
+#     - span_id
+#     - user_id
+#   timing:
+#     - duration_ms
+#     - latency_ms

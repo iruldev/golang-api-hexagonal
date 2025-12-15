@@ -211,7 +211,7 @@ func (c ConsumerConfig) Validate() error {
 		return errors.New("MaxRetries must be >= 0")
 	}
 	if c.Concurrency < 1 {
-		return errors.New("Concurrency must be >= 1")
+		return errors.New("concurrency must be >= 1")
 	}
 	if c.ProcessingTimeout < 0 {
 		return errors.New("ProcessingTimeout must be >= 0")
