@@ -1,4 +1,4 @@
-.PHONY: help dev build test test-integration lint clean migrate-up migrate-down migrate-down-all migrate-create gen sqlc-check up verify reset
+.PHONY: help dev build test test-integration lint clean migrate-up migrate-down migrate-down-all migrate-create gen sqlc-check up verify reset hooks
 
 # Help (default target)
 help:
@@ -9,6 +9,7 @@ help:
 	@echo "    dev            - Start dependencies and run app"
 	@echo "    verify         - Run lint + unit tests (fail-fast)"
 	@echo "    reset          - Clean slate: stop containers, remove volumes, clean build"
+	@echo "    hooks          - Install pre-commit hooks for lint checks"
 	@echo ""
 	@echo "  Testing:"
 	@echo "    test           - Run tests with coverage"
@@ -56,6 +57,12 @@ reset:
 	rm -rf bin/
 
 	@echo "✓ Reset complete: containers stopped, volumes removed, artifacts cleaned"
+
+# Install pre-commit hooks (AC: #2)
+hooks:
+	@git config core.hooksPath .githooks
+	@chmod +x .githooks/pre-commit
+	@echo "✓ Pre-commit hooks installed. Git will use .githooks/ directory."
 
 # Build
 build:
