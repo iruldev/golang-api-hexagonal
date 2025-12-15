@@ -1,5 +1,14 @@
 # CI workflow for golang-api-hexagonal
-# Runs tests and linting on push to main and pull requests
+# Story 1.5: Setup CI Pipeline with Quality Gates
+#
+# Quality Gates:
+# - Lint violations → Block PR
+# - Test failures → Block PR
+# - Coverage report generated on main branch
+#
+# Performance Targets (NFR):
+# - Quick checks (lint + unit tests): ≤5 minutes
+# - Full pipeline: ≤15 minutes (p95)
 
 name: CI
 
@@ -9,42 +18,88 @@ on:
   pull_request:
     branches: [main]
 
+# Cancel in-progress runs when a new commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  # ============================================
+  # Lint Job - Quality Gate #1
+  # AC: PR with golangci-lint violations → blocked
+  # ============================================
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
     steps:
-      - uses: actions/checkout@v4
-      
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
-          cache: true  # Auto-downloads and caches dependencies
-      
-      - name: Run tests
-        run: go test -v -race -coverprofile=coverage.out ./...
-      
-      - name: Upload coverage
+          go-version-file: 'go.mod'  # Use version from go.mod
+          cache: true
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.0.2
+          args: --config policy/golangci.yml --timeout=5m
+          # Skip cache, handled by actions/setup-go
+          skip-cache: false
+
+  # ============================================
+  # Test Job - Quality Gate #2
+  # AC: PR with test failures → blocked
+  # ============================================
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'  # Use version from go.mod
+          cache: true
+
+      - name: Run unit tests with coverage
+        run: |
+          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+          echo ""
+          echo "========================================"
+          echo "📊 Coverage Summary"
+          echo "========================================"
+          go tool cover -func=coverage.out | tail -1
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.out
+          retention-days: 7
+
+      - name: Coverage summary for PR
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "## 📊 Test Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          go tool cover -func=coverage.out >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Coverage report for main branch
+        if: github.ref == 'refs/heads/main'
         uses: codecov/codecov-action@v4
         with:
           files: ./coverage.out
           fail_ci_if_error: false
-        # Note: For private repos, set CODECOV_TOKEN in repo secrets
-
-  lint:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-          cache: true  # Auto-downloads and caches dependencies
-      
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.61.0  # Pinned for reproducible builds
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

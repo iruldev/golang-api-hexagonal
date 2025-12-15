@@ -1,5 +1,7 @@
 # Backend Service Golang Boilerplate
 
+[![CI](https://github.com/iruldev/golang-api-hexagonal/actions/workflows/ci.yml/badge.svg)](https://github.com/iruldev/golang-api-hexagonal/actions/workflows/ci.yml)
+
 Enterprise-grade "golden template" untuk membangun backend services di Go dengan **observability-first architecture**.
 
 ## Quick Start
@@ -183,6 +185,7 @@ See [CLI Documentation](#cli-tool-bplat) below for full usage.
 | `API_KEYS` | API key-service pairs (`key:svc,key:svc`) | - | For API Key |
 | **Feature Flags** ||||
 | `FF_*` | Feature flags (e.g., `FF_NEW_FEATURE=true`) | `false` | No |
+| `CODECOV_TOKEN` | Token for Codecov upload (CI only) | - | Yes (in CI) |
 
 #### Job Queue Pattern Decision Table
 
