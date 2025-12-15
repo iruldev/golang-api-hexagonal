@@ -15,11 +15,13 @@ type ExampleData struct {
 	TraceID   string `json:"trace_id,omitempty"`
 }
 
-// ExampleHandler demonstrates the handler pattern with context usage.
+// ExampleHandler demonstrates the handler pattern with context usage and error return.
 //
 // This handler shows how to:
-// ExampleHandler handles example requests.
-func ExampleHandler(w http.ResponseWriter, r *http.Request) {
+// 1. Accept Context (implicitly via Request)
+// 2. Return error for automatic mapping
+// 3. Use wrappers for clean logic
+func ExampleHandler(w http.ResponseWriter, r *http.Request) error {
 	// Example: Create child span for tracing (optional)
 	_, span := observability.StartSpan(r.Context(), "example-handler")
 	defer span.End()
@@ -30,9 +32,13 @@ func ExampleHandler(w http.ResponseWriter, r *http.Request) {
 	// Access trace ID from OTEL middleware (Story 3.5)
 	traceID := observability.GetTraceID(r.Context())
 
+	// Demonstrate success response
 	response.SuccessEnvelope(w, r.Context(), ExampleData{
 		Message:   "Example handler working correctly",
 		RequestID: requestID,
 		TraceID:   traceID,
 	})
+
+	// Return nil to indicate success
+	return nil
 }

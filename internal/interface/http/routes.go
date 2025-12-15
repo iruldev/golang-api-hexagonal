@@ -43,8 +43,8 @@ func RegisterRoutes(r chi.Router) {
 	// Health check (Story 3.1)
 	r.Get("/health", handlers.HealthHandler)
 
-	// Example handler demonstrating the pattern (Story 3.6)
-	r.Get("/example", handlers.ExampleHandler)
+	// Example handler demonstrating the pattern (Story 2.4 & 3.6)
+	r.Get("/example", WrapHandler(handlers.ExampleHandler))
 
 	// ---------------------------------------------------------------------
 	// Add new routes below this line

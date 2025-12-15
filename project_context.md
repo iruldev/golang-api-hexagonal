@@ -23,6 +23,13 @@ infra → domain only
 - Public codes: UPPER_SNAKE (e.g., `NOTE_NOT_FOUND`)
 - Never expose stack traces in production
 
+### Handler Pattern
+- Use **Handler Functions that Return Errors**: `func(w, r) error`
+- Wrap with `http.WrapHandler` in routes
+- Return `nil` for success, return `error` for failure
+- Middleware automatically handles error mapping and logging
+
+
 ### API Response Format
 ```go
 type Envelope struct {

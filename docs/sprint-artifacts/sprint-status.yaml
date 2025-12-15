@@ -61,7 +61,7 @@ development_status:
   2-1-implement-response-envelope-package: done
   2-2-create-central-error-code-registry: done
   2-3-implement-context-wrapper-package: done
-  2-4-add-http-error-mapping-middleware: backlog
+  2-4-add-http-error-mapping-middleware: done
   epic-2-retrospective: optional
 
   # ============================================
