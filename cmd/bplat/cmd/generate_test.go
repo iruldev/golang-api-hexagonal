@@ -186,7 +186,7 @@ func TestNewGenerateModuleCmd(t *testing.T) {
 	// Check flags
 	entityFlag := cmd.Flags().Lookup("entity")
 	if entityFlag == nil {
-		t.Error("expected --entity flag to be defined")
+		t.Fatal("expected --entity flag to be defined")
 	}
 	if entityFlag.Shorthand != "e" {
 		t.Errorf("expected --entity shorthand to be 'e', got %q", entityFlag.Shorthand)

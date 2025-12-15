@@ -6,11 +6,10 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain/note"
-	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/middleware"
 	"github.com/iruldev/golang-api-hexagonal/internal/observability"
 	"go.uber.org/zap"
-	// For explicit actor ID extraction in usecase layer if needed
 )
 
 // Usecase implements business logic for Note operations.
@@ -33,7 +32,7 @@ func NewUsecase(repo note.Repository, logger *zap.Logger) *Usecase {
 func (u *Usecase) Create(ctx context.Context, title, content string) (_ *note.Note, err error) {
 	// Prepare audit event (actor extraction remains same)
 	actorID := "anonymous"
-	if claims, err := middleware.FromContext(ctx); err == nil {
+	if claims, err := ctxutil.ClaimsFromContext(ctx); err == nil {
 		actorID = claims.UserID
 	}
 
@@ -56,7 +55,7 @@ func (u *Usecase) Create(ctx context.Context, title, content string) (_ *note.No
 				"content": content,
 			},
 		)
-		event.RequestID = middleware.GetRequestID(ctx)
+		event.RequestID = ctxutil.RequestIDFromContext(ctx)
 
 		if err != nil {
 			event.Status = "failure"
@@ -103,7 +102,7 @@ func (u *Usecase) List(ctx context.Context, page, pageSize int) ([]*note.Note, i
 func (u *Usecase) Update(ctx context.Context, id uuid.UUID, title, content string) (_ *note.Note, err error) {
 	// Audit setup
 	actorID := "anonymous"
-	if claims, err := middleware.FromContext(ctx); err == nil {
+	if claims, err := ctxutil.ClaimsFromContext(ctx); err == nil {
 		actorID = claims.UserID
 	}
 
@@ -118,7 +117,7 @@ func (u *Usecase) Update(ctx context.Context, id uuid.UUID, title, content strin
 				"content": content,
 			},
 		)
-		event.RequestID = middleware.GetRequestID(ctx)
+		event.RequestID = ctxutil.RequestIDFromContext(ctx)
 		if err != nil {
 			event.Status = "failure"
 			event.Error = err.Error()
@@ -152,7 +151,7 @@ func (u *Usecase) Update(ctx context.Context, id uuid.UUID, title, content strin
 func (u *Usecase) Delete(ctx context.Context, id uuid.UUID) (err error) {
 	// Audit setup
 	actorID := "anonymous"
-	if claims, err := middleware.FromContext(ctx); err == nil {
+	if claims, err := ctxutil.ClaimsFromContext(ctx); err == nil {
 		actorID = claims.UserID
 	}
 
@@ -164,7 +163,7 @@ func (u *Usecase) Delete(ctx context.Context, id uuid.UUID) (err error) {
 			actorID,
 			nil,
 		)
-		event.RequestID = middleware.GetRequestID(ctx)
+		event.RequestID = ctxutil.RequestIDFromContext(ctx)
 		if err != nil {
 			event.Status = "failure"
 			event.Error = err.Error()

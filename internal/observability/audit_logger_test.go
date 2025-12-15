@@ -43,12 +43,10 @@ func TestLogAudit(t *testing.T) {
 	assert.Equal(t, "", fields["audit_status"])
 
 	// Metadata might be nested map
-	meta, ok := fields["audit_metadata"].(map[string]interface{})
-	if !ok {
-		// zaptest observer might flatten or keep as map, depending on encoding.
-		// In-memory core usually keeps implementation types.
-		// If fails, we can check deeper.
-	}
+	// Metadata might be nested map
+	meta := fields["audit_metadata"].(map[string]interface{})
+	// zaptest observer might flatten or keep as map, depending on encoding.
+	// In-memory core usually keeps implementation types.
 	assert.Equal(t, "value", meta["key"])
 }
 

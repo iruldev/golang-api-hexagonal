@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/iruldev/golang-api-hexagonal/internal/ctxutil"
 	"github.com/iruldev/golang-api-hexagonal/internal/interface/http/response"
 )
 
@@ -20,7 +21,8 @@ var (
 	ErrTokenInvalid = errors.New("token invalid")
 
 	// ErrNoClaimsInContext indicates claims were not found in context.
-	ErrNoClaimsInContext = errors.New("no claims in context")
+	// Deprecated: Use ctxutil.ErrNoClaimsInContext instead.
+	ErrNoClaimsInContext = ctxutil.ErrNoClaimsInContext
 
 	// ErrForbidden indicates the user lacks permission for the requested resource.
 	// This is returned when authorization (not authentication) fails.
@@ -60,53 +62,21 @@ type Authenticator interface {
 	Authenticate(r *http.Request) (Claims, error)
 }
 
-// Claims represents authenticated user information.
-// This struct is stored in the request context after successful authentication.
-type Claims struct {
-	UserID      string            `json:"user_id"`
-	Roles       []string          `json:"roles"`
-	Permissions []string          `json:"permissions"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
-}
-
-// HasRole checks if the claims include the specified role.
-func (c Claims) HasRole(role string) bool {
-	for _, r := range c.Roles {
-		if r == role {
-			return true
-		}
-	}
-	return false
-}
-
-// HasPermission checks if the claims include the specified permission.
-func (c Claims) HasPermission(perm string) bool {
-	for _, p := range c.Permissions {
-		if p == perm {
-			return true
-		}
-	}
-	return false
-}
-
-// contextKey is an unexported type for context keys to prevent collisions.
-type contextKey string
-
-const claimsKey contextKey = "auth_claims"
+// Claims is an alias for ctxutil.Claims for backwards compatibility.
+// New code should use ctxutil.Claims directly.
+type Claims = ctxutil.Claims
 
 // NewContext returns a new context with the given claims.
+// Deprecated: Use ctxutil.NewClaimsContext instead.
 func NewContext(ctx context.Context, claims Claims) context.Context {
-	return context.WithValue(ctx, claimsKey, claims)
+	return ctxutil.NewClaimsContext(ctx, claims)
 }
 
 // FromContext extracts claims from context.
 // Returns ErrNoClaimsInContext if claims are not present.
+// Deprecated: Use ctxutil.ClaimsFromContext instead.
 func FromContext(ctx context.Context) (Claims, error) {
-	claims, ok := ctx.Value(claimsKey).(Claims)
-	if !ok {
-		return Claims{}, ErrNoClaimsInContext
-	}
-	return claims, nil
+	return ctxutil.ClaimsFromContext(ctx)
 }
 
 // AuthMiddleware creates authentication middleware using the provided Authenticator.
@@ -141,8 +111,8 @@ func AuthMiddleware(auth Authenticator) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Store claims in context
-			ctx := NewContext(r.Context(), claims)
+			// Store claims in context using ctxutil
+			ctx := ctxutil.NewClaimsContext(r.Context(), claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

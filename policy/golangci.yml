@@ -4,7 +4,7 @@ run:
   timeout: 5m
   # Skip tests temporarily to work around printf analyzer crash
   # TODO: Remove when golangci-lint fixes the printf analyzer bug
-  tests: false
+  tests: true
 
 linters:
   default: none
@@ -15,6 +15,7 @@ linters:
     - unused
     - ineffassign
     - cyclop
+    - depguard
   
   settings:
     cyclop:
@@ -24,6 +25,46 @@ linters:
     govet:
       disable:
         - printf
+    
+    # Hexagonal Architecture Layer Boundaries
+    # See: docs/architecture.md and project_context.md
+    depguard:
+      rules:
+        # Domain layer: Cannot import any other internal layers
+        # Domain is the core and must be isolated
+        domain-layer:
+          list-mode: lax
+          files:
+            - "**/internal/domain/**"
+          deny:
+            - pkg: "github.com/iruldev/golang-api-hexagonal/internal/usecase/**"
+              desc: "domain layer cannot import usecase - violates hexagonal architecture"
+            - pkg: "github.com/iruldev/golang-api-hexagonal/internal/interface/**"
+              desc: "domain layer cannot import interface - violates hexagonal architecture"
+            - pkg: "github.com/iruldev/golang-api-hexagonal/internal/infra/**"
+              desc: "domain layer cannot import infra - violates hexagonal architecture"
+        
+        # Usecase layer: Can only import domain
+        # Cannot import interface or infra (use dependency injection)
+        usecase-layer:
+          list-mode: lax
+          files:
+            - "**/internal/usecase/**"
+          deny:
+            - pkg: "github.com/iruldev/golang-api-hexagonal/internal/interface/**"
+              desc: "usecase layer cannot import interface - violates hexagonal architecture"
+            - pkg: "github.com/iruldev/golang-api-hexagonal/internal/infra/**"
+              desc: "usecase layer cannot import infra - use dependency injection instead"
+        
+        # Interface layer: Can import usecase and domain
+        # Cannot directly import infra (use dependency injection)
+        interface-layer:
+          list-mode: lax
+          files:
+            - "**/internal/interface/**"
+          deny:
+            - pkg: "github.com/iruldev/golang-api-hexagonal/internal/infra/**"
+              desc: "interface layer cannot import infra - use dependency injection instead"
   
   exclusions:
     # Predefined exclusion rules for common false positives
@@ -56,3 +97,8 @@ linters:
       - path: "cmd/bplat/cmd/"
         linters:
           - unused
+
+      # Exclude errcheck for test files (common in tests to ignore cleanup errors)
+      - path: "_test\\.go"
+        linters:
+          - errcheck

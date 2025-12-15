@@ -12,10 +12,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type mockUnaryServerInfo struct {
-	FullMethod string
-}
-
 func TestRecoveryInterceptor(t *testing.T) {
 	logger := observability.NewNopLoggerInterface()
 

@@ -1,6 +1,7 @@
 package middleware_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -107,7 +108,7 @@ func ExampleEnvKeyValidator() {
 	validator := middleware.NewEnvKeyValidator("DEMO_API_KEYS")
 
 	// Validate a key
-	keyInfo, err := validator.Validate(nil, "key1")
+	keyInfo, err := validator.Validate(context.TODO(), "key1")
 	if err != nil {
 		panic(err)
 	}
@@ -129,7 +130,7 @@ func ExampleMapKeyValidator() {
 		},
 	}
 
-	keyInfo, err := validator.Validate(nil, "test-key-1")
+	keyInfo, err := validator.Validate(context.TODO(), "test-key-1")
 	if err != nil {
 		panic(err)
 	}

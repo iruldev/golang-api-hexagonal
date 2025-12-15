@@ -6,10 +6,39 @@ This directory is the **single source of truth** for all project-wide configurat
 
 | File | Purpose |
 |------|---------|
-| `golangci.yml` | golangci-lint v2 configuration |
-| `depguard.yml` | Layer boundary rules (hexagonal architecture) |
+| `golangci.yml` | golangci-lint v2 configuration (includes depguard) |
+| `depguard.yml` | Layer boundary rules placeholder (rules moved inline) |
 | `error-codes.yml` | Public error code registry |
 | `log-fields.yml` | Approved log field names for structured logging |
+
+## Layer Boundary Enforcement (depguard)
+
+The depguard linter enforces hexagonal architecture layer boundaries:
+
+| Layer | Can Import | Cannot Import |
+|-------|------------|---------------|
+| `domain` | (nothing) | usecase, interface, infra |
+| `usecase` | domain | interface, infra |
+| `interface` | domain, usecase | infra |
+| `infra` | domain | - |
+
+**Error messages include helpful descriptions explaining the violation.**
+
+### Example Violation
+
+```
+import 'internal/infra/postgres' is not allowed from list 'usecase-layer': 
+usecase layer cannot import infra - use dependency injection instead
+```
+
+### Cross-Cutting Packages
+
+These packages are allowed from all layers:
+- `internal/ctxutil` - Context utilities (claims, request ID)
+- `internal/observability` - Logging, metrics, tracing
+- `internal/runtimeutil` - Runtime utilities
+- `internal/testing` - Test utilities
+- `internal/config` - Configuration loading
 
 ## Usage
 
@@ -19,8 +48,7 @@ All CI and local tooling reads from this directory:
 # Linting with policy pack
 make lint  # Uses policy/golangci.yml
 
-# Layer boundary validation (Story 1.2)
-depguard → reads policy/depguard.yml
+# Layer boundary validation happens automatically via depguard
 ```
 
 ## Adding New Policies
