@@ -15,6 +15,7 @@ const (
 	logKeyStatus    = "status"
 	logKeyDuration  = "duration_ms"
 	logKeyBytes     = "bytes"
+	logKeyTraceID   = "traceId"
 )
 
 // RequestLogger returns a middleware that logs HTTP request completion.
@@ -59,6 +60,7 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 				logKeyDuration, duration.Milliseconds(),
 				logKeyBytes, ww.BytesWritten(),
 				logKeyRequestID, requestID,
+				logKeyTraceID, GetTraceID(r.Context()),
 			)
 		})
 	}

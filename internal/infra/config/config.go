@@ -20,6 +20,11 @@ type Config struct {
 	LogLevel    string `envconfig:"LOG_LEVEL" default:"info"`
 	Env         string `envconfig:"ENV" default:"development"`
 	ServiceName string `envconfig:"SERVICE_NAME" default:"golang-api-hexagonal"`
+
+	// OpenTelemetry
+	OTELEnabled          bool   `envconfig:"OTEL_ENABLED" default:"false"`
+	OTELExporterEndpoint string `envconfig:"OTEL_EXPORTER_OTLP_ENDPOINT"`
+	OTELExporterInsecure bool   `envconfig:"OTEL_EXPORTER_OTLP_INSECURE" default:"false"`
 }
 
 // Load reads configuration from environment variables.
@@ -38,6 +43,10 @@ func Load() (*Config, error) {
 }
 
 func (c *Config) Validate() error {
+	if c.OTELEnabled && strings.TrimSpace(c.OTELExporterEndpoint) == "" {
+		return fmt.Errorf("OTEL_ENABLED is true but OTEL_EXPORTER_OTLP_ENDPOINT is empty")
+	}
+
 	if c.Port < 1 || c.Port > 65535 {
 		return fmt.Errorf("invalid PORT: must be between 1 and 65535")
 	}

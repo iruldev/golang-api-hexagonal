@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/otel"
+
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/config"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
@@ -41,7 +43,22 @@ func run() error {
 	logger.Info("service starting",
 		slog.Int("port", cfg.Port),
 		slog.String("log_level", cfg.LogLevel),
+		slog.Bool("otel_enabled", cfg.OTELEnabled),
 	)
+
+	// Initialize OpenTelemetry tracer provider only when enabled
+	var tpShutdown func(context.Context) error
+	if cfg.OTELEnabled {
+		tp, err := observability.InitTracer(ctx, cfg)
+		if err != nil {
+			return fmt.Errorf("failed to initialize tracer: %w", err)
+		}
+		otel.SetTracerProvider(tp)
+		tpShutdown = tp.Shutdown
+		logger.Info("tracing enabled")
+	} else {
+		logger.Info("tracing disabled; skipping tracer provider initialization")
+	}
 
 	// Prepare database connection (non-fatal if unavailable at startup)
 	db := newReconnectingDB(cfg.DatabaseURL, logger)
@@ -60,7 +77,7 @@ func run() error {
 	readyHandler := handler.NewReadyHandler(db)
 
 	// Create router with logger for request logging middleware
-	router := httpTransport.NewRouter(logger, healthHandler, readyHandler)
+	router := httpTransport.NewRouter(logger, cfg.OTELEnabled, healthHandler, readyHandler)
 
 	// Create HTTP server
 	addr := fmt.Sprintf(":%d", cfg.Port)
@@ -95,6 +112,13 @@ func run() error {
 		// Give outstanding requests 30 seconds to complete
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
+
+		// Shutdown tracer provider to flush pending spans
+		if tpShutdown != nil {
+			if err := tpShutdown(ctx); err != nil {
+				logger.Error("tracer shutdown failed", slog.Any("err", err))
+			}
+		}
 
 		if err := srv.Shutdown(ctx); err != nil {
 			// Force close after timeout
