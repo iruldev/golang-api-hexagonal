@@ -1,0 +1,186 @@
+# golang-api-hexagonal
+
+A production-ready Go API built with hexagonal architecture, featuring comprehensive observability, security, and developer experience.
+
+## 🚀 Quick Start
+
+```bash
+# 1. Clone and setup
+git clone https://github.com/iruldev/golang-api-hexagonal.git
+cd golang-api-hexagonal
+make setup
+
+# 2. Start infrastructure (PostgreSQL)
+make infra-up
+
+# 3. Run migrations
+export DATABASE_URL="postgres://postgres:postgres@localhost:5432/golang_api_hexagonal?sslmode=disable"
+make migrate-up
+
+# 4. Run the service
+make run
+
+# 5. Test endpoints
+curl http://localhost:8080/health
+curl http://localhost:8080/ready
+```
+
+## 📋 Requirements
+
+- **Go** 1.23+
+- **Docker** & Docker Compose
+- **Make**
+
+## 🛠️ Make Targets
+
+Run `make help` to see all available targets:
+
+### Development
+| Target | Description |
+|--------|-------------|
+| `make setup` | Install development tools and dependencies |
+| `make build` | Build the application binary |
+| `make run` | Run the application |
+| `make test` | Run all tests with race detector |
+| `make lint` | Run golangci-lint |
+| `make clean` | Clean build artifacts |
+
+### Infrastructure
+| Target | Description |
+|--------|-------------|
+| `make infra-up` | Start PostgreSQL (waits for healthy) |
+| `make infra-down` | Stop infrastructure (preserve data) |
+| `make infra-reset` | Stop and remove volumes (DESTRUCTIVE) |
+| `make infra-logs` | View container logs |
+| `make infra-status` | Show container status |
+
+### Database Migrations
+| Target | Description |
+|--------|-------------|
+| `make migrate-up` | Run all pending migrations |
+| `make migrate-down` | Rollback the last migration |
+| `make migrate-status` | Show migration status |
+| `make migrate-create name=X` | Create new migration |
+| `make migrate-validate` | Validate migration files |
+
+## 🏗️ Architecture
+
+This project follows **Hexagonal Architecture** (Ports & Adapters):
+
+```
+cmd/
+└── api/                    # Application entry point
+    └── main.go
+
+internal/
+├── domain/                 # Business logic (entities, value objects)
+├── app/                    # Application services (use cases)
+├── transport/              # Inbound adapters
+│   └── http/
+│       ├── router.go
+│       └── handler/        # HTTP handlers
+└── infra/                  # Outbound adapters
+    ├── config/             # Configuration management
+    └── postgres/           # Database implementation
+```
+
+### Layer Rules
+
+| Layer | Can Import | Cannot Import |
+|-------|------------|---------------|
+| Domain | stdlib only | app, transport, infra |
+| App | domain | transport, infra |
+| Transport | domain, app | infra |
+| Infra | domain, external packages | app, transport |
+
+## 🔧 Configuration
+
+Configuration via environment variables (using `envconfig`):
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DATABASE_URL` | ✅ | - | PostgreSQL connection string |
+| `PORT` | ❌ | `8080` | HTTP server port |
+| `LOG_LEVEL` | ❌ | `info` | Logging level (debug, info, warn, error) |
+| `ENV` | ❌ | `development` | Environment (development, staging, production, test) |
+| `SERVICE_NAME` | ❌ | `golang-api-hexagonal` | Service name for observability |
+
+Example:
+```bash
+export DATABASE_URL="postgres://postgres:postgres@localhost:5432/golang_api_hexagonal?sslmode=disable"
+export PORT=8080
+export LOG_LEVEL=info
+export ENV=development
+```
+
+## 📡 API Endpoints
+
+### Health Checks
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Liveness probe (no DB check) |
+| `/ready` | GET | Readiness probe (checks DB) |
+
+**Response format:**
+```json
+{
+  "data": {
+    "status": "ok"
+  }
+}
+```
+
+## 🗄️ Database Migrations
+
+Migrations use [goose](https://github.com/pressly/goose) and are located in `migrations/`.
+
+**File format:** `YYYYMMDDHHMMSS_description.sql`
+
+```sql
+-- +goose Up
+-- +goose StatementBegin
+CREATE TABLE ...;
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+DROP TABLE ...;
+-- +goose StatementEnd
+```
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+make test
+
+# Run tests with coverage
+go test -cover ./...
+
+# Run specific package tests
+go test -v ./internal/transport/http/handler/...
+```
+
+## 📁 Project Structure
+
+```
+.
+├── cmd/api/                # Application entry point
+├── internal/               # Private application code
+│   ├── domain/             # Business entities
+│   ├── app/                # Use cases
+│   ├── transport/http/     # HTTP handlers
+│   └── infra/              # Infrastructure (config, postgres)
+├── migrations/             # Database migrations (goose)
+├── docs/                   # Documentation
+├── .github/workflows/      # CI/CD pipelines
+├── docker-compose.yaml     # Local infrastructure
+├── Makefile                # Development commands
+├── .env.example            # Environment template
+└── go.mod                  # Go modules
+```
+
+## 📝 License
+
+MIT License - see [LICENSE](LICENSE) for details.

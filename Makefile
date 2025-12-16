@@ -29,12 +29,39 @@ help:
 .PHONY: setup
 setup:
 	@echo "📦 Installing development tools..."
+	@echo ""
+	@echo "  Installing golangci-lint..."
 	@which golangci-lint > /dev/null || go install github.com/golangci-lint/golangci-lint/cmd/golangci-lint@latest
+	@version_gcl=$$(golangci-lint --version 2>/dev/null | head -1); \
+		if [ -z "$$version_gcl" ]; then \
+			echo "    ❌ golangci-lint not available on PATH after install"; \
+			exit 1; \
+		fi; \
+		echo "    ✅ $$version_gcl"
+	@echo ""
+	@echo "  Installing goose..."
 	@which goose > /dev/null || go install github.com/pressly/goose/v3/cmd/goose@latest
+	@version_goose=$$(goose --version 2>/dev/null); \
+		if [ -z "$$version_goose" ]; then \
+			echo "    ❌ goose not available on PATH after install"; \
+			exit 1; \
+		fi; \
+		echo "    ✅ $$version_goose"
+	@echo ""
 	@echo "📦 Downloading Go modules..."
 	$(GOMOD) download
 	$(GOMOD) tidy
+	@echo ""
 	@echo "✅ Setup complete!"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  1. Start infrastructure:  make infra-up"
+	@echo "  2. Run migrations:        export DATABASE_URL=\"postgres://postgres:postgres@localhost:5432/golang_api_hexagonal?sslmode=disable\""
+	@echo "                            make migrate-up"
+	@echo "  3. Run the service:       make run"
+	@echo ""
+	@echo "Run 'make help' to see all available targets."
+
 
 ## build: Build the application
 .PHONY: build
