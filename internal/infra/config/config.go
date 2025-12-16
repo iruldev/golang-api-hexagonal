@@ -45,6 +45,7 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid SERVICE_NAME: must not be empty")
 	}
 
+	c.LogLevel = strings.ToLower(strings.TrimSpace(c.LogLevel))
 	switch c.Env {
 	case "development", "staging", "production", "test":
 	default:

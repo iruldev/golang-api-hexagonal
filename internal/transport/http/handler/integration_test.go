@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,14 +21,20 @@ func (f *fakeDB) Ping(ctx context.Context) error {
 	return f.pingErr
 }
 
+// testLogger returns a discarding logger for use in tests.
+func testLogger() *slog.Logger {
+	return slog.New(slog.NewJSONHandler(io.Discard, nil))
+}
+
 // TestIntegrationRoutes covers /health and /ready through the router with DB ok/fail.
 func TestIntegrationRoutes(t *testing.T) {
 	healthHandler := NewHealthHandler()
+	logger := testLogger()
 
 	t.Run("ready OK", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db)
-		r := httpTransport.NewRouter(healthHandler, readyHandler)
+		r := httpTransport.NewRouter(logger, healthHandler, readyHandler)
 
 		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 		rec := httptest.NewRecorder()
@@ -40,7 +48,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("ready not ready", func(t *testing.T) {
 		db := &fakeDB{pingErr: assert.AnError}
 		readyHandler := NewReadyHandler(db)
-		r := httpTransport.NewRouter(healthHandler, readyHandler)
+		r := httpTransport.NewRouter(logger, healthHandler, readyHandler)
 
 		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 		rec := httptest.NewRecorder()
@@ -54,7 +62,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("health ok", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db)
-		r := httpTransport.NewRouter(healthHandler, readyHandler)
+		r := httpTransport.NewRouter(logger, healthHandler, readyHandler)
 
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rec := httptest.NewRecorder()
@@ -65,4 +73,3 @@ func TestIntegrationRoutes(t *testing.T) {
 		assert.JSONEq(t, `{"data":{"status":"ok"}}`, rec.Body.String())
 	})
 }
-

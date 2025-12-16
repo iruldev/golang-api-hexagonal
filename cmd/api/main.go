@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/config"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
 	httpTransport "github.com/iruldev/golang-api-hexagonal/internal/transport/http"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/handler"
@@ -33,10 +34,11 @@ func run() error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	logger := newLogger(cfg)
+	// Initialize structured JSON logger with service/env attributes
+	logger := observability.NewLogger(cfg)
+	slog.SetDefault(logger) // Set as default for use with slog.Info(), slog.Error(), etc.
+
 	logger.Info("service starting",
-		slog.String("service", cfg.ServiceName),
-		slog.String("env", cfg.Env),
 		slog.Int("port", cfg.Port),
 		slog.String("log_level", cfg.LogLevel),
 	)
@@ -47,9 +49,7 @@ func run() error {
 
 	ctxPing, cancelPing := context.WithTimeout(ctx, 5*time.Second)
 	if err := db.Ping(ctxPing); err != nil {
-		logger.Warn("database not reachable at startup; service will start but ready will be not_ready",
-			slog.Any("err", err),
-		)
+		logger.Warn("database not reachable at startup; service will start but ready will be not_ready")
 	} else {
 		logger.Info("database connected")
 	}
@@ -59,8 +59,8 @@ func run() error {
 	healthHandler := handler.NewHealthHandler()
 	readyHandler := handler.NewReadyHandler(db)
 
-	// Create router
-	router := httpTransport.NewRouter(healthHandler, readyHandler)
+	// Create router with logger for request logging middleware
+	router := httpTransport.NewRouter(logger, healthHandler, readyHandler)
 
 	// Create HTTP server
 	addr := fmt.Sprintf(":%d", cfg.Port)
@@ -106,22 +106,6 @@ func run() error {
 
 	logger.Info("server stopped gracefully")
 	return nil
-}
-
-// newLogger creates a JSON slog logger with sane defaults.
-func newLogger(cfg *config.Config) *slog.Logger {
-	level := slog.LevelInfo
-	switch cfg.LogLevel {
-	case "debug":
-		level = slog.LevelDebug
-	case "warn":
-		level = slog.LevelWarn
-	case "error":
-		level = slog.LevelError
-	}
-
-	h := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
-	return slog.New(h)
 }
 
 // reconnectingDB lazily establishes a database pool and retries on readiness checks.

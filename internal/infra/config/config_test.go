@@ -45,6 +45,16 @@ func TestLoad_CustomValues(t *testing.T) {
 	assert.Equal(t, "my-custom-service", cfg.ServiceName)
 }
 
+func TestLoad_LogLevelUppercase(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("LOG_LEVEL", "WARN")
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, "warn", cfg.LogLevel, "LOG_LEVEL should be normalized to lowercase")
+}
+
 func TestLoad_MissingRequired(t *testing.T) {
 	// Don't set DATABASE_URL
 
