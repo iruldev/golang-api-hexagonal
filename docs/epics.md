@@ -1639,7 +1639,7 @@ Epic 1 (Foundation) ────────────────────
 **Given** I clone the repository
 **When** I read `README.md`
 **Then** I see clear quick start section with commands:
-1. Prerequisites (Go 1.23+, Docker)
+1. Prerequisites (Go 1.24+, Docker)
 2. `make setup`
 3. `make infra-up`
 4. `make migrate-up`

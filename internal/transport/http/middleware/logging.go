@@ -16,11 +16,13 @@ const (
 	logKeyDuration  = "duration_ms"
 	logKeyBytes     = "bytes"
 	logKeyTraceID   = "traceId"
+	logKeySpanID    = "spanId"
 )
 
 // RequestLogger returns a middleware that logs HTTP request completion.
 // It captures method, route, status, duration, and response size.
 // The requestId field is populated from the context (set by RequestID middleware).
+// The traceId and spanId fields are conditionally added when tracing is enabled.
 func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -52,16 +54,28 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			// Calculate duration
 			duration := time.Since(start)
 
-			// Log request completion with structured fields
-			logger.Info("request completed",
+			// Build log args, conditionally adding trace fields only if present (AC#1, AC#2)
+			args := []any{
 				logKeyMethod, r.Method,
 				logKeyRoute, routePattern,
 				logKeyStatus, ww.Status(),
 				logKeyDuration, duration.Milliseconds(),
 				logKeyBytes, ww.BytesWritten(),
 				logKeyRequestID, requestID,
-				logKeyTraceID, GetTraceID(r.Context()),
-			)
+			}
+
+			// Add traceId only if present (absent when tracing disabled)
+			if traceID := GetTraceID(r.Context()); traceID != "" {
+				args = append(args, logKeyTraceID, traceID)
+			}
+
+			// Add spanId only if present (absent when tracing disabled)
+			if spanID := GetSpanID(r.Context()); spanID != "" {
+				args = append(args, logKeySpanID, spanID)
+			}
+
+			// Log request completion with structured fields using request context (for context-aware handlers).
+			logger.InfoContext(r.Context(), "request completed", args...)
 		})
 	}
 }

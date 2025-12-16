@@ -37,7 +37,7 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 
 | Constraint | Impact |
 |------------|--------|
-| Go 1.23+ | Modern stdlib features, generics support |
+| Go 1.24+ | Modern stdlib features, generics support |
 | PostgreSQL 15+ | Primary datastore, JSON support |
 | Docker | Required for local development |
 | Hexagonal boundaries | Import rules must be enforceable via linting |
@@ -1229,7 +1229,7 @@ HTTP Request
 ### Coherence Validation ✅
 
 **Decision Compatibility:**
-All technology choices (Go 1.23+, Chi v5, pgx v5, slog, OpenTelemetry, envconfig, go-playground/validator) are compatible and work together without conflicts. Version compatibility verified.
+All technology choices (Go 1.24+, Chi v5, pgx v5, slog, OpenTelemetry, envconfig, go-playground/validator) are compatible and work together without conflicts. Version compatibility verified.
 
 **Pattern Consistency:**
 Implementation patterns (hexagonal layers, UoW transactions, RFC 7807 errors, structured logging) fully support and align with architectural decisions. No contradictions found.
@@ -1308,7 +1308,7 @@ All 39 NFRs across 7 categories architecturally supported:
 **✅ Requirements Analysis**
 - [x] Project context thoroughly analyzed (69 FRs, 39 NFRs)
 - [x] Scale and complexity assessed (Medium)
-- [x] Technical constraints identified (Go 1.23+, PostgreSQL 15+, Docker)
+- [x] Technical constraints identified (Go 1.24+, PostgreSQL 15+, Docker)
 - [x] Cross-cutting concerns mapped (logging, tracing, error handling, audit)
 
 **✅ Architectural Decisions**

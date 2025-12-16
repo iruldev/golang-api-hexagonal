@@ -11,6 +11,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func TestRequestLogger_LogsRequestFields(t *testing.T) {
@@ -154,4 +158,90 @@ func TestRequestLogger_NoRouteUsesPath(t *testing.T) {
 
 	// For 404, route pattern is empty so we fall back to path
 	assert.Equal(t, "/unknown", logEntry["route"])
+}
+
+func TestRequestLogger_IncludesTraceIDWhenTracingEnabled(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+
+	// Setup: Create a test tracer provider with exporter
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	defer tp.Shutdown(t.Context())
+	prevTP := otel.GetTracerProvider()
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(prevTP)
+	})
+
+	// Create router with Tracing and RequestLogger middleware
+	r := chi.NewRouter()
+	r.Use(RequestID)
+	r.Use(Tracing)
+	r.Use(RequestLogger(logger))
+	r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// When: Request is made with tracing enabled
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	// Parse log output
+	var logEntry map[string]interface{}
+	err := json.Unmarshal(buf.Bytes(), &logEntry)
+	require.NoError(t, err)
+
+	// Then: traceId is present and has correct format (32 hex chars)
+	traceID, ok := logEntry["traceId"].(string)
+	assert.True(t, ok, "traceId should be a string")
+	assert.Len(t, traceID, 32, "traceId should be 32 hex characters")
+
+	// Then: spanId is present and has correct format (16 hex chars)
+	spanID, ok := logEntry["spanId"].(string)
+	assert.True(t, ok, "spanId should be a string")
+	assert.Len(t, spanID, 16, "spanId should be 16 hex characters")
+}
+
+func TestRequestLogger_ExcludesTraceIDWhenTracingDisabled(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+
+	// Setup: Create a noop tracer provider (disabled tracing)
+	prevTP := otel.GetTracerProvider()
+	otel.SetTracerProvider(trace.NewNoopTracerProvider())
+	t.Cleanup(func() {
+		otel.SetTracerProvider(prevTP)
+	})
+
+	// Create router WITHOUT Tracing middleware (simulates disabled tracing)
+	r := chi.NewRouter()
+	r.Use(RequestID)
+	r.Use(RequestLogger(logger))
+	r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// When: Request is made without tracing
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	// Parse log output
+	var logEntry map[string]interface{}
+	err := json.Unmarshal(buf.Bytes(), &logEntry)
+	require.NoError(t, err)
+
+	// Then: traceId field is ABSENT (not empty string) - AC#2
+	_, traceIDExists := logEntry["traceId"]
+	assert.False(t, traceIDExists, "traceId should be absent when tracing disabled, not empty")
+
+	// Then: spanId field is ABSENT (not empty string) - AC#2
+	_, spanIDExists := logEntry["spanId"]
+	assert.False(t, spanIDExists, "spanId should be absent when tracing disabled, not empty")
+
+	// But requestId should still be present
+	_, requestIDExists := logEntry["requestId"]
+	assert.True(t, requestIDExists, "requestId should still be present")
 }

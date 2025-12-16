@@ -425,11 +425,11 @@ Dimas buka README. Langkah jelas: `make setup` untuk install tools, `make run` u
 
 | Version | Support Level | Notes |
 |---------|---------------|-------|
-| **Go 1.23+** | Primary | Latest stable, fully tested |
+| **Go 1.24+** | Primary | Latest stable, fully tested |
 | **Go 1.22** | CI Tested | Backward compatibility verified |
 | **Go 1.21 and below** | Unsupported | May work, no guarantees |
 
-> **Note:** Aligned with Architecture and Project Context documents (Go 1.23+ as primary target).
+> **Note:** Aligned with Architecture and Project Context documents (Go 1.24+ as primary target).
 
 #### Operating System Support
 

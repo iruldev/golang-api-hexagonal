@@ -12,7 +12,17 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 )
+
+func setTracerProviderWithCleanup(t *testing.T, tp trace.TracerProvider) {
+	t.Helper()
+	prev := otel.GetTracerProvider()
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(prev)
+	})
+}
 
 func TestTracing_CreatesSpan(t *testing.T) {
 	// Setup: Create a test exporter to capture spans
@@ -20,8 +30,7 @@ func TestTracing_CreatesSpan(t *testing.T) {
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	defer tp.Shutdown(t.Context())
 
-	// Register test provider globally
-	otel.SetTracerProvider(tp)
+	setTracerProviderWithCleanup(t, tp)
 
 	// Setup: Create router with tracing middleware
 	r := chi.NewRouter()
@@ -60,8 +69,12 @@ func TestTracing_PropagatesTraceContext(t *testing.T) {
 	defer tp.Shutdown(t.Context())
 
 	// Register test provider and propagator globally
-	otel.SetTracerProvider(tp)
+	setTracerProviderWithCleanup(t, tp)
+	prevProp := otel.GetTextMapPropagator()
 	otel.SetTextMapPropagator(propagation.TraceContext{})
+	t.Cleanup(func() {
+		otel.SetTextMapPropagator(prevProp)
+	})
 
 	// Setup: Create router with tracing middleware
 	r := chi.NewRouter()
@@ -91,7 +104,7 @@ func TestTracing_StoresTraceIDInContext(t *testing.T) {
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	defer tp.Shutdown(t.Context())
 
-	otel.SetTracerProvider(tp)
+	setTracerProviderWithCleanup(t, tp)
 
 	// Setup: Create router that captures trace ID from context
 	var capturedTraceID string
@@ -146,7 +159,7 @@ func TestTracing_CapturesStatusCode(t *testing.T) {
 			exporter := tracetest.NewInMemoryExporter()
 			tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 			defer tp.Shutdown(t.Context())
-			otel.SetTracerProvider(tp)
+			setTracerProviderWithCleanup(t, tp)
 
 			r := chi.NewRouter()
 			r.Use(Tracing)
@@ -189,7 +202,7 @@ func TestTracing_FallsBackToURLPath(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	defer tp.Shutdown(t.Context())
-	otel.SetTracerProvider(tp)
+	setTracerProviderWithCleanup(t, tp)
 
 	// Setup: Use handler directly without Chi routing (simulating edge case)
 	handler := Tracing(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -205,4 +218,74 @@ func TestTracing_FallsBackToURLPath(t *testing.T) {
 	spans := exporter.GetSpans()
 	require.Len(t, spans, 1)
 	assert.Equal(t, "/some/path", spans[0].Name)
+}
+
+func TestGetSpanID_ReturnsEmptyWhenNoSpan(t *testing.T) {
+	// Given: A context without span
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+
+	// When: GetSpanID is called
+	spanID := GetSpanID(req.Context())
+
+	// Then: Empty string is returned
+	assert.Empty(t, spanID)
+}
+
+func TestTracing_StoresSpanIDInContext(t *testing.T) {
+	// Setup: Create a test exporter
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	defer tp.Shutdown(t.Context())
+
+	setTracerProviderWithCleanup(t, tp)
+
+	// Setup: Create router that captures span ID from context
+	var capturedSpanID string
+	r := chi.NewRouter()
+	r.Use(Tracing)
+	r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
+		capturedSpanID = GetSpanID(r.Context())
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// When: Request is made
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	// Then: Span ID is available in context with correct format
+	assert.NotEmpty(t, capturedSpanID)
+	assert.Len(t, capturedSpanID, 16) // Span ID is 16 hex characters (64 bits)
+}
+
+func TestGetSpanID_ReturnsCorrectFormat(t *testing.T) {
+	// Setup: Create a test exporter
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	defer tp.Shutdown(t.Context())
+
+	setTracerProviderWithCleanup(t, tp)
+
+	// Setup: Create router that captures span ID
+	var capturedSpanID string
+	r := chi.NewRouter()
+	r.Use(Tracing)
+	r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
+		capturedSpanID = GetSpanID(r.Context())
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// When: Request is made
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	// Then: Span ID should be exactly 16 hex characters
+	assert.Len(t, capturedSpanID, 16)
+
+	// Verify it's valid hex
+	for _, c := range capturedSpanID {
+		assert.True(t, (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'),
+			"span ID should contain only hex characters, got: %c", c)
+	}
 }

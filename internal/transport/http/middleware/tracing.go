@@ -73,7 +73,35 @@ func GetTraceID(ctx context.Context) string {
 	if id, ok := ctx.Value(traceIDKey).(string); ok && id != "00000000000000000000000000000000" {
 		return id
 	}
-	return ""
+
+	// Fallback to span context in case middleware order changes or trace ID is only in the span.
+	spanCtx := trace.SpanContextFromContext(ctx)
+	if !spanCtx.HasTraceID() {
+		return ""
+	}
+
+	traceID := spanCtx.TraceID().String()
+	if traceID == "00000000000000000000000000000000" {
+		return ""
+	}
+
+	return traceID
+}
+
+// GetSpanID retrieves the span ID from the context.
+// Returns an empty string (16 zero chars) if no active span is present.
+// Span ID format: 16 hex characters (64 bits).
+func GetSpanID(ctx context.Context) string {
+	spanCtx := trace.SpanContextFromContext(ctx)
+	if !spanCtx.HasSpanID() {
+		return ""
+	}
+	spanID := spanCtx.SpanID().String()
+	// Check for zero span ID (invalid/no tracing)
+	if spanID == "0000000000000000" {
+		return ""
+	}
+	return spanID
 }
 
 // getRoutePattern returns the Chi route pattern or falls back to the URL path.
