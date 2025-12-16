@@ -35,7 +35,7 @@ func setupTestRouter(authenticator middleware.Authenticator) chi.Router {
 	// Apply middleware in correct order: Auth before RBAC
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(authenticator, observability.NewNopLoggerInterface(), false))
-		r.Use(middleware.RequireRole([]string{"admin"}, observability.NewNopLoggerInterface()))
+		r.Use(middleware.RequireRole(observability.NewNopLoggerInterface(), "admin"))
 		r.Get("/health", admin.HealthHandler)
 	})
 

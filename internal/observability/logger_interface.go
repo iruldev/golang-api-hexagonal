@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+const (
+	// LogKeyTraceID is the standard key for trace IDs in logs
+	LogKeyTraceID = "trace_id"
+)
+
 // Logger defines logging abstraction for swappable implementations.
 // Use the default ZapLogger or implement custom loggers (e.g., logrus, slog).
 type Logger interface {

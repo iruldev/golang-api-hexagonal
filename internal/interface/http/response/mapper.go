@@ -59,6 +59,10 @@ func mapDomainErrorCode(code string) int {
 		return http.StatusConflict
 	case domainerrors.CodeInternalError:
 		return http.StatusInternalServerError
+	case domainerrors.CodeInsufficientRole:
+		return http.StatusForbidden
+	case domainerrors.CodeInsufficientPermission:
+		return http.StatusForbidden
 	case domainerrors.CodeTimeout:
 		return http.StatusGatewayTimeout
 	case domainerrors.CodeRateLimitExceeded:

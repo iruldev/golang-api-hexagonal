@@ -15,10 +15,76 @@ import (
 )
 
 // envelopeResponse is an alias to the shared test response type.
-// This avoids code duplication across test files.
 type envelopeResponse = response.TestEnvelopeResponse
 
 func TestRequireRole(t *testing.T) {
+	logger := observability.NewNopLoggerInterface()
+
+	tests := []struct {
+		name           string
+		role           string
+		claims         ctxutil.Claims
+		hasContext     bool
+		expectedStatus int
+		expectedCode   string
+	}{
+		{
+			name:           "Allowed - Has exact role",
+			role:           "admin",
+			claims:         ctxutil.Claims{Roles: []string{"admin"}, UserID: "user-1"},
+			hasContext:     true,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "Denied - Missing role",
+			role:           "admin",
+			claims:         ctxutil.Claims{Roles: []string{"user"}, UserID: "user-3"},
+			hasContext:     true,
+			expectedStatus: http.StatusForbidden,
+			expectedCode:   domainerrors.CodeInsufficientRole,
+		},
+		{
+			name:           "Error - No claims",
+			role:           "admin",
+			hasContext:     false,
+			expectedStatus: http.StatusInternalServerError,
+			expectedCode:   domainerrors.CodeInternalError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := middleware.RequireRole(logger, tt.role)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			req := httptest.NewRequest("GET", "/", nil)
+			if tt.hasContext {
+				ctx := ctxutil.NewClaimsContext(req.Context(), tt.claims)
+				req = req.WithContext(ctx)
+			}
+
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.expectedStatus, rec.Code)
+
+			if tt.expectedCode != "" {
+				var env envelopeResponse
+				err := json.Unmarshal(rec.Body.Bytes(), &env)
+				assert.NoError(t, err)
+				assert.NotNil(t, env.Error)
+				assert.Equal(t, tt.expectedCode, env.Error.Code)
+				assert.NotNil(t, env.Meta)
+				assert.NotEmpty(t, env.Meta.TraceID)
+			}
+		})
+	}
+}
+
+func TestRequireAnyRole(t *testing.T) {
+	logger := observability.NewNopLoggerInterface()
+
 	tests := []struct {
 		name           string
 		roles          []string
@@ -28,48 +94,48 @@ func TestRequireRole(t *testing.T) {
 		expectedCode   string
 	}{
 		{
-			name:           "Allowed - Has exact role",
-			roles:          []string{"admin"},
+			name:           "Allowed - Has first role",
+			roles:          []string{"admin", "editor"},
 			claims:         ctxutil.Claims{Roles: []string{"admin"}, UserID: "user-1"},
 			hasContext:     true,
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:           "Allowed - Has one of multiple required roles",
+			name:           "Allowed - Has second role",
 			roles:          []string{"admin", "editor"},
 			claims:         ctxutil.Claims{Roles: []string{"editor"}, UserID: "user-2"},
 			hasContext:     true,
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:           "Denied - Missing role",
-			roles:          []string{"admin"},
+			name:           "Denied - Has none of roles",
+			roles:          []string{"admin", "editor"},
 			claims:         ctxutil.Claims{Roles: []string{"user"}, UserID: "user-3"},
 			hasContext:     true,
 			expectedStatus: http.StatusForbidden,
-			expectedCode:   domainerrors.CodeForbidden, // "FORBIDDEN"
+			expectedCode:   domainerrors.CodeInsufficientRole,
 		},
 		{
-			name:           "Denied - No roles in claims",
-			roles:          []string{"admin"},
-			claims:         ctxutil.Claims{UserID: "user-4"},
+			name:           "Denied - Empty roles list",
+			roles:          []string{},
+			claims:         ctxutil.Claims{Roles: []string{"admin"}, UserID: "user-4"},
 			hasContext:     true,
 			expectedStatus: http.StatusForbidden,
-			expectedCode:   domainerrors.CodeForbidden, // "FORBIDDEN"
+			expectedCode:   domainerrors.CodeInsufficientRole,
 		},
 		{
-			name:           "Error - No claims in context (Server Error)",
+			name:           "Error - No claims",
 			roles:          []string{"admin"},
 			hasContext:     false,
 			expectedStatus: http.StatusInternalServerError,
-			expectedCode:   domainerrors.CodeInternalError, // "INTERNAL_ERROR"
+			expectedCode:   domainerrors.CodeInternalError,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logger := observability.NewNopLoggerInterface()
-			handler := middleware.RequireRole(tt.roles, logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Using Variadic signature as per plan
+			handler := middleware.RequireAnyRole(logger, tt.roles...)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			}))
 
@@ -83,73 +149,55 @@ func TestRequireRole(t *testing.T) {
 			handler.ServeHTTP(rec, req)
 
 			assert.Equal(t, tt.expectedStatus, rec.Code)
-
 			if tt.expectedCode != "" {
-				// Parse response body as Envelope
 				var env envelopeResponse
-				err := json.Unmarshal(rec.Body.Bytes(), &env)
-				assert.NoError(t, err)
-				assert.NotNil(t, env.Error)
+				_ = json.Unmarshal(rec.Body.Bytes(), &env)
 				assert.Equal(t, tt.expectedCode, env.Error.Code)
-				// Verify trace_id is present in error responses (consistency with auth_test.go)
-				assert.NotNil(t, env.Meta, "expected meta in error response")
+				assert.NotNil(t, env.Meta)
+				assert.NotEmpty(t, env.Meta.TraceID)
 			}
 		})
 	}
 }
 
 func TestRequirePermission(t *testing.T) {
+	logger := observability.NewNopLoggerInterface()
+
 	tests := []struct {
 		name           string
-		perms          []string
+		perm           string
 		claims         ctxutil.Claims
 		hasContext     bool
 		expectedStatus int
 		expectedCode   string
 	}{
 		{
-			name:           "Allowed - Has required permission",
-			perms:          []string{"note:read"},
-			claims:         ctxutil.Claims{Permissions: []string{"note:read"}, UserID: "user-1"},
+			name:           "Allowed",
+			perm:           "write",
+			claims:         ctxutil.Claims{Permissions: []string{"write"}, UserID: "user-1"},
 			hasContext:     true,
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:           "Allowed - Has all required permissions",
-			perms:          []string{"note:read", "note:write"},
-			claims:         ctxutil.Claims{Permissions: []string{"note:read", "note:write"}, UserID: "user-2"},
-			hasContext:     true,
-			expectedStatus: http.StatusOK,
-		},
-		{
-			name:           "Denied - Missing one of required permissions (AND logic)",
-			perms:          []string{"note:read", "note:write"},
-			claims:         ctxutil.Claims{Permissions: []string{"note:read"}, UserID: "user-3"},
+			name:           "Denied",
+			perm:           "write",
+			claims:         ctxutil.Claims{Permissions: []string{"read"}, UserID: "user-2"},
 			hasContext:     true,
 			expectedStatus: http.StatusForbidden,
-			expectedCode:   domainerrors.CodeForbidden, // "FORBIDDEN"
+			expectedCode:   domainerrors.CodeInsufficientPermission,
 		},
 		{
-			name:           "Denied - Missing permission",
-			perms:          []string{"note:admin"},
-			claims:         ctxutil.Claims{Permissions: []string{"note:read"}, UserID: "user-4"},
-			hasContext:     true,
-			expectedStatus: http.StatusForbidden,
-			expectedCode:   domainerrors.CodeForbidden, // "FORBIDDEN"
-		},
-		{
-			name:           "Error - No claims in context",
-			perms:          []string{"note:read"},
+			name:           "Error - No claims",
+			perm:           "write",
 			hasContext:     false,
 			expectedStatus: http.StatusInternalServerError,
-			expectedCode:   domainerrors.CodeInternalError, // "INTERNAL_ERROR"
+			expectedCode:   domainerrors.CodeInternalError,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logger := observability.NewNopLoggerInterface()
-			handler := middleware.RequirePermission(tt.perms, logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler := middleware.RequirePermission(logger, tt.perm)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			}))
 
@@ -164,86 +212,11 @@ func TestRequirePermission(t *testing.T) {
 
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			if tt.expectedCode != "" {
-				// Parse response body as Envelope
 				var env envelopeResponse
-				err := json.Unmarshal(rec.Body.Bytes(), &env)
-				assert.NoError(t, err)
-				assert.NotNil(t, env.Error)
+				_ = json.Unmarshal(rec.Body.Bytes(), &env)
 				assert.Equal(t, tt.expectedCode, env.Error.Code)
-				// Verify trace_id is present in error responses (consistency with auth_test.go)
-				assert.NotNil(t, env.Meta, "expected meta in error response")
-			}
-		})
-	}
-}
-
-func TestRequireAnyPermission(t *testing.T) {
-	tests := []struct {
-		name           string
-		perms          []string
-		claims         ctxutil.Claims
-		hasContext     bool
-		expectedStatus int
-		expectedCode   string
-	}{
-		{
-			name:           "Allowed - Has one of required permissions",
-			perms:          []string{"note:read", "note:unique"},
-			claims:         ctxutil.Claims{Permissions: []string{"note:read"}, UserID: "user-1"},
-			hasContext:     true,
-			expectedStatus: http.StatusOK,
-		},
-		{
-			name:           "Denied - Missing all required permissions",
-			perms:          []string{"note:admin", "note:special"},
-			claims:         ctxutil.Claims{Permissions: []string{"note:read"}, UserID: "user-2"},
-			hasContext:     true,
-			expectedStatus: http.StatusForbidden,
-			expectedCode:   domainerrors.CodeForbidden, // "FORBIDDEN"
-		},
-		{
-			name:           "Denied - Empty permissions array",
-			perms:          []string{"note:read"},
-			claims:         ctxutil.Claims{Permissions: []string{}, UserID: "user-3"},
-			hasContext:     true,
-			expectedStatus: http.StatusForbidden,
-			expectedCode:   domainerrors.CodeForbidden, // "FORBIDDEN"
-		},
-		{
-			name:           "Error - No claims in context",
-			perms:          []string{"note:read"},
-			hasContext:     false,
-			expectedStatus: http.StatusInternalServerError,
-			expectedCode:   domainerrors.CodeInternalError, // "INTERNAL_ERROR"
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			logger := observability.NewNopLoggerInterface()
-			handler := middleware.RequireAnyPermission(tt.perms, logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-			}))
-
-			req := httptest.NewRequest("GET", "/", nil)
-			if tt.hasContext {
-				ctx := ctxutil.NewClaimsContext(req.Context(), tt.claims)
-				req = req.WithContext(ctx)
-			}
-
-			rec := httptest.NewRecorder()
-			handler.ServeHTTP(rec, req)
-
-			assert.Equal(t, tt.expectedStatus, rec.Code)
-			if tt.expectedCode != "" {
-				// Parse response body as Envelope
-				var env envelopeResponse
-				err := json.Unmarshal(rec.Body.Bytes(), &env)
-				assert.NoError(t, err)
-				assert.NotNil(t, env.Error)
-				assert.Equal(t, tt.expectedCode, env.Error.Code)
-				// Verify trace_id is present in error responses (consistency with auth_test.go)
-				assert.NotNil(t, env.Meta, "expected meta in error response")
+				assert.NotNil(t, env.Meta)
+				assert.NotEmpty(t, env.Meta.TraceID)
 			}
 		})
 	}

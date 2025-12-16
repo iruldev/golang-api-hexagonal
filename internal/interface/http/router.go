@@ -110,7 +110,7 @@ func NewRouter(deps RouterDeps) chi.Router {
 	if deps.Authenticator != nil {
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(middleware.AuthMiddleware(deps.Authenticator, zapLogger, cfg.App.TrustProxyHeaders))
-			r.Use(middleware.RequireRole([]string{string(auth.RoleAdmin)}, zapLogger))
+			r.Use(middleware.RequireRole(zapLogger, string(auth.RoleAdmin)))
 			adminDeps := AdminDeps{
 				FeatureFlagProvider: deps.AdminFeatureFlagProvider,
 				UserRoleProvider:    deps.UserRoleProvider,

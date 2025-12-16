@@ -265,7 +265,7 @@ func TestFeaturesRoutes_NonAdminUser_Returns403(t *testing.T) {
 	r := chi.NewRouter()
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(auth, observability.NewNopLoggerInterface(), false))
-		r.Use(middleware.RequireRole([]string{"admin"}, observability.NewNopLoggerInterface()))
+		r.Use(middleware.RequireRole(observability.NewNopLoggerInterface(), "admin"))
 		r.Get("/features", handler.ListFlags)
 		r.Get("/features/{flag}", handler.GetFlag)
 		r.Post("/features/{flag}/enable", handler.EnableFlag)

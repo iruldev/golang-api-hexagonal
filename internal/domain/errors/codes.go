@@ -39,6 +39,12 @@ const (
 	// CodeInternalError indicates an internal server error.
 	CodeInternalError = "INTERNAL_ERROR"
 
+	// CodeInsufficientRole indicates the user lacks the required role.
+	CodeInsufficientRole = "INSUFFICIENT_ROLE"
+
+	// CodeInsufficientPermission indicates the user lacks the required permission.
+	CodeInsufficientPermission = "INSUFFICIENT_PERMISSION"
+
 	// CodeTimeout indicates an operation timed out.
 	CodeTimeout = "TIMEOUT"
 
@@ -57,17 +63,19 @@ const (
 
 // allCodes is a registry of all valid error codes.
 var allCodes = map[string]struct{}{
-	CodeNotFound:          {},
-	CodeValidationError:   {},
-	CodeUnauthorized:      {},
-	CodeForbidden:         {},
-	CodeConflict:          {},
-	CodeInternalError:     {},
-	CodeTimeout:           {},
-	CodeRateLimitExceeded: {},
-	CodeBadRequest:        {},
-	CodeTokenExpired:      {},
-	CodeTokenInvalid:      {},
+	CodeNotFound:               {},
+	CodeValidationError:        {},
+	CodeUnauthorized:           {},
+	CodeForbidden:              {},
+	CodeInsufficientRole:       {},
+	CodeInsufficientPermission: {},
+	CodeConflict:               {},
+	CodeInternalError:          {},
+	CodeTimeout:                {},
+	CodeRateLimitExceeded:      {},
+	CodeBadRequest:             {},
+	CodeTokenExpired:           {},
+	CodeTokenInvalid:           {},
 }
 
 // IsValidCode checks if the provided code is a valid registered error code.

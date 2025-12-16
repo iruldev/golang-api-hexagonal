@@ -39,7 +39,7 @@ func ExampleRequireRole() {
 	// Protected admin-only route
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(mockAuth, logger, false))
-		r.Use(middleware.RequireRole([]string{string(auth.RoleAdmin)}, logger))
+		r.Use(middleware.RequireRole(logger, string(auth.RoleAdmin)))
 		r.Delete("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintln(w, "User deleted")
@@ -72,7 +72,7 @@ func ExampleRequireRole_multipleRoles() {
 	// Allow either admin or service roles
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(mockAuth, logger, false))
-		r.Use(middleware.RequireRole([]string{string(auth.RoleAdmin), string(auth.RoleService)}, logger))
+		r.Use(middleware.RequireAnyRole(logger, string(auth.RoleAdmin), string(auth.RoleService)))
 		r.Get("/internal/metrics", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintln(w, "Metrics data")
@@ -104,10 +104,8 @@ func ExampleRequirePermission() {
 	// Require BOTH read and update permissions (AND logic)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(mockAuth, logger, false))
-		r.Use(middleware.RequirePermission(
-			[]string{string(auth.PermNoteRead), string(auth.PermNoteUpdate)},
-			logger,
-		))
+		r.Use(middleware.RequirePermission(logger, string(auth.PermNoteRead)))
+		r.Use(middleware.RequirePermission(logger, string(auth.PermNoteUpdate)))
 		r.Put("/notes/{id}", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintln(w, "Note updated")
@@ -140,8 +138,9 @@ func ExampleRequireAnyPermission() {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(mockAuth, logger, false))
 		r.Use(middleware.RequireAnyPermission(
-			[]string{string(auth.PermNoteUpdate), string(auth.PermNoteDelete)},
 			logger,
+			string(auth.PermNoteUpdate),
+			string(auth.PermNoteDelete),
 		))
 		r.Patch("/notes/{id}", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -190,7 +189,7 @@ func ExampleRequireRole_combinedMiddleware() {
 
 		// Admin-only routes
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole([]string{string(auth.RoleAdmin)}, logger))
+			r.Use(middleware.RequireRole(logger, string(auth.RoleAdmin)))
 			r.Delete("/notes/{id}", func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 				fmt.Fprintln(w, "Note deleted by admin")

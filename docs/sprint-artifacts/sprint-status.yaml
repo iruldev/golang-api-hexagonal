@@ -69,7 +69,7 @@ development_status:
   # ============================================
   epic-3: in-progress
   3-1-implement-jwt-middleware: done
-  3-2-implement-rbac-middleware: backlog
+  3-2-implement-rbac-middleware: done
   3-3-implement-api-key-store: backlog
   3-4-implement-rate-limiting-middleware: backlog
   epic-3-retrospective: optional
