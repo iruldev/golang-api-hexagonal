@@ -76,8 +76,11 @@ func run() error {
 	healthHandler := handler.NewHealthHandler()
 	readyHandler := handler.NewReadyHandler(db)
 
+	// Initialize Prometheus metrics registry
+	metricsReg, httpMetrics := observability.NewMetricsRegistry()
+
 	// Create router with logger for request logging middleware
-	router := httpTransport.NewRouter(logger, cfg.OTELEnabled, healthHandler, readyHandler)
+	router := httpTransport.NewRouter(logger, cfg.OTELEnabled, metricsReg, httpMetrics, healthHandler, readyHandler)
 
 	// Create HTTP server
 	addr := fmt.Sprintf(":%d", cfg.Port)

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
 	httpTransport "github.com/iruldev/golang-api-hexagonal/internal/transport/http"
 	"github.com/stretchr/testify/assert"
 )
@@ -30,11 +31,12 @@ func testLogger() *slog.Logger {
 func TestIntegrationRoutes(t *testing.T) {
 	healthHandler := NewHealthHandler()
 	logger := testLogger()
+	metricsReg, httpMetrics := observability.NewMetricsRegistry()
 
 	t.Run("ready OK", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db)
-		r := httpTransport.NewRouter(logger, false, healthHandler, readyHandler)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler)
 
 		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 		rec := httptest.NewRecorder()
@@ -48,7 +50,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("ready not ready", func(t *testing.T) {
 		db := &fakeDB{pingErr: assert.AnError}
 		readyHandler := NewReadyHandler(db)
-		r := httpTransport.NewRouter(logger, false, healthHandler, readyHandler)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler)
 
 		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 		rec := httptest.NewRecorder()
@@ -62,7 +64,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("health ok", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db)
-		r := httpTransport.NewRouter(logger, false, healthHandler, readyHandler)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler)
 
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rec := httptest.NewRecorder()
@@ -71,5 +73,56 @@ func TestIntegrationRoutes(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.JSONEq(t, `{"data":{"status":"ok"}}`, rec.Body.String())
+	})
+}
+
+// TestMetricsEndpoint verifies the /metrics endpoint behavior.
+func TestMetricsEndpoint(t *testing.T) {
+	healthHandler := NewHealthHandler()
+	logger := testLogger()
+	metricsReg, httpMetrics := observability.NewMetricsRegistry()
+	db := &fakeDB{pingErr: nil}
+	readyHandler := NewReadyHandler(db)
+
+	r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler)
+
+	t.Run("metrics endpoint returns 200", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		rec := httptest.NewRecorder()
+
+		r.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	t.Run("metrics content-type contains text/plain", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		rec := httptest.NewRecorder()
+
+		r.ServeHTTP(rec, req)
+
+		contentType := rec.Header().Get("Content-Type")
+		assert.Contains(t, contentType, "text/plain")
+	})
+
+	t.Run("metrics contains Go runtime metrics", func(t *testing.T) {
+		// First make some requests to generate metrics
+		for i := 0; i < 3; i++ {
+			req := httptest.NewRequest(http.MethodGet, "/health", nil)
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, req)
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		rec := httptest.NewRecorder()
+
+		r.ServeHTTP(rec, req)
+
+		body := rec.Body.String()
+		// Prometheus exposition format check
+		assert.Contains(t, body, "# HELP")
+		assert.Contains(t, body, "# TYPE")
+		// Go runtime metrics (from collectors.NewGoCollector)
+		assert.Contains(t, body, "go_goroutines")
 	})
 }
