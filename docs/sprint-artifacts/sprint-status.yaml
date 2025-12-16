@@ -54,7 +54,7 @@ development_status:
   # Epic 2: Observability Stack
   epic-2: in-progress
   2-1-implement-structured-json-logging: done
-  2-2-implement-request-id-middleware: backlog
+  2-2-implement-request-id-middleware: done
   2-3a-implement-opentelemetry-tracing-setup: backlog
   2-3b-implement-trace-correlation-in-logs: backlog
   2-4-implement-prometheus-metrics-endpoint: backlog

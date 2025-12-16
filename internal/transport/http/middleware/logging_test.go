@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,11 +23,10 @@ func TestRequestLogger_LogsRequestFields(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":"test"}`))
 	})
 
-	// Create chi router with our middleware
+	// Create chi router with custom RequestID middleware
 	r := chi.NewRouter()
-	r.Use(chiMiddleware.RequestID)
+	r.Use(RequestID) // Use our custom RequestID middleware
 	r.Use(RequestLogger(logger))
-	r.Use(chiMiddleware.RequestID)
 	r.Get("/test", testHandler)
 
 	// Make request
@@ -47,7 +45,11 @@ func TestRequestLogger_LogsRequestFields(t *testing.T) {
 	assert.Equal(t, float64(http.StatusOK), logEntry["status"])
 	assert.NotNil(t, logEntry["duration_ms"])
 	assert.Equal(t, float64(len(`{"data":"test"}`)), logEntry["bytes"])
-	assert.NotEmpty(t, logEntry["requestId"], "requestId should be present from chi RequestID middleware")
+
+	// Verify requestId is present and is 32 hex characters
+	requestID, ok := logEntry["requestId"].(string)
+	assert.True(t, ok, "requestId should be a string")
+	assert.Len(t, requestID, 32, "requestId should be 32 hex characters from custom RequestID middleware")
 }
 
 func TestRequestLogger_CapturesErrorStatus(t *testing.T) {
