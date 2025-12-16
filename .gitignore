@@ -1,6 +1,23 @@
+# OS
 .DS_Store
+
+# Build artifacts
 /api
+
+# IDE/Editor
 .agent/
 .bmad/
 .claude/
 .cursor/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment (local config - do not commit)
+.env
+.env.docker
+
+# Keep example files tracked
+!.env.example
+!.env.docker.example
