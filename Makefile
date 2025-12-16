@@ -120,27 +120,70 @@ infra-status:
 # Database Migrations
 # =============================================================================
 
+# Helper to check prerequisites
+.PHONY: _check-goose _check-db-url
+
+_check-goose:
+	@which goose > /dev/null || (echo "❌ goose not found. Run 'make setup' first." && exit 1)
+
+_check-db-url:
+	@if [ -z "$(DATABASE_URL)" ]; then \
+		echo "❌ DATABASE_URL is not set."; \
+		echo ""; \
+		echo "Set it with:"; \
+		echo "  export DATABASE_URL=\"postgres://postgres:postgres@localhost:5432/golang_api_hexagonal?sslmode=disable\""; \
+		echo ""; \
+		echo "Or source from .env.example:"; \
+		echo "  export \$$(grep DATABASE_URL .env.example | xargs)"; \
+		exit 1; \
+	fi
+
 ## migrate-up: Run all pending migrations
 .PHONY: migrate-up
-migrate-up:
+migrate-up: _check-goose _check-db-url
 	@echo "🔄 Running migrations..."
 	goose -dir migrations postgres "$(DATABASE_URL)" up
 	@echo "✅ Migrations complete"
 
 ## migrate-down: Rollback the last migration
 .PHONY: migrate-down
-migrate-down:
+migrate-down: _check-goose _check-db-url
 	@echo "⏪ Rolling back last migration..."
 	goose -dir migrations postgres "$(DATABASE_URL)" down
 	@echo "✅ Rollback complete"
 
 ## migrate-status: Show migration status
 .PHONY: migrate-status
-migrate-status:
+migrate-status: _check-goose _check-db-url
 	goose -dir migrations postgres "$(DATABASE_URL)" status
 
 ## migrate-create: Create a new migration (usage: make migrate-create name=description)
 .PHONY: migrate-create
-migrate-create:
+migrate-create: _check-goose
 	@if [ -z "$(name)" ]; then echo "Usage: make migrate-create name=description"; exit 1; fi
-	goose -dir migrations create $(name) sql
+	goose -dir migrations create "$(name)" sql
+
+## migrate-validate: Validate migration files syntax (no DB required)
+.PHONY: migrate-validate
+migrate-validate: _check-goose
+	@echo "🔍 Validating migration files..."
+	@echo "  Running goose validate..."
+	@goose -dir migrations validate
+	@echo ""
+	@echo "  Checking goose annotations..."
+	@for f in migrations/*.sql; do \
+		if [ -f "$$f" ]; then \
+			echo "    Checking $$f..."; \
+			if ! grep -q -e "+goose Up" "$$f"; then \
+				echo "      ❌ Missing '-- +goose Up' section"; \
+				exit 1; \
+			fi; \
+			if ! grep -q -e "+goose Down" "$$f"; then \
+				echo "      ❌ Missing '-- +goose Down' section"; \
+				exit 1; \
+			fi; \
+			echo "      ✅ Annotations valid"; \
+		fi; \
+	done
+	@echo ""
+	@echo "✅ All migration files are valid"
