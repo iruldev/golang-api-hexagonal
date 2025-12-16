@@ -1,0 +1,6 @@
+.DS_Store
+/api
+.agent/
+.bmad/
+.claude/
+.cursor/

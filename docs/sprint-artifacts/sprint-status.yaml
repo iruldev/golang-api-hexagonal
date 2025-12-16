@@ -1,0 +1,117 @@
+# generated: 2025-12-16
+# project: golang-api-hexagonal
+# project_key: golang-api-hex
+# tracking_system: file-system
+# story_location: docs/sprint-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - drafted: Story file created in stories folder
+#   - ready-for-dev: Draft approved and story context created
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - completed: Retrospective has been done
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically drafts next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2025-12-16
+project: golang-api-hexagonal
+project_key: golang-api-hex
+tracking_system: file-system
+story_location: docs/sprint-artifacts
+
+development_status:
+  # Epic 1: Project Foundation & First Run Experience
+  epic-1: in-progress
+  1-1-initialize-hexagonal-folder-structure: done
+  1-2-implement-configuration-management: backlog
+  1-3-setup-docker-compose-infrastructure: backlog
+  1-4-implement-database-migration-system: backlog
+  1-5-implement-health-readiness-endpoints: backlog
+  1-6-create-makefile-commands-developer-setup: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: Observability Stack
+  epic-2: backlog
+  2-1-implement-structured-json-logging: backlog
+  2-2-implement-request-id-middleware: backlog
+  2-3a-implement-opentelemetry-tracing-setup: backlog
+  2-3b-implement-trace-correlation-in-logs: backlog
+  2-4-implement-prometheus-metrics-endpoint: backlog
+  2-5-implement-custom-metrics-utilities: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Local Quality Gates
+  epic-3: backlog
+  3-1-configure-golangci-lint-with-boundary-rules: backlog
+  3-2-setup-unit-test-infrastructure: backlog
+  3-3-create-local-ci-pipeline: backlog
+  3-4-implement-infrastructure-container-management: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Reference Implementation (Users Module)
+  epic-4: backlog
+  4-1-implement-user-domain-entity: backlog
+  4-2-implement-user-postgresql-repository: backlog
+  4-3-implement-user-use-cases: backlog
+  4-4-implement-error-response-mapper: backlog
+  4-5-implement-transport-contracts-dtos: backlog
+  4-6-implement-user-http-handlers: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Security & Authentication Foundation
+  epic-5: backlog
+  5-1-implement-request-validation-middleware: backlog
+  5-2-implement-jwt-authentication-middleware: backlog
+  5-3-implement-authorization-middleware: backlog
+  5-4-implement-security-headers-middleware: backlog
+  5-5-implement-rate-limiting-middleware: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Audit Trail System
+  epic-6: backlog
+  6-1-implement-audit-event-domain-model: backlog
+  6-2-implement-audit-event-postgresql-repository: backlog
+  6-3-implement-pii-redaction-service: backlog
+  6-4-implement-audit-event-service: backlog
+  6-5-enable-extensible-audit-event-types: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: CI/CD Pipeline
+  epic-7: backlog
+  7-1-setup-github-actions-workflow: backlog
+  7-2-implement-ci-lint-and-test-steps: backlog
+  7-3-implement-ci-build-and-security-scan: backlog
+  7-4-implement-ci-migration-verification: backlog
+  7-5-create-migration-helper-commands: backlog
+  epic-7-retrospective: optional
+
+  # Epic 8: Documentation & Developer Guides
+  epic-8: backlog
+  8-1-create-readme-quick-start: backlog
+  8-2-document-architecture-and-layer-responsibilities: backlog
+  8-3-document-local-development-workflow: backlog
+  8-4-document-observability-configuration: backlog
+  8-5-create-guide-for-adding-new-modules: backlog
+  8-6-create-guide-for-adding-new-adapters: backlog
+  epic-8-retrospective: optional
