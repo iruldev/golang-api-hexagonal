@@ -72,7 +72,7 @@ development_status:
   # Epic 4: Reference Implementation (Users Module)
   epic-4: in-progress
   4-1-implement-user-domain-entity: done
-  4-2-implement-user-postgresql-repository: backlog
+  4-2-implement-user-postgresql-repository: done
   4-3-implement-user-use-cases: backlog
   4-4-implement-error-response-mapper: backlog
   4-5-implement-transport-contracts-dtos: backlog
