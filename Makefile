@@ -130,6 +130,14 @@ ci:
 .PHONY: check-mod-tidy
 check-mod-tidy:
 	@echo "📦 Checking go.mod is tidy..."
+	@if ! git diff --exit-code > /dev/null 2>&1; then \
+		echo ""; \
+		echo "❌ Working tree is not clean (required for mod tidy check)"; \
+		echo "   Commit or stash changes, then rerun"; \
+		echo ""; \
+		git --no-pager diff --name-only; \
+		exit 1; \
+	fi
 	@$(GOMOD) tidy
 	@if ! git diff --exit-code go.mod go.sum > /dev/null 2>&1; then \
 		echo ""; \
@@ -144,13 +152,21 @@ check-mod-tidy:
 .PHONY: check-fmt
 check-fmt:
 	@echo "📐 Checking code formatting (gofmt)..."
+	@if ! git diff --exit-code > /dev/null 2>&1; then \
+		echo ""; \
+		echo "❌ Working tree is not clean (required for gofmt check)"; \
+		echo "   Commit or stash changes, then rerun"; \
+		echo ""; \
+		git --no-pager diff --name-only; \
+		exit 1; \
+	fi
 	@FILES=$$(git ls-files '*.go'); \
 	if [ -n "$$FILES" ]; then \
 		gofmt -w $$FILES; \
 	fi; \
 	if ! git diff --exit-code > /dev/null 2>&1; then \
 		echo ""; \
-		echo "❌ gofmt would change files (working tree is not clean after formatting)"; \
+		echo "❌ gofmt would change files"; \
 		echo "   Run 'gofmt -w .' and commit the changes"; \
 		echo ""; \
 		echo "Changed files:"; \

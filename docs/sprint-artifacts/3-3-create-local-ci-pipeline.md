@@ -1,6 +1,6 @@
 # Story 3.3: Configure Local CI Pipeline
 
-Status: Ready for Review
+Status: done
 
 ## Story
 
@@ -75,8 +75,8 @@ From `docs/epics.md`:
 - `make coverage` - Coverage check with 80% threshold ✅
 - `make build` - Build the application ✅
 
-**Missing:**
-- `make ci` - Combined local CI pipeline (this story)
+**Added by this story:**
+- `make ci` - Combined local CI pipeline (mod-tidy → fmt → lint → test)
 - `check-mod-tidy` - go.mod verification
 - `check-fmt` - gofmt verification
 
@@ -223,8 +223,8 @@ Claude 3.5 Sonnet (Anthropic)
 
 ### Debug Log References
 
-- Fixed `prometheus/client_model` direct dependency in go.mod (was incorrectly marked indirect)
-- Fixed gofmt formatting issues in test files: `create_user_test.go`, `metrics_test.go`
+- Review fix: tightened `check-mod-tidy`/`check-fmt` to require clean working tree and avoid misleading failures
+- `make ci` (with staged changes) passed locally on 2025-12-17
 
 ### Completion Notes List
 
@@ -235,20 +235,20 @@ Claude 3.5 Sonnet (Anthropic)
 - ✅ All targets include emoji step indicators for readability
 - ✅ Verified all CI checks pass on clean working tree
 - ✅ Verified fail paths work: mod-tidy failure detected, gofmt failure detected
+ - ✅ Review fix: updated Makefile checks to fail early when working tree is not clean
+ - ✅ Review fix: updated `docs/project-context.md` Makefile section to include `make ci` and helper targets
+ - ✅ Verified `make ci` passes with staged changes (see Debug Log References)
 
 ### File List
 
-- `Makefile` (updated - added `ci`, `check-mod-tidy`, `check-fmt` targets)
-- `go.mod` (updated - prometheus/client_model moved to direct dependency)
-- `internal/app/user/create_user_test.go` (updated - gofmt fixes)
-- `internal/transport/http/middleware/metrics_test.go` (updated - gofmt fixes)
-- `docs/sprint-artifacts/3-3-create-local-ci-pipeline.md` (updated - story file)
-- `docs/sprint-artifacts/sprint-status.yaml` (updated - story status)
+- `Makefile` (updated - `check-mod-tidy`/`check-fmt` robustness improvements)
+- `docs/project-context.md` (updated - document `make ci` and helper targets)
+- `docs/sprint-artifacts/3-3-create-local-ci-pipeline.md` (updated - status normalization + notes)
+- `docs/sprint-artifacts/sprint-status.yaml` (updated - mark story status `done`)
 
 ### Change Log
 
 - 2025-12-17: Story 3.3 implementation complete - Added local CI pipeline with `make ci`
+- 2025-12-17: Code review fixes - status normalization, Makefile robustness, docs sync
 
 ---
-
-Status: Ready for Review

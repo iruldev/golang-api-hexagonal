@@ -376,7 +376,11 @@ migrations/                  → goose SQL files
 make setup      # Install tools
 make run        # Run locally
 make test       # Run unit tests
+make coverage   # Enforce 80% coverage (domain+app)
 make lint       # Run golangci-lint
+make ci         # Run local CI checks (mod-tidy, fmt, lint, test)
+make check-mod-tidy # Verify go.mod/go.sum are tidy (requires clean working tree)
+make check-fmt  # Verify gofmt produces no changes (requires clean working tree)
 make migrate    # Run migrations
 ```
 
