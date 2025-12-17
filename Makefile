@@ -13,6 +13,9 @@ COVERAGE_THRESHOLD ?= 80
 
 # Docker parameters
 DOCKER_COMPOSE=docker compose
+DOCKER_VOLUME_PGDATA ?= golang-api-hexagonal-pgdata
+INFRA_TIMEOUT ?= 60
+INFRA_CONFIRM ?=
 
 ## help: Show this help message
 .PHONY: help
@@ -185,17 +188,32 @@ clean:
 # Infrastructure
 # =============================================================================
 
-## infra-up: Start infrastructure (PostgreSQL)
+## infra-up: Start infrastructure (PostgreSQL) (INFRA_TIMEOUT=60)
 .PHONY: infra-up
 infra-up:
 	@echo "🐘 Starting PostgreSQL..."
-	$(DOCKER_COMPOSE) up -d
-	@echo "⏳ Waiting for PostgreSQL to be healthy (timeout: 60s)..."
-	@timeout=60; \
-	while ! $(DOCKER_COMPOSE) ps | grep -q "healthy"; do \
+	$(DOCKER_COMPOSE) up -d postgres
+	@echo "⏳ Waiting for PostgreSQL to be healthy (timeout: $(INFRA_TIMEOUT)s)..."
+	@set -e; \
+	timeout=$(INFRA_TIMEOUT); \
+	cid=$$($(DOCKER_COMPOSE) ps -q postgres); \
+	if [ -z "$$cid" ]; then \
+		echo "❌ PostgreSQL container not found after startup"; \
+		exit 1; \
+	fi; \
+	while true; do \
+		status=$$(docker inspect --format='{{.State.Health.Status}}' "$$cid" 2>/dev/null || echo "unknown"); \
+		if [ "$$status" = "healthy" ]; then \
+			break; \
+		fi; \
+		if [ "$$status" = "unhealthy" ]; then \
+			echo "❌ PostgreSQL reported unhealthy"; \
+			echo "   Run 'make infra-logs' to check container logs"; \
+			exit 1; \
+		fi; \
 		timeout=$$((timeout - 2)); \
 		if [ $$timeout -le 0 ]; then \
-			echo "❌ Timeout: PostgreSQL did not become healthy in 60s"; \
+			echo "❌ Timeout: PostgreSQL did not become healthy in $(INFRA_TIMEOUT)s"; \
 			echo "   Run 'make infra-logs' to check container logs"; \
 			exit 1; \
 		fi; \
@@ -214,26 +232,42 @@ infra-up:
 .PHONY: infra-down
 infra-down:
 	@echo "🛑 Stopping infrastructure..."
-	$(DOCKER_COMPOSE) down
+	@set -e; \
+	cid=$$($(DOCKER_COMPOSE) ps -q postgres); \
+	if [ -n "$$cid" ]; then \
+		$(DOCKER_COMPOSE) stop postgres; \
+		$(DOCKER_COMPOSE) rm -f postgres; \
+	fi
 	@echo "✅ Infrastructure stopped (data preserved)"
 
-## infra-reset: Stop infrastructure and remove volumes (DESTRUCTIVE)
+## infra-reset: Stop infrastructure and remove volumes (DESTRUCTIVE) (INFRA_CONFIRM=y)
 .PHONY: infra-reset
 infra-reset:
-	@echo "⚠️  WARNING: This will delete all database data!"
-	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
-	$(DOCKER_COMPOSE) down -v
+	@echo "WARNING: removing volumes"
+	@echo "⚠️  This will delete all database data!"
+	@if [ "$(INFRA_CONFIRM)" != "y" ]; then \
+		printf "Are you sure? [y/N] " && read confirm && [ "$$confirm" = "y" ] || exit 1; \
+	fi
+	@set -e; \
+	cid=$$($(DOCKER_COMPOSE) ps -q postgres); \
+	if [ -n "$$cid" ]; then \
+		$(DOCKER_COMPOSE) stop postgres; \
+		$(DOCKER_COMPOSE) rm -f postgres; \
+	fi; \
+	if docker volume inspect "$(DOCKER_VOLUME_PGDATA)" > /dev/null 2>&1; then \
+		docker volume rm -f "$(DOCKER_VOLUME_PGDATA)"; \
+	fi
 	@echo "✅ Infrastructure reset complete"
 
 ## infra-logs: View infrastructure logs
 .PHONY: infra-logs
 infra-logs:
-	$(DOCKER_COMPOSE) logs -f
+	$(DOCKER_COMPOSE) logs -f postgres
 
 ## infra-status: Show infrastructure status
 .PHONY: infra-status
 infra-status:
-	$(DOCKER_COMPOSE) ps
+	$(DOCKER_COMPOSE) ps postgres
 
 # =============================================================================
 # Database Migrations
