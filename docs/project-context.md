@@ -18,7 +18,7 @@ _Critical rules for implementing code in golang-api-hexagonal. Focus on what's u
 
 | Component | Package | Version |
 |-----------|---------|---------|
-| Language | Go | 1.23+ (CI: 1.22, 1.23) |
+| Language | Go | 1.24+ (toolchain pinned in `go.mod`) |
 | HTTP Router | github.com/go-chi/chi/v5 | v5.x |
 | PostgreSQL | github.com/jackc/pgx/v5 | v5.x |
 | Config | github.com/kelseyhightower/envconfig | latest |

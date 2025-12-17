@@ -9,6 +9,7 @@ GOBUILD=$(GOCMD) build
 GOTEST=$(GOCMD) test
 GOMOD=$(GOCMD) mod
 BINARY_NAME=api
+COVERAGE_THRESHOLD ?= 80
 
 # Docker parameters
 DOCKER_COMPOSE=docker compose
@@ -76,7 +77,28 @@ run:
 ## test: Run all tests
 .PHONY: test
 test:
-	$(GOTEST) -v -race ./...
+	$(GOTEST) -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+## coverage: Check test coverage meets 80% threshold for domain+app
+.PHONY: coverage
+coverage:
+	@echo "📊 Running tests with coverage (domain+app)..."
+	$(GOTEST) -race -coverprofile=coverage.out -covermode=atomic \
+		./internal/domain/... \
+		./internal/app/...
+	@echo ""
+	@echo "📈 Coverage report:"
+	@go tool cover -func=coverage.out | tail -1
+	@THRESHOLD="$(COVERAGE_THRESHOLD)"; \
+	COVERAGE=$$(go tool cover -func=coverage.out | tail -1 | awk '{gsub(/%/,"",$$3); print $$3}'); \
+	if awk 'BEGIN {exit !('"$$COVERAGE"' < '"$$THRESHOLD"')}'; then \
+		echo ""; \
+		echo "❌ Coverage $$COVERAGE% is below $$THRESHOLD% threshold"; \
+		exit 1; \
+	else \
+		echo ""; \
+		echo "✅ Coverage $$COVERAGE% meets $$THRESHOLD% threshold"; \
+	fi
 
 ## lint: Run linter
 .PHONY: lint

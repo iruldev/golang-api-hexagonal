@@ -44,7 +44,8 @@ linters:
         app-layer:
           list-mode: strict
           files:
-            - '**/internal/app/**'
+            - 'internal/app/**'
+            - '!internal/app/**/*_test.go'
           allow:
             - $gostd
             - github.com/iruldev/golang-api-hexagonal/internal/domain
@@ -63,15 +64,49 @@ linters:
               desc: App layer must not import transport layer
             - pkg: github.com/iruldev/golang-api-hexagonal/internal/infra
               desc: App layer must not import infra layer
+        app-layer-test:
+          list-mode: strict
+          files:
+            - 'internal/app/**/*_test.go'
+          allow:
+            - $gostd
+            - github.com/iruldev/golang-api-hexagonal/internal/domain
+            - github.com/stretchr/testify
+          deny:
+            - pkg: log/slog
+              desc: App tests must not log directly
+            - pkg: go.opentelemetry.io
+              desc: App tests must not trace directly
+            - pkg: github.com/google/uuid
+              desc: App tests must not import UUID library directly
+            - pkg: net/http
+              desc: App tests must not import HTTP packages
+            - pkg: github.com/jackc/pgx/v5
+              desc: App tests must not import database drivers
+            - pkg: github.com/iruldev/golang-api-hexagonal/internal/transport
+              desc: App tests must not import transport layer
+            - pkg: github.com/iruldev/golang-api-hexagonal/internal/infra
+              desc: App tests must not import infra layer
         domain-layer:
           list-mode: strict
           files:
-            - '**/internal/domain/**'
+            - 'internal/domain/**'
+            - '!internal/domain/**/*_test.go'
           allow:
             - $gostd
           deny:
             - pkg: log/slog
               desc: Domain layer must not log
+        domain-layer-test:
+          list-mode: strict
+          files:
+            - 'internal/domain/**/*_test.go'
+          allow:
+            - $gostd
+            - github.com/stretchr/testify
+          deny:
+            - pkg: log/slog
+              desc: Domain tests must not log
         infra-layer:
           list-mode: lax
           files:
