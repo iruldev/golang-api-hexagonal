@@ -9,12 +9,15 @@ var (
 	// ErrUserNotFound is returned when a user cannot be found.
 	ErrUserNotFound = errors.New("user not found")
 
-	// ErrEmailExists is returned when attempting to create a user with an existing email.
-	ErrEmailExists = errors.New("email already exists")
+	// ErrEmailAlreadyExists is returned when attempting to create a user with an existing email.
+	ErrEmailAlreadyExists = errors.New("email already exists")
 
 	// ErrInvalidEmail is returned when the email format is invalid or empty.
 	ErrInvalidEmail = errors.New("invalid email format")
 
-	// ErrInvalidUserName is returned when the user name is empty or invalid.
-	ErrInvalidUserName = errors.New("invalid user name")
+	// ErrInvalidFirstName is returned when the first name is empty or invalid.
+	ErrInvalidFirstName = errors.New("invalid first name")
+
+	// ErrInvalidLastName is returned when the last name is empty or invalid.
+	ErrInvalidLastName = errors.New("invalid last name")
 )

@@ -6,25 +6,31 @@ import (
 	"time"
 )
 
-// User represents a minimal domain entity used to validate unit testing patterns.
-// This is a sample entity created for Story 3.2 to demonstrate test infrastructure.
+// User represents a domain entity for user data.
+// This entity follows hexagonal architecture principles - no external dependencies.
 type User struct {
 	ID        ID
-	Name      string
 	Email     string
+	FirstName string
+	LastName  string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
 
 // Validate checks if the User entity has valid required fields.
 // Returns a domain error if validation fails.
+// Validation order: Email first, then FirstName, then LastName.
 func (u User) Validate() error {
 	if strings.TrimSpace(u.Email) == "" {
 		return ErrInvalidEmail
 	}
 
-	if strings.TrimSpace(u.Name) == "" {
-		return ErrInvalidUserName
+	if strings.TrimSpace(u.FirstName) == "" {
+		return ErrInvalidFirstName
+	}
+
+	if strings.TrimSpace(u.LastName) == "" {
+		return ErrInvalidLastName
 	}
 
 	return nil
@@ -32,19 +38,15 @@ func (u User) Validate() error {
 
 // UserRepository defines the interface for user persistence operations.
 // This interface is defined in the domain layer and implemented by the infrastructure layer.
+// All methods accept a Querier to support both connection pool and transaction usage.
 type UserRepository interface {
-	// Create stores a new user and returns the created user with ID.
-	Create(ctx context.Context, user User) (User, error)
+	// Create stores a new user.
+	Create(ctx context.Context, q Querier, user *User) error
 
 	// GetByID retrieves a user by their ID.
-	GetByID(ctx context.Context, id ID) (User, error)
+	GetByID(ctx context.Context, q Querier, id ID) (*User, error)
 
-	// GetByEmail retrieves a user by their email address.
-	GetByEmail(ctx context.Context, email string) (User, error)
-
-	// Update modifies an existing user.
-	Update(ctx context.Context, user User) error
-
-	// Delete removes a user by their ID.
-	Delete(ctx context.Context, id ID) error
+	// List retrieves users with pagination.
+	// Returns the slice of users, total count of matching users, and any error.
+	List(ctx context.Context, q Querier, params ListParams) ([]User, int, error)
 }

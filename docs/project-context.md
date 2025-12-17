@@ -168,7 +168,7 @@ const DEFAULT_PAGE_SIZE = 20 // ❌ (except env vars)
 
 // Domain Errors: Err prefix
 var ErrUserNotFound = errors.New("user not found")
-var ErrEmailExists = errors.New("email already exists")
+var ErrEmailAlreadyExists = errors.New("email already exists")
 ```
 
 ### API

@@ -19,3 +19,10 @@ func (id ID) String() string {
 func (id ID) IsEmpty() bool {
 	return id == ""
 }
+
+// IDGenerator is an interface for generating unique identifiers.
+// The domain layer defines this interface; infrastructure provides the implementation
+// (e.g., UUID v7 generator). This allows tests to use deterministic fakes.
+type IDGenerator interface {
+	NewID() ID
+}

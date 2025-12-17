@@ -2,7 +2,7 @@ package user
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -11,78 +11,67 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
 )
 
+// mockIDGenerator is a test double for domain.IDGenerator.
+type mockIDGenerator struct {
+	nextID int
+}
+
+func newMockIDGenerator() *mockIDGenerator {
+	return &mockIDGenerator{nextID: 1}
+}
+
+func (m *mockIDGenerator) NewID() domain.ID {
+	id := domain.ID("user-" + strconv.Itoa(m.nextID))
+	m.nextID++
+	return id
+}
+
+// mockQuerier is a test double for domain.Querier.
+type mockQuerier struct{}
+
+func (m *mockQuerier) Exec(_ context.Context, _ string, _ ...any) (any, error)  { return nil, nil }
+func (m *mockQuerier) Query(_ context.Context, _ string, _ ...any) (any, error) { return nil, nil }
+func (m *mockQuerier) QueryRow(_ context.Context, _ string, _ ...any) any       { return nil }
+
 // mockUserRepository is a test double for domain.UserRepository.
-// It allows us to control repository behavior in tests without database access.
 type mockUserRepository struct {
 	users       map[domain.ID]domain.User
-	emailIndex  map[string]domain.ID
-	nextID      int
 	createError error
-	getError    error
 }
 
 func newMockUserRepository() *mockUserRepository {
 	return &mockUserRepository{
-		users:      make(map[domain.ID]domain.User),
-		emailIndex: make(map[string]domain.ID),
-		nextID:     1,
+		users: make(map[domain.ID]domain.User),
 	}
 }
 
-func (m *mockUserRepository) Create(_ context.Context, user domain.User) (domain.User, error) {
+func (m *mockUserRepository) Create(_ context.Context, _ domain.Querier, user *domain.User) error {
 	if m.createError != nil {
-		return domain.User{}, m.createError
+		return m.createError
 	}
-
-	user.ID = domain.ID(fmt.Sprintf("user-%d", m.nextID))
-	m.nextID++
 
 	now := time.Unix(0, 0).UTC()
 	user.CreatedAt = now
 	user.UpdatedAt = now
 
-	m.users[user.ID] = user
-	m.emailIndex[user.Email] = user.ID
-
-	return user, nil
+	m.users[user.ID] = *user
+	return nil
 }
 
-func (m *mockUserRepository) GetByID(_ context.Context, id domain.ID) (domain.User, error) {
-	if m.getError != nil {
-		return domain.User{}, m.getError
-	}
-
+func (m *mockUserRepository) GetByID(_ context.Context, _ domain.Querier, id domain.ID) (*domain.User, error) {
 	user, exists := m.users[id]
 	if !exists {
-		return domain.User{}, domain.ErrUserNotFound
+		return nil, domain.ErrUserNotFound
 	}
-	return user, nil
+	return &user, nil
 }
 
-func (m *mockUserRepository) GetByEmail(_ context.Context, email string) (domain.User, error) {
-	if m.getError != nil {
-		return domain.User{}, m.getError
+func (m *mockUserRepository) List(_ context.Context, _ domain.Querier, _ domain.ListParams) ([]domain.User, int, error) {
+	users := make([]domain.User, 0, len(m.users))
+	for _, u := range m.users {
+		users = append(users, u)
 	}
-
-	id, exists := m.emailIndex[email]
-	if !exists {
-		return domain.User{}, domain.ErrUserNotFound
-	}
-	return m.users[id], nil
-}
-
-func (m *mockUserRepository) Update(_ context.Context, _ domain.User) error {
-	return nil
-}
-
-func (m *mockUserRepository) Delete(_ context.Context, _ domain.ID) error {
-	return nil
-}
-
-// addExistingUser adds a user directly to the mock repository for testing.
-func (m *mockUserRepository) addExistingUser(user domain.User) {
-	m.users[user.ID] = user
-	m.emailIndex[user.Email] = user.ID
+	return users, len(users), nil
 }
 
 func TestCreateUserUseCase_Execute(t *testing.T) {
@@ -98,8 +87,9 @@ func TestCreateUserUseCase_Execute(t *testing.T) {
 		{
 			name: "successfully creates a new user",
 			req: CreateUserRequest{
-				Name:  "John Doe",
-				Email: "john@example.com",
+				FirstName: "John",
+				LastName:  "Doe",
+				Email:     "john@example.com",
 			},
 			setupMock:  func(_ *mockUserRepository) {},
 			wantErr:    nil,
@@ -108,8 +98,9 @@ func TestCreateUserUseCase_Execute(t *testing.T) {
 		{
 			name: "fails with invalid email",
 			req: CreateUserRequest{
-				Name:  "John Doe",
-				Email: "",
+				FirstName: "John",
+				LastName:  "Doe",
+				Email:     "",
 			},
 			setupMock:  func(_ *mockUserRepository) {},
 			wantErr:    domain.ErrInvalidEmail,
@@ -118,56 +109,42 @@ func TestCreateUserUseCase_Execute(t *testing.T) {
 		{
 			name: "fails with whitespace-only email",
 			req: CreateUserRequest{
-				Name:  "John Doe",
-				Email: "   ",
+				FirstName: "John",
+				LastName:  "Doe",
+				Email:     "   ",
 			},
 			setupMock:  func(_ *mockUserRepository) {},
 			wantErr:    domain.ErrInvalidEmail,
 			wantUserID: false,
 		},
 		{
-			name: "fails with invalid name",
+			name: "fails with invalid first name",
 			req: CreateUserRequest{
-				Name:  "",
-				Email: "john@example.com",
+				FirstName: "",
+				LastName:  "Doe",
+				Email:     "john@example.com",
 			},
 			setupMock:  func(_ *mockUserRepository) {},
-			wantErr:    domain.ErrInvalidUserName,
+			wantErr:    domain.ErrInvalidFirstName,
 			wantUserID: false,
 		},
 		{
-			name: "fails when email already exists",
+			name: "fails with invalid last name",
 			req: CreateUserRequest{
-				Name:  "John Doe",
-				Email: "existing@example.com",
+				FirstName: "John",
+				LastName:  "",
+				Email:     "john@example.com",
 			},
-			setupMock: func(m *mockUserRepository) {
-				m.addExistingUser(domain.User{
-					ID:    domain.ID("existing-user"),
-					Name:  "Existing User",
-					Email: "existing@example.com",
-				})
-			},
-			wantErr:    domain.ErrEmailExists,
-			wantUserID: false,
-		},
-		{
-			name: "propagates repository get error (non-not-found)",
-			req: CreateUserRequest{
-				Name:  "John Doe",
-				Email: "john@example.com",
-			},
-			setupMock: func(m *mockUserRepository) {
-				m.getError = repoErr
-			},
-			wantErr:    repoErr,
+			setupMock:  func(_ *mockUserRepository) {},
+			wantErr:    domain.ErrInvalidLastName,
 			wantUserID: false,
 		},
 		{
 			name: "propagates repository create error",
 			req: CreateUserRequest{
-				Name:  "John Doe",
-				Email: "john@example.com",
+				FirstName: "John",
+				LastName:  "Doe",
+				Email:     "john@example.com",
 			},
 			setupMock: func(m *mockUserRepository) {
 				m.createError = repoErr
@@ -180,9 +157,11 @@ func TestCreateUserUseCase_Execute(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := newMockUserRepository()
+			mockIDGen := newMockIDGenerator()
+			mockDB := &mockQuerier{}
 			tt.setupMock(mockRepo)
 
-			useCase := NewCreateUserUseCase(mockRepo)
+			useCase := NewCreateUserUseCase(mockRepo, mockIDGen, mockDB)
 			resp, err := useCase.Execute(context.Background(), tt.req)
 
 			if tt.wantErr != nil {
@@ -192,7 +171,8 @@ func TestCreateUserUseCase_Execute(t *testing.T) {
 				assert.NoError(t, err)
 				if tt.wantUserID {
 					assert.False(t, resp.User.ID.IsEmpty())
-					assert.Equal(t, tt.req.Name, resp.User.Name)
+					assert.Equal(t, tt.req.FirstName, resp.User.FirstName)
+					assert.Equal(t, tt.req.LastName, resp.User.LastName)
 					assert.Equal(t, tt.req.Email, resp.User.Email)
 				}
 			}
@@ -202,8 +182,12 @@ func TestCreateUserUseCase_Execute(t *testing.T) {
 
 func TestNewCreateUserUseCase(t *testing.T) {
 	mockRepo := newMockUserRepository()
-	useCase := NewCreateUserUseCase(mockRepo)
+	mockIDGen := newMockIDGenerator()
+	mockDB := &mockQuerier{}
+	useCase := NewCreateUserUseCase(mockRepo, mockIDGen, mockDB)
 
 	assert.NotNil(t, useCase)
 	assert.Equal(t, mockRepo, useCase.userRepo)
+	assert.Equal(t, mockIDGen, useCase.idGen)
+	assert.Equal(t, mockDB, useCase.db)
 }

@@ -62,16 +62,16 @@ development_status:
   epic-2-retrospective: completed
 
   # Epic 3: Local Quality Gates
-  epic-3: in-progress
+  epic-3: done
   3-1-configure-golangci-lint-with-boundary-rules: done
   3-2-setup-unit-test-infrastructure: done
   3-3-create-local-ci-pipeline: done
   3-4-implement-infrastructure-container-management: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: completed
 
   # Epic 4: Reference Implementation (Users Module)
-  epic-4: backlog
-  4-1-implement-user-domain-entity: backlog
+  epic-4: in-progress
+  4-1-implement-user-domain-entity: done
   4-2-implement-user-postgresql-repository: backlog
   4-3-implement-user-use-cases: backlog
   4-4-implement-error-response-mapper: backlog

@@ -209,7 +209,7 @@ go.opentelemetry.io/otel/exporters/prometheus # Metrics
 type UserRepository interface {
     Create(ctx context.Context, q Querier, user *User) error
     GetByID(ctx context.Context, q Querier, id ID) (*User, error)
-    List(ctx context.Context, q Querier, params ListParams) ([]User, error)
+    List(ctx context.Context, q Querier, params ListParams) ([]User, int, error)
 }
 
 // internal/domain/querier.go
@@ -243,14 +243,13 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, req CreateUserRequest)
     var user *User
     err := uc.txManager.WithTx(ctx, func(tx domain.Querier) error {
         // All operations within transaction
-        u, err := uc.userRepo.Create(ctx, tx, &domain.User{...})
-        if err != nil {
+        user = &domain.User{...}
+        if err := uc.userRepo.Create(ctx, tx, user); err != nil {
             return err
         }
         if err := uc.auditRepo.Record(ctx, tx, auditEvent); err != nil {
             return err
         }
-        user = u
         return nil
     })
     return user, err

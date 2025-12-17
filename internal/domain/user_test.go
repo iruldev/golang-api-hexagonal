@@ -17,7 +17,8 @@ func TestUser_Validate(t *testing.T) {
 			name: "valid user with all fields",
 			user: User{
 				ID:        ID("user-123"),
-				Name:      "John Doe",
+				FirstName: "John",
+				LastName:  "Doe",
 				Email:     "john@example.com",
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
@@ -27,50 +28,83 @@ func TestUser_Validate(t *testing.T) {
 		{
 			name: "valid user with minimal fields",
 			user: User{
-				Name:  "Jane Doe",
-				Email: "jane@example.com",
+				FirstName: "Jane",
+				LastName:  "Doe",
+				Email:     "jane@example.com",
 			},
 			wantErr: nil,
 		},
 		{
 			name: "missing email",
 			user: User{
-				Name:  "John Doe",
-				Email: "",
+				FirstName: "John",
+				LastName:  "Doe",
+				Email:     "",
 			},
 			wantErr: ErrInvalidEmail,
 		},
 		{
 			name: "whitespace-only email",
 			user: User{
-				Name:  "John Doe",
-				Email: "   ",
+				FirstName: "John",
+				LastName:  "Doe",
+				Email:     "   ",
 			},
 			wantErr: ErrInvalidEmail,
 		},
 		{
-			name: "missing name",
+			name: "missing first name",
 			user: User{
-				Name:  "",
-				Email: "john@example.com",
+				FirstName: "",
+				LastName:  "Doe",
+				Email:     "john@example.com",
 			},
-			wantErr: ErrInvalidUserName,
+			wantErr: ErrInvalidFirstName,
 		},
 		{
-			name: "whitespace-only name",
+			name: "whitespace-only first name",
 			user: User{
-				Name:  "   ",
-				Email: "john@example.com",
+				FirstName: "   ",
+				LastName:  "Doe",
+				Email:     "john@example.com",
 			},
-			wantErr: ErrInvalidUserName,
+			wantErr: ErrInvalidFirstName,
 		},
 		{
-			name: "missing both email and name returns email error first",
+			name: "missing last name",
 			user: User{
-				Name:  "",
-				Email: "",
+				FirstName: "John",
+				LastName:  "",
+				Email:     "john@example.com",
+			},
+			wantErr: ErrInvalidLastName,
+		},
+		{
+			name: "whitespace-only last name",
+			user: User{
+				FirstName: "John",
+				LastName:  "   ",
+				Email:     "john@example.com",
+			},
+			wantErr: ErrInvalidLastName,
+		},
+		{
+			name: "missing both email and names returns email error first",
+			user: User{
+				FirstName: "",
+				LastName:  "",
+				Email:     "",
 			},
 			wantErr: ErrInvalidEmail,
+		},
+		{
+			name: "valid email but missing names returns first name error",
+			user: User{
+				FirstName: "",
+				LastName:  "",
+				Email:     "john@example.com",
+			},
+			wantErr: ErrInvalidFirstName,
 		},
 	}
 
