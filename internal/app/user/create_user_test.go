@@ -148,34 +148,34 @@ func TestCreateUserUseCase_Execute(t *testing.T) {
 					Email: "existing@example.com",
 				})
 			},
-				wantErr:    domain.ErrEmailExists,
-				wantUserID: false,
+			wantErr:    domain.ErrEmailExists,
+			wantUserID: false,
+		},
+		{
+			name: "propagates repository get error (non-not-found)",
+			req: CreateUserRequest{
+				Name:  "John Doe",
+				Email: "john@example.com",
 			},
-			{
-				name: "propagates repository get error (non-not-found)",
-				req: CreateUserRequest{
-					Name:  "John Doe",
-					Email: "john@example.com",
-				},
-				setupMock: func(m *mockUserRepository) {
-					m.getError = repoErr
-				},
-				wantErr:    repoErr,
-				wantUserID: false,
+			setupMock: func(m *mockUserRepository) {
+				m.getError = repoErr
 			},
-			{
-				name: "propagates repository create error",
-				req: CreateUserRequest{
-					Name:  "John Doe",
-					Email: "john@example.com",
-				},
-				setupMock: func(m *mockUserRepository) {
-					m.createError = repoErr
-				},
-				wantErr:    repoErr,
-				wantUserID: false,
+			wantErr:    repoErr,
+			wantUserID: false,
+		},
+		{
+			name: "propagates repository create error",
+			req: CreateUserRequest{
+				Name:  "John Doe",
+				Email: "john@example.com",
 			},
-		}
+			setupMock: func(m *mockUserRepository) {
+				m.createError = repoErr
+			},
+			wantErr:    repoErr,
+			wantUserID: false,
+		},
+	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

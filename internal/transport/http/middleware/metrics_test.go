@@ -196,10 +196,10 @@ func TestMetrics_CapturesStatusCode(t *testing.T) {
 		{"500 Internal Server Error", http.StatusInternalServerError},
 	}
 
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				reg, httpMetrics := newTestMetricsRegistry()
-				resetMetrics(httpMetrics)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reg, httpMetrics := newTestMetricsRegistry()
+			resetMetrics(httpMetrics)
 
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.statusCode)

@@ -105,6 +105,60 @@ coverage:
 lint:
 	golangci-lint run ./...
 
+# =============================================================================
+# CI Pipeline
+# =============================================================================
+
+## ci: Run full CI pipeline locally (mod-tidy, fmt, lint, test)
+.NOTPARALLEL: ci
+.PHONY: ci
+ci:
+	@echo ""
+	@echo "🚀 Running Local CI Pipeline"
+	@echo "=============================="
+	@echo ""
+	@$(MAKE) check-mod-tidy
+	@$(MAKE) check-fmt
+	@$(MAKE) lint
+	@$(MAKE) test
+	@echo ""
+	@echo "=============================="
+	@echo "✅ All CI checks passed!"
+	@echo ""
+
+## check-mod-tidy: Verify go.mod and go.sum are tidy
+.PHONY: check-mod-tidy
+check-mod-tidy:
+	@echo "📦 Checking go.mod is tidy..."
+	@$(GOMOD) tidy
+	@if ! git diff --exit-code go.mod go.sum > /dev/null 2>&1; then \
+		echo ""; \
+		echo "❌ go.mod or go.sum is not tidy"; \
+		echo "   Run 'go mod tidy' and commit the changes"; \
+		git --no-pager diff --stat go.mod go.sum; \
+		exit 1; \
+	fi
+	@echo "✅ go.mod is tidy"
+
+## check-fmt: Verify code is formatted with gofmt
+.PHONY: check-fmt
+check-fmt:
+	@echo "📐 Checking code formatting (gofmt)..."
+	@FILES=$$(git ls-files '*.go'); \
+	if [ -n "$$FILES" ]; then \
+		gofmt -w $$FILES; \
+	fi; \
+	if ! git diff --exit-code > /dev/null 2>&1; then \
+		echo ""; \
+		echo "❌ gofmt would change files (working tree is not clean after formatting)"; \
+		echo "   Run 'gofmt -w .' and commit the changes"; \
+		echo ""; \
+		echo "Changed files:"; \
+		git --no-pager diff --name-only; \
+		exit 1; \
+	fi
+	@echo "✅ All files are formatted"
+
 ## clean: Clean build artifacts
 .PHONY: clean
 clean:
