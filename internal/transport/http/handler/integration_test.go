@@ -125,4 +125,21 @@ func TestMetricsEndpoint(t *testing.T) {
 		// Go runtime metrics (from collectors.NewGoCollector)
 		assert.Contains(t, body, "go_goroutines")
 	})
+
+	t.Run("custom metrics created via factory appear at /metrics", func(t *testing.T) {
+		custom, err := observability.NewCounter(metricsReg, "custom_events_total", "Custom events", []string{})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		custom.WithLabelValues().Inc()
+
+		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		rec := httptest.NewRecorder()
+
+		r.ServeHTTP(rec, req)
+
+		body := rec.Body.String()
+		assert.Contains(t, body, "custom_events_total")
+		assert.Contains(t, body, "# HELP custom_events_total")
+	})
 }

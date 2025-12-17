@@ -58,7 +58,7 @@ development_status:
   2-3a-implement-opentelemetry-tracing-setup: done
   2-3b-implement-trace-correlation-in-logs: done
   2-4-implement-prometheus-metrics-endpoint: done
-  2-5-implement-custom-metrics-utilities: backlog
+  2-5-implement-custom-metrics-utilities: done
   epic-2-retrospective: optional
 
   # Epic 3: Local Quality Gates
