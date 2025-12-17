@@ -5,7 +5,9 @@ package user
 
 import (
 	"context"
+	"errors"
 
+	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
 )
 
@@ -39,6 +41,7 @@ func NewCreateUserUseCase(userRepo domain.UserRepository, idGen domain.IDGenerat
 
 // Execute processes the create user request.
 // It validates the input and creates the user.
+// Returns AppError with appropriate Code for domain errors.
 func (uc *CreateUserUseCase) Execute(ctx context.Context, req CreateUserRequest) (CreateUserResponse, error) {
 	// Create a new user entity with generated ID
 	user := &domain.User{
@@ -50,12 +53,30 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, req CreateUserRequest)
 
 	// Validate the user entity using domain rules
 	if err := user.Validate(); err != nil {
-		return CreateUserResponse{}, err
+		return CreateUserResponse{}, &app.AppError{
+			Op:      "CreateUser",
+			Code:    app.CodeValidationError,
+			Message: "Validation failed",
+			Err:     err,
+		}
 	}
 
 	// Create the user in the repository
 	if err := uc.userRepo.Create(ctx, uc.db, user); err != nil {
-		return CreateUserResponse{}, err
+		if errors.Is(err, domain.ErrEmailAlreadyExists) {
+			return CreateUserResponse{}, &app.AppError{
+				Op:      "CreateUser",
+				Code:    app.CodeEmailExists,
+				Message: "Email already exists",
+				Err:     err,
+			}
+		}
+		return CreateUserResponse{}, &app.AppError{
+			Op:      "CreateUser",
+			Code:    app.CodeInternalError,
+			Message: "Failed to create user",
+			Err:     err,
+		}
 	}
 
 	return CreateUserResponse{User: *user}, nil

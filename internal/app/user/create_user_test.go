@@ -1,13 +1,18 @@
+//go:build !integration
+
 package user
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
 )
 
@@ -75,12 +80,13 @@ func (m *mockUserRepository) List(_ context.Context, _ domain.Querier, _ domain.
 }
 
 func TestCreateUserUseCase_Execute(t *testing.T) {
-	repoErr := assert.AnError
+	repoErr := errors.New("database error")
 
 	tests := []struct {
 		name       string
 		req        CreateUserRequest
 		setupMock  func(*mockUserRepository)
+		wantCode   string
 		wantErr    error
 		wantUserID bool
 	}{
@@ -96,51 +102,69 @@ func TestCreateUserUseCase_Execute(t *testing.T) {
 			wantUserID: true,
 		},
 		{
-			name: "fails with invalid email",
+			name: "fails with invalid email - returns AppError with VALIDATION_ERROR code",
 			req: CreateUserRequest{
 				FirstName: "John",
 				LastName:  "Doe",
 				Email:     "",
 			},
 			setupMock:  func(_ *mockUserRepository) {},
+			wantCode:   app.CodeValidationError,
 			wantErr:    domain.ErrInvalidEmail,
 			wantUserID: false,
 		},
 		{
-			name: "fails with whitespace-only email",
+			name: "fails with whitespace-only email - returns AppError with VALIDATION_ERROR code",
 			req: CreateUserRequest{
 				FirstName: "John",
 				LastName:  "Doe",
 				Email:     "   ",
 			},
 			setupMock:  func(_ *mockUserRepository) {},
+			wantCode:   app.CodeValidationError,
 			wantErr:    domain.ErrInvalidEmail,
 			wantUserID: false,
 		},
 		{
-			name: "fails with invalid first name",
+			name: "fails with invalid first name - returns AppError with VALIDATION_ERROR code",
 			req: CreateUserRequest{
 				FirstName: "",
 				LastName:  "Doe",
 				Email:     "john@example.com",
 			},
 			setupMock:  func(_ *mockUserRepository) {},
+			wantCode:   app.CodeValidationError,
 			wantErr:    domain.ErrInvalidFirstName,
 			wantUserID: false,
 		},
 		{
-			name: "fails with invalid last name",
+			name: "fails with invalid last name - returns AppError with VALIDATION_ERROR code",
 			req: CreateUserRequest{
 				FirstName: "John",
 				LastName:  "",
 				Email:     "john@example.com",
 			},
 			setupMock:  func(_ *mockUserRepository) {},
+			wantCode:   app.CodeValidationError,
 			wantErr:    domain.ErrInvalidLastName,
 			wantUserID: false,
 		},
 		{
-			name: "propagates repository create error",
+			name: "fails with email already exists - returns AppError with EMAIL_EXISTS code",
+			req: CreateUserRequest{
+				FirstName: "John",
+				LastName:  "Doe",
+				Email:     "john@example.com",
+			},
+			setupMock: func(m *mockUserRepository) {
+				m.createError = domain.ErrEmailAlreadyExists
+			},
+			wantCode:   app.CodeEmailExists,
+			wantErr:    domain.ErrEmailAlreadyExists,
+			wantUserID: false,
+		},
+		{
+			name: "propagates repository create error - returns AppError with INTERNAL_ERROR code",
 			req: CreateUserRequest{
 				FirstName: "John",
 				LastName:  "Doe",
@@ -149,6 +173,7 @@ func TestCreateUserUseCase_Execute(t *testing.T) {
 			setupMock: func(m *mockUserRepository) {
 				m.createError = repoErr
 			},
+			wantCode:   app.CodeInternalError,
 			wantErr:    repoErr,
 			wantUserID: false,
 		},
@@ -165,10 +190,16 @@ func TestCreateUserUseCase_Execute(t *testing.T) {
 			resp, err := useCase.Execute(context.Background(), tt.req)
 
 			if tt.wantErr != nil {
-				assert.ErrorIs(t, err, tt.wantErr)
+				require.Error(t, err)
+				// Verify error is wrapped in AppError
+				var appErr *app.AppError
+				require.True(t, errors.As(err, &appErr), "expected AppError, got %T", err)
+				assert.Equal(t, tt.wantCode, appErr.Code)
+				// Verify underlying error is preserved
+				assert.True(t, errors.Is(err, tt.wantErr), "expected wrapped error %v, got %v", tt.wantErr, appErr.Err)
 				assert.True(t, resp.User.ID.IsEmpty())
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				if tt.wantUserID {
 					assert.False(t, resp.User.ID.IsEmpty())
 					assert.Equal(t, tt.req.FirstName, resp.User.FirstName)
