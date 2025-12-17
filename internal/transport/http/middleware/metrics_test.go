@@ -6,14 +6,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
+	sharedMetrics "github.com/iruldev/golang-api-hexagonal/internal/shared/metrics"
 )
 
 // resetMetrics resets the metrics instance for clean tests.
@@ -23,8 +23,55 @@ func resetMetrics(m interface{}) {
 	}
 }
 
+type testHTTPMetrics struct {
+	requests  *prometheus.CounterVec
+	durations *prometheus.HistogramVec
+}
+
+func (m *testHTTPMetrics) IncRequest(method, route, status string) {
+	m.requests.WithLabelValues(method, route, status).Inc()
+}
+
+func (m *testHTTPMetrics) ObserveRequestDuration(method, route string, seconds float64) {
+	m.durations.WithLabelValues(method, route).Observe(seconds)
+}
+
+func (m *testHTTPMetrics) Reset() {
+	m.requests.Reset()
+	m.durations.Reset()
+}
+
+func newTestMetricsRegistry() (*prometheus.Registry, sharedMetrics.HTTPMetrics) {
+	reg := prometheus.NewRegistry()
+
+	requests := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total number of HTTP requests",
+		},
+		[]string{"method", "route", "status"},
+	)
+
+	durations := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "http_request_duration_seconds",
+			Help:    "HTTP request duration in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"method", "route"},
+	)
+
+	reg.MustRegister(requests)
+	reg.MustRegister(durations)
+
+	return reg, &testHTTPMetrics{
+		requests:  requests,
+		durations: durations,
+	}
+}
+
 func TestMetrics_RecordsRequestsTotal(t *testing.T) {
-	reg, httpMetrics := observability.NewMetricsRegistry()
+	reg, httpMetrics := newTestMetricsRegistry()
 	resetMetrics(httpMetrics)
 
 	// Create a test handler
@@ -60,7 +107,7 @@ func TestMetrics_RecordsRequestsTotal(t *testing.T) {
 }
 
 func TestMetrics_RecordsRequestDuration(t *testing.T) {
-	reg, httpMetrics := observability.NewMetricsRegistry()
+	reg, httpMetrics := newTestMetricsRegistry()
 	resetMetrics(httpMetrics)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +145,7 @@ func TestMetrics_RecordsRequestDuration(t *testing.T) {
 }
 
 func TestMetrics_UsesChiRoutePattern(t *testing.T) {
-	reg, httpMetrics := observability.NewMetricsRegistry()
+	reg, httpMetrics := newTestMetricsRegistry()
 	resetMetrics(httpMetrics)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -149,10 +196,10 @@ func TestMetrics_CapturesStatusCode(t *testing.T) {
 		{"500 Internal Server Error", http.StatusInternalServerError},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			reg, httpMetrics := observability.NewMetricsRegistry()
-			resetMetrics(httpMetrics)
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				reg, httpMetrics := newTestMetricsRegistry()
+				resetMetrics(httpMetrics)
 
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.statusCode)
@@ -193,7 +240,7 @@ func TestMetrics_CapturesStatusCode(t *testing.T) {
 }
 
 func TestMetrics_MultipleRequests(t *testing.T) {
-	reg, httpMetrics := observability.NewMetricsRegistry()
+	reg, httpMetrics := newTestMetricsRegistry()
 	resetMetrics(httpMetrics)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -234,7 +281,7 @@ func TestMetrics_MultipleRequests(t *testing.T) {
 }
 
 func TestMetrics_UsesResponseWrapper(t *testing.T) {
-	reg, httpMetrics := observability.NewMetricsRegistry()
+	reg, httpMetrics := newTestMetricsRegistry()
 	resetMetrics(httpMetrics)
 
 	// Handler that writes body without calling WriteHeader explicitly
@@ -276,7 +323,7 @@ func TestMetrics_UsesResponseWrapper(t *testing.T) {
 }
 
 func TestMetrics_FallbackToURLPath(t *testing.T) {
-	reg, httpMetrics := observability.NewMetricsRegistry()
+	reg, httpMetrics := newTestMetricsRegistry()
 	resetMetrics(httpMetrics)
 
 	// Create a simple handler without chi routing
@@ -311,33 +358,4 @@ func TestMetrics_FallbackToURLPath(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "should use URL path when no chi route pattern")
-}
-
-func TestNewMetricsRegistry_HasGoCollectors(t *testing.T) {
-	reg, httpMetrics := observability.NewMetricsRegistry()
-	resetMetrics(httpMetrics)
-
-	// Gather all metrics
-	families, err := reg.Gather()
-	require.NoError(t, err)
-
-	metricNames := make([]string, 0, len(families))
-	for _, f := range families {
-		metricNames = append(metricNames, f.GetName())
-	}
-
-	// Check for Go runtime metrics
-	hasGoroutines := false
-	hasMemstats := false
-	for _, name := range metricNames {
-		if name == "go_goroutines" {
-			hasGoroutines = true
-		}
-		if strings.HasPrefix(name, "go_memstats_") {
-			hasMemstats = true
-		}
-	}
-
-	assert.True(t, hasGoroutines, "go_goroutines metric should be present")
-	assert.True(t, hasMemstats, "go_memstats_* metrics should be present")
 }

@@ -8,7 +8,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+
+	sharedMetrics "github.com/iruldev/golang-api-hexagonal/internal/shared/metrics"
 	httpTransport "github.com/iruldev/golang-api-hexagonal/internal/transport/http"
 	"github.com/stretchr/testify/assert"
 )
@@ -27,11 +30,55 @@ func testLogger() *slog.Logger {
 	return slog.New(slog.NewJSONHandler(io.Discard, nil))
 }
 
+type testHTTPMetrics struct {
+	requests  *prometheus.CounterVec
+	durations *prometheus.HistogramVec
+}
+
+func (m *testHTTPMetrics) IncRequest(method, route, status string) {
+	m.requests.WithLabelValues(method, route, status).Inc()
+}
+
+func (m *testHTTPMetrics) ObserveRequestDuration(method, route string, seconds float64) {
+	m.durations.WithLabelValues(method, route).Observe(seconds)
+}
+
+func newTestMetricsRegistry() (*prometheus.Registry, sharedMetrics.HTTPMetrics) {
+	reg := prometheus.NewRegistry()
+
+	requests := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total number of HTTP requests",
+		},
+		[]string{"method", "route", "status"},
+	)
+
+	durations := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "http_request_duration_seconds",
+			Help:    "HTTP request duration in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"method", "route"},
+	)
+
+	reg.MustRegister(collectors.NewGoCollector())
+	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	reg.MustRegister(requests)
+	reg.MustRegister(durations)
+
+	return reg, &testHTTPMetrics{
+		requests:  requests,
+		durations: durations,
+	}
+}
+
 // TestIntegrationRoutes covers /health and /ready through the router with DB ok/fail.
 func TestIntegrationRoutes(t *testing.T) {
 	healthHandler := NewHealthHandler()
 	logger := testLogger()
-	metricsReg, httpMetrics := observability.NewMetricsRegistry()
+	metricsReg, httpMetrics := newTestMetricsRegistry()
 
 	t.Run("ready OK", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
@@ -80,7 +127,7 @@ func TestIntegrationRoutes(t *testing.T) {
 func TestMetricsEndpoint(t *testing.T) {
 	healthHandler := NewHealthHandler()
 	logger := testLogger()
-	metricsReg, httpMetrics := observability.NewMetricsRegistry()
+	metricsReg, httpMetrics := newTestMetricsRegistry()
 	db := &fakeDB{pingErr: nil}
 	readyHandler := NewReadyHandler(db)
 
@@ -127,10 +174,14 @@ func TestMetricsEndpoint(t *testing.T) {
 	})
 
 	t.Run("custom metrics created via factory appear at /metrics", func(t *testing.T) {
-		custom, err := observability.NewCounter(metricsReg, "custom_events_total", "Custom events", []string{})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		custom := prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "custom_events_total",
+				Help: "Custom events",
+			},
+			[]string{},
+		)
+		metricsReg.MustRegister(custom)
 		custom.WithLabelValues().Inc()
 
 		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)

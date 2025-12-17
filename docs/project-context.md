@@ -63,7 +63,7 @@ _Critical rules for implementing code in golang-api-hexagonal. Focus on what's u
 ### Transport Layer (`internal/transport/http/`)
 
 ```
-✅ ALLOWED: domain, app, chi, uuid, stdlib
+✅ ALLOWED: domain, app, chi, uuid, stdlib, otel (middleware), prometheus client (metrics endpoint)
 ❌ FORBIDDEN: pgx, direct infra/observability imports
 ```
 
