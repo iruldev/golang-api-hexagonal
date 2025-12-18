@@ -31,6 +31,7 @@ const (
 	ProblemTypeInternalErrorSlug   = "internal-error"
 	ProblemTypeUnauthorizedSlug    = "unauthorized"
 	ProblemTypeForbiddenSlug       = "forbidden"
+	ProblemTypeRateLimitSlug       = "rate-limit-exceeded"
 )
 
 func SetProblemBaseURL(baseURL string) error {
@@ -81,6 +82,8 @@ func mapCodeToStatus(code string) int {
 		return http.StatusUnauthorized // 401
 	case app.CodeForbidden:
 		return http.StatusForbidden // 403
+	case app.CodeRateLimitExceeded:
+		return http.StatusTooManyRequests // 429
 	case app.CodeInternalError:
 		return http.StatusInternalServerError // 500
 	default:
@@ -103,6 +106,8 @@ func codeToTitle(code string) string {
 		return "Unauthorized"
 	case app.CodeForbidden:
 		return "Forbidden"
+	case app.CodeRateLimitExceeded:
+		return "Too Many Requests"
 	case app.CodeInternalError:
 		return "Internal Server Error"
 	default:
@@ -124,6 +129,8 @@ func codeToTypeSlug(code string) string {
 		return ProblemTypeUnauthorizedSlug
 	case app.CodeForbidden:
 		return ProblemTypeForbiddenSlug
+	case app.CodeRateLimitExceeded:
+		return ProblemTypeRateLimitSlug
 	case app.CodeInternalError:
 		return ProblemTypeInternalErrorSlug
 	default:

@@ -94,6 +94,18 @@ func TestWriteProblemJSON(t *testing.T) {
 			wantNoInternal: true,
 		},
 		{
+			name: "RATE_LIMIT_EXCEEDED maps to 429",
+			err: &app.AppError{
+				Op:      "RateLimiter",
+				Code:    app.CodeRateLimitExceeded,
+				Message: "Rate limit exceeded",
+			},
+			wantStatus: http.StatusTooManyRequests,
+			wantCode:   app.CodeRateLimitExceeded,
+			wantTitle:  "Too Many Requests",
+			wantType:   ProblemBaseURL + "rate-limit-exceeded",
+		},
+		{
 			name:           "unknown error becomes INTERNAL_ERROR",
 			err:            errors.New("something went wrong"),
 			wantStatus:     http.StatusInternalServerError,
@@ -195,6 +207,9 @@ func TestMapCodeToStatus(t *testing.T) {
 		{app.CodeUserNotFound, http.StatusNotFound},
 		{app.CodeEmailExists, http.StatusConflict},
 		{app.CodeValidationError, http.StatusBadRequest},
+		{app.CodeUnauthorized, http.StatusUnauthorized},
+		{app.CodeForbidden, http.StatusForbidden},
+		{app.CodeRateLimitExceeded, http.StatusTooManyRequests},
 		{app.CodeInternalError, http.StatusInternalServerError},
 		{"UNKNOWN_CODE", http.StatusInternalServerError},
 		{"", http.StatusInternalServerError},
@@ -216,6 +231,7 @@ func TestProblemTypeURL(t *testing.T) {
 		{ProblemTypeNotFoundSlug, ProblemBaseURL + "not-found"},
 		{ProblemTypeConflictSlug, ProblemBaseURL + "conflict"},
 		{ProblemTypeValidationErrorSlug, ProblemBaseURL + "validation-error"},
+		{ProblemTypeRateLimitSlug, ProblemBaseURL + "rate-limit-exceeded"},
 		{ProblemTypeInternalErrorSlug, ProblemBaseURL + "internal-error"},
 	}
 
@@ -235,6 +251,8 @@ func TestCodeToTitle(t *testing.T) {
 		{app.CodeUserNotFound, "User Not Found"},
 		{app.CodeEmailExists, "Email Already Exists"},
 		{app.CodeValidationError, "Validation Error"},
+		{app.CodeValidationError, "Validation Error"},
+		{app.CodeRateLimitExceeded, "Too Many Requests"},
 		{app.CodeInternalError, "Internal Server Error"},
 		{"UNKNOWN_CODE", "Internal Server Error"},
 	}

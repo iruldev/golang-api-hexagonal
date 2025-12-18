@@ -18,6 +18,8 @@ const (
 	CodeUnauthorized = "UNAUTHORIZED"
 	// CodeForbidden indicates that the user is authenticated but not authorized for this action.
 	CodeForbidden = "FORBIDDEN"
+	// CodeRateLimitExceeded indicates that the client has exceeded the rate limit.
+	CodeRateLimitExceeded = "RATE_LIMIT_EXCEEDED"
 	// CodeInternalError indicates an unexpected internal error.
 	CodeInternalError = "INTERNAL_ERROR"
 )

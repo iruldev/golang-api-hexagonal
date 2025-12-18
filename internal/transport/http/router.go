@@ -36,6 +36,16 @@ type JWTConfig struct {
 	Now func() time.Time
 }
 
+// RateLimitConfig holds rate limiting configuration for the router.
+type RateLimitConfig struct {
+	// RequestsPerSecond is the number of requests allowed per second.
+	// Default: 100.
+	RequestsPerSecond int
+	// TrustProxy enables trusting X-Forwarded-For/X-Real-IP headers for client IP.
+	// Default: false.
+	TrustProxy bool
+}
+
 // NewRouter creates a new chi router with the provided handlers and logger.
 //
 // Middleware ordering:
@@ -57,6 +67,7 @@ func NewRouter(
 	userHandler UserRoutes,
 	maxRequestSize int64,
 	jwtConfig JWTConfig,
+	rateLimitConfig RateLimitConfig,
 ) chi.Router {
 	r := chi.NewRouter()
 
@@ -92,6 +103,12 @@ func NewRouter(
 				r.Use(middleware.JWTAuth(jwtConfig.Secret, now))
 				r.Use(middleware.AuthContextBridge)
 			}
+
+			// Apply rate limiting after JWT auth so claims are available for per-user limiting
+			r.Use(middleware.RateLimiter(middleware.RateLimitConfig{
+				RequestsPerSecond: rateLimitConfig.RequestsPerSecond,
+				TrustProxy:        rateLimitConfig.TrustProxy,
+			}))
 
 			r.Post("/users", userHandler.CreateUser)
 			r.Get("/users/{id}", userHandler.GetUser)

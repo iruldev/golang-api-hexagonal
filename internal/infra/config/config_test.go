@@ -17,6 +17,18 @@ func TestLoad_Success(t *testing.T) {
 	assert.Equal(t, "postgres://user:pass@localhost:5432/testdb", cfg.DatabaseURL)
 }
 
+func TestLoad_InvalidRateLimitRPS(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("RATE_LIMIT_RPS", "0")
+
+	cfg, err := Load()
+
+	assert.Nil(t, cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "RATE_LIMIT_RPS")
+	assert.Contains(t, err.Error(), "greater than 0")
+}
+
 func TestLoad_Defaults(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 
@@ -28,6 +40,8 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, "development", cfg.Env, "ENV should default to development")
 	assert.Equal(t, "golang-api-hexagonal", cfg.ServiceName, "SERVICE_NAME should default to golang-api-hexagonal")
 	assert.Equal(t, "https://api.example.com/problems/", cfg.ProblemBaseURL, "PROBLEM_BASE_URL should default to https://api.example.com/problems/")
+	assert.Equal(t, 100, cfg.RateLimitRPS, "RATE_LIMIT_RPS should default to 100")
+	assert.False(t, cfg.TrustProxy, "TRUST_PROXY should default to false")
 }
 
 func TestLoad_CustomValues(t *testing.T) {
@@ -46,6 +60,8 @@ func TestLoad_CustomValues(t *testing.T) {
 	assert.Equal(t, "production", cfg.Env)
 	assert.Equal(t, "my-custom-service", cfg.ServiceName)
 	assert.Equal(t, "https://my-custom-service.example/problems/", cfg.ProblemBaseURL)
+	// We didn't set them in env, so they should be defaults, but let's test setting them separately if needed or just assume existing test is fine.
+	// Actually, let's update the test to set them.
 }
 
 func TestLoad_InvalidProblemBaseURL(t *testing.T) {

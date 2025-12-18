@@ -111,7 +111,11 @@ func run() error {
 		Secret:  []byte(cfg.JWTSecret),
 		Now:     nil, // Use time.Now in production
 	}
-	router := httpTransport.NewRouter(logger, cfg.OTELEnabled, metricsReg, httpMetrics, healthHandler, readyHandler, userHandler, cfg.MaxRequestSize, jwtConfig)
+	rateLimitConfig := httpTransport.RateLimitConfig{
+		RequestsPerSecond: cfg.RateLimitRPS,
+		TrustProxy:        cfg.TrustProxy,
+	}
+	router := httpTransport.NewRouter(logger, cfg.OTELEnabled, metricsReg, httpMetrics, healthHandler, readyHandler, userHandler, cfg.MaxRequestSize, jwtConfig, rateLimitConfig)
 
 	// Create HTTP server
 	addr := fmt.Sprintf(":%d", cfg.Port)

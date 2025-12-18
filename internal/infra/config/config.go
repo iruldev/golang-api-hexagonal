@@ -39,6 +39,12 @@ type Config struct {
 	JWTEnabled bool `envconfig:"JWT_ENABLED" default:"false"`
 	// JWTSecret is the secret key for JWT signing (required if JWTEnabled=true).
 	JWTSecret string `envconfig:"JWT_SECRET"`
+
+	// Rate Limiting
+	// RateLimitRPS is the rate limit in requests per second. Default: 100.
+	RateLimitRPS int `envconfig:"RATE_LIMIT_RPS" default:"100"`
+	// TrustProxy enables trusting X-Forwarded-For/X-Real-IP headers. Default: false.
+	TrustProxy bool `envconfig:"TRUST_PROXY" default:"false"`
 }
 
 // Load reads configuration from environment variables.
@@ -94,6 +100,10 @@ func (c *Config) Validate() error {
 	}
 	if c.JWTEnabled && len(strings.TrimSpace(c.JWTSecret)) < 32 {
 		return fmt.Errorf("JWT_SECRET must be at least 32 bytes when JWT_ENABLED is true")
+	}
+
+	if c.RateLimitRPS < 1 {
+		return fmt.Errorf("invalid RATE_LIMIT_RPS: must be greater than 0")
 	}
 
 	return nil
