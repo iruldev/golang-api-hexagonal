@@ -73,6 +73,8 @@ func mapCodeToStatus(code string) int {
 		return http.StatusConflict // 409
 	case app.CodeValidationError:
 		return http.StatusBadRequest // 400
+	case app.CodeRequestTooLarge:
+		return http.StatusRequestEntityTooLarge // 413
 	case app.CodeInternalError:
 		return http.StatusInternalServerError // 500
 	default:
@@ -89,6 +91,8 @@ func codeToTitle(code string) string {
 		return "Email Already Exists"
 	case app.CodeValidationError:
 		return "Validation Error"
+	case app.CodeRequestTooLarge:
+		return "Request Entity Too Large"
 	case app.CodeInternalError:
 		return "Internal Server Error"
 	default:
@@ -104,6 +108,8 @@ func codeToTypeSlug(code string) string {
 		return ProblemTypeNotFoundSlug
 	case app.CodeEmailExists:
 		return ProblemTypeConflictSlug
+	case app.CodeRequestTooLarge:
+		return ProblemTypeValidationErrorSlug
 	case app.CodeInternalError:
 		return ProblemTypeInternalErrorSlug
 	default:

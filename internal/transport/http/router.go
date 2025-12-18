@@ -30,6 +30,7 @@ func NewRouter(
 	httpMetrics metrics.HTTPMetrics,
 	healthHandler, readyHandler stdhttp.Handler,
 	userHandler UserRoutes,
+	maxRequestSize int64,
 ) chi.Router {
 	r := chi.NewRouter()
 
@@ -47,6 +48,7 @@ func NewRouter(
 	r.Use(middleware.Metrics(httpMetrics))
 	r.Use(middleware.RequestLogger(logger))
 	r.Use(chiMiddleware.RealIP)
+	r.Use(middleware.BodyLimiter(maxRequestSize))
 	r.Use(chiMiddleware.Recoverer)
 
 	// Metrics endpoint (no auth required)

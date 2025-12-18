@@ -29,6 +29,10 @@ type Config struct {
 	OTELEnabled          bool   `envconfig:"OTEL_ENABLED" default:"false"`
 	OTELExporterEndpoint string `envconfig:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	OTELExporterInsecure bool   `envconfig:"OTEL_EXPORTER_OTLP_INSECURE" default:"false"`
+
+	// HTTP request handling
+	// MaxRequestSize is the maximum request body size in bytes. Default: 1MB (1048576 bytes).
+	MaxRequestSize int64 `envconfig:"MAX_REQUEST_SIZE" default:"1048576"`
 }
 
 // Load reads configuration from environment variables.
@@ -73,6 +77,10 @@ func (c *Config) Validate() error {
 
 	if err := validateProblemBaseURL(c.ProblemBaseURL); err != nil {
 		return err
+	}
+
+	if c.MaxRequestSize < 1 {
+		return fmt.Errorf("invalid MAX_REQUEST_SIZE: must be greater than 0")
 	}
 
 	return nil

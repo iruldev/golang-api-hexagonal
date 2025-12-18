@@ -12,6 +12,8 @@ const (
 	CodeEmailExists = "EMAIL_EXISTS"
 	// CodeValidationError indicates that input validation failed.
 	CodeValidationError = "VALIDATION_ERROR"
+	// CodeRequestTooLarge indicates that the request body exceeded configured limits.
+	CodeRequestTooLarge = "REQUEST_TOO_LARGE"
 	// CodeInternalError indicates an unexpected internal error.
 	CodeInternalError = "INTERNAL_ERROR"
 )

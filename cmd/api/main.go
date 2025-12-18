@@ -106,7 +106,7 @@ func run() error {
 	metricsReg, httpMetrics := observability.NewMetricsRegistry()
 
 	// Create router with logger for request logging middleware
-	router := httpTransport.NewRouter(logger, cfg.OTELEnabled, metricsReg, httpMetrics, healthHandler, readyHandler, userHandler)
+	router := httpTransport.NewRouter(logger, cfg.OTELEnabled, metricsReg, httpMetrics, healthHandler, readyHandler, userHandler, cfg.MaxRequestSize)
 
 	// Create HTTP server
 	addr := fmt.Sprintf(":%d", cfg.Port)

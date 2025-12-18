@@ -70,18 +70,18 @@ development_status:
   epic-3-retrospective: completed
 
   # Epic 4: Reference Implementation (Users Module)
-  epic-4: in-progress
+  epic-4: done
   4-1-implement-user-domain-entity: done
   4-2-implement-user-postgresql-repository: done
   4-3-implement-user-use-cases: done
   4-4-implement-error-response-mapper: done
-  4-5-implement-transport-contracts-dtos: review
+  4-5-implement-transport-contracts-dtos: done
   4-6-implement-user-http-handlers: done
-  epic-4-retrospective: optional
+  epic-4-retrospective: completed
 
   # Epic 5: Security & Authentication Foundation
-  epic-5: backlog
-  5-1-implement-request-validation-middleware: backlog
+  epic-5: in-progress
+  5-1-implement-request-validation-middleware: review
   5-2-implement-jwt-authentication-middleware: backlog
   5-3-implement-authorization-middleware: backlog
   5-4-implement-security-headers-middleware: backlog
