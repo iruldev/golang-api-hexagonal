@@ -4,6 +4,7 @@ package ctxutil
 
 import (
 	"context"
+	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -15,12 +16,16 @@ type claimsKey struct{}
 // It embeds jwt.RegisteredClaims for standard fields (iss, sub, aud, exp, nbf, iat, jti).
 type Claims struct {
 	jwt.RegisteredClaims
+	// Role for authorization (e.g., "admin", "user")
+	Role string `json:"role,omitempty"`
 	// Custom claims can be added here as the application evolves.
-	// Example: UserID string `json:"userId,omitempty"`
 }
 
 // SetClaims stores the claims in the context.
 func SetClaims(ctx context.Context, claims *Claims) context.Context {
+	if claims != nil {
+		claims.Role = strings.ToLower(strings.TrimSpace(claims.Role))
+	}
 	return context.WithValue(ctx, claimsKey{}, claims)
 }
 

@@ -88,6 +88,7 @@ func NewRouter(
 					now = time.Now
 				}
 				r.Use(middleware.JWTAuth(jwtConfig.Secret, now))
+				r.Use(middleware.AuthContextBridge)
 			}
 
 			r.Post("/users", userHandler.CreateUser)

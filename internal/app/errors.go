@@ -16,6 +16,8 @@ const (
 	CodeRequestTooLarge = "REQUEST_TOO_LARGE"
 	// CodeUnauthorized indicates that authentication is required or the provided credentials are invalid.
 	CodeUnauthorized = "UNAUTHORIZED"
+	// CodeForbidden indicates that the user is authenticated but not authorized for this action.
+	CodeForbidden = "FORBIDDEN"
 	// CodeInternalError indicates an unexpected internal error.
 	CodeInternalError = "INTERNAL_ERROR"
 )

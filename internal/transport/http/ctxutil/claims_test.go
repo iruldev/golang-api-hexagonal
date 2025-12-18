@@ -82,3 +82,34 @@ func TestClaims_RegisteredClaimsFields(t *testing.T) {
 	assert.Equal(t, now.Unix(), got.IssuedAt.Unix())
 	assert.Equal(t, "jti-123", got.ID)
 }
+
+func TestClaims_RoleField(t *testing.T) {
+	claims := &Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject: "user-123",
+		},
+		Role: "admin",
+	}
+
+	ctx := SetClaims(context.Background(), claims)
+	got := GetClaims(ctx)
+
+	require.NotNil(t, got)
+	assert.Equal(t, "admin", got.Role)
+	assert.Equal(t, "user-123", got.Subject)
+}
+
+func TestClaims_EmptyRole(t *testing.T) {
+	claims := &Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject: "user-456",
+		},
+		// Role is empty (omitempty)
+	}
+
+	ctx := SetClaims(context.Background(), claims)
+	got := GetClaims(ctx)
+
+	require.NotNil(t, got)
+	assert.Equal(t, "", got.Role)
+}

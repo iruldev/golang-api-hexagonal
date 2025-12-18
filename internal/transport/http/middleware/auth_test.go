@@ -13,8 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
+	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
 // testSecret is a 32-byte secret for HS256 signing in tests
@@ -177,7 +178,77 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 	assert.Equal(t, "user-123", gotClaims.Subject)
 }
 
-// TestJWTAuth_BearerCaseInsensitive tests that Bearer prefix is case-insensitive
+// TestJWTAuth_SetsAuthContext verifies AuthContext is populated for app layer usage via bridge.
+func TestJWTAuth_SetsAuthContext(t *testing.T) {
+	var gotAuth *app.AuthContext
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = app.GetAuthContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	})
+
+	claims := &ctxutil.Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "user-999",
+			ExpiresAt: jwt.NewNumericDate(fixedTime.Add(1 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(fixedTime),
+		},
+		Role: "admin",
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(testSecret)
+	require.NoError(t, err)
+
+	middleware := JWTAuth(testSecret, nowFunc())
+	wrapped := middleware(AuthContextBridge(handler))
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenString)
+	rr := httptest.NewRecorder()
+
+	wrapped.ServeHTTP(rr, req)
+
+	require.NotNil(t, gotAuth)
+	assert.Equal(t, "user-999", gotAuth.SubjectID)
+	assert.Equal(t, "admin", gotAuth.Role)
+}
+
+// TestJWTAuth_NormalizesRoleCase verifies normalization path.
+func TestJWTAuth_NormalizesRoleCase(t *testing.T) {
+	var gotAuth *app.AuthContext
+	var validated bool
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = app.GetAuthContext(r.Context())
+		validated = isClaimsValidated(r.Context())
+		w.WriteHeader(http.StatusOK)
+	})
+
+	claims := &ctxutil.Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "user-abc",
+			ExpiresAt: jwt.NewNumericDate(fixedTime.Add(1 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(fixedTime),
+		},
+		Role: "Admin", // mixed case
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(testSecret)
+	require.NoError(t, err)
+
+	middleware := JWTAuth(testSecret, nowFunc())
+	wrapped := middleware(AuthContextBridge(handler))
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenString)
+	rr := httptest.NewRecorder()
+
+	wrapped.ServeHTTP(rr, req)
+
+	require.NotNil(t, gotAuth)
+	assert.Equal(t, "user-abc", gotAuth.SubjectID)
+	assert.Equal(t, "admin", gotAuth.Role, "role should be normalized to lower-case")
+	assert.True(t, validated, "validated marker should be set in request context")
+}
+
 func TestJWTAuth_BearerCaseInsensitive(t *testing.T) {
 	testCases := []string{"bearer", "Bearer", "BEARER", "BeArEr"}
 
@@ -206,7 +277,6 @@ func TestJWTAuth_BearerCaseInsensitive(t *testing.T) {
 	}
 }
 
-// TestJWTAuth_InvalidAuthScheme tests that non-Bearer schemes return 401
 func TestJWTAuth_InvalidAuthScheme(t *testing.T) {
 	handlerCalled := false
 	handler := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
@@ -228,7 +298,6 @@ func TestJWTAuth_InvalidAuthScheme(t *testing.T) {
 	assert.False(t, handlerCalled)
 }
 
-// TestJWTAuth_EmptyBearerToken tests that empty token returns 401
 func TestJWTAuth_EmptyBearerToken(t *testing.T) {
 	handlerCalled := false
 	handler := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
@@ -248,7 +317,6 @@ func TestJWTAuth_EmptyBearerToken(t *testing.T) {
 	assert.False(t, handlerCalled)
 }
 
-// TestJWTAuth_WrongAlgorithm tests AC #7: only HS256 is accepted
 func TestJWTAuth_WrongAlgorithm(t *testing.T) {
 	handlerCalled := false
 	handler := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
@@ -278,7 +346,6 @@ func TestJWTAuth_WrongAlgorithm(t *testing.T) {
 	assert.False(t, handlerCalled, "handler should not be called for wrong algorithm")
 }
 
-// TestJWTAuth_TimeInjection tests AC #3: time function is properly injected for expiry
 func TestJWTAuth_TimeInjection(t *testing.T) {
 	// Create a token that expires at a specific time
 	expTime := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
@@ -335,7 +402,6 @@ func TestJWTAuth_TimeInjection(t *testing.T) {
 	})
 }
 
-// TestJWTAuth_GetClaimsFromContext tests AC #5 (continued): ctxutil.GetClaims returns correct claims
 func TestJWTAuth_GetClaimsFromContext(t *testing.T) {
 	// Create token with specific claims
 	claims := &ctxutil.Claims{
