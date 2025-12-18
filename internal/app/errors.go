@@ -14,6 +14,8 @@ const (
 	CodeValidationError = "VALIDATION_ERROR"
 	// CodeRequestTooLarge indicates that the request body exceeded configured limits.
 	CodeRequestTooLarge = "REQUEST_TOO_LARGE"
+	// CodeUnauthorized indicates that authentication is required or the provided credentials are invalid.
+	CodeUnauthorized = "UNAUTHORIZED"
 	// CodeInternalError indicates an unexpected internal error.
 	CodeInternalError = "INTERNAL_ERROR"
 )

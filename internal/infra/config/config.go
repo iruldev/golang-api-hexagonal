@@ -33,6 +33,12 @@ type Config struct {
 	// HTTP request handling
 	// MaxRequestSize is the maximum request body size in bytes. Default: 1MB (1048576 bytes).
 	MaxRequestSize int64 `envconfig:"MAX_REQUEST_SIZE" default:"1048576"`
+
+	// JWT Authentication
+	// JWTEnabled enables JWT authentication for protected endpoints. Default: false.
+	JWTEnabled bool `envconfig:"JWT_ENABLED" default:"false"`
+	// JWTSecret is the secret key for JWT signing (required if JWTEnabled=true).
+	JWTSecret string `envconfig:"JWT_SECRET"`
 }
 
 // Load reads configuration from environment variables.
@@ -81,6 +87,13 @@ func (c *Config) Validate() error {
 
 	if c.MaxRequestSize < 1 {
 		return fmt.Errorf("invalid MAX_REQUEST_SIZE: must be greater than 0")
+	}
+
+	if c.JWTEnabled && strings.TrimSpace(c.JWTSecret) == "" {
+		return fmt.Errorf("JWT_ENABLED is true but JWT_SECRET is empty")
+	}
+	if c.JWTEnabled && len(strings.TrimSpace(c.JWTSecret)) < 32 {
+		return fmt.Errorf("JWT_SECRET must be at least 32 bytes when JWT_ENABLED is true")
 	}
 
 	return nil

@@ -106,7 +106,12 @@ func run() error {
 	metricsReg, httpMetrics := observability.NewMetricsRegistry()
 
 	// Create router with logger for request logging middleware
-	router := httpTransport.NewRouter(logger, cfg.OTELEnabled, metricsReg, httpMetrics, healthHandler, readyHandler, userHandler, cfg.MaxRequestSize)
+	jwtConfig := httpTransport.JWTConfig{
+		Enabled: cfg.JWTEnabled,
+		Secret:  []byte(cfg.JWTSecret),
+		Now:     nil, // Use time.Now in production
+	}
+	router := httpTransport.NewRouter(logger, cfg.OTELEnabled, metricsReg, httpMetrics, healthHandler, readyHandler, userHandler, cfg.MaxRequestSize, jwtConfig)
 
 	// Create HTTP server
 	addr := fmt.Sprintf(":%d", cfg.Port)

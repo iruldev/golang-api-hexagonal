@@ -29,6 +29,7 @@ const (
 	ProblemTypeNotFoundSlug        = "not-found"
 	ProblemTypeConflictSlug        = "conflict"
 	ProblemTypeInternalErrorSlug   = "internal-error"
+	ProblemTypeUnauthorizedSlug    = "unauthorized"
 )
 
 func SetProblemBaseURL(baseURL string) error {
@@ -75,6 +76,8 @@ func mapCodeToStatus(code string) int {
 		return http.StatusBadRequest // 400
 	case app.CodeRequestTooLarge:
 		return http.StatusRequestEntityTooLarge // 413
+	case app.CodeUnauthorized:
+		return http.StatusUnauthorized // 401
 	case app.CodeInternalError:
 		return http.StatusInternalServerError // 500
 	default:
@@ -93,6 +96,8 @@ func codeToTitle(code string) string {
 		return "Validation Error"
 	case app.CodeRequestTooLarge:
 		return "Request Entity Too Large"
+	case app.CodeUnauthorized:
+		return "Unauthorized"
 	case app.CodeInternalError:
 		return "Internal Server Error"
 	default:
@@ -110,6 +115,8 @@ func codeToTypeSlug(code string) string {
 		return ProblemTypeConflictSlug
 	case app.CodeRequestTooLarge:
 		return ProblemTypeValidationErrorSlug
+	case app.CodeUnauthorized:
+		return ProblemTypeUnauthorizedSlug
 	case app.CodeInternalError:
 		return ProblemTypeInternalErrorSlug
 	default:
