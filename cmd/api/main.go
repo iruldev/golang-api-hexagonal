@@ -17,6 +17,7 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
 	httpTransport "github.com/iruldev/golang-api-hexagonal/internal/transport/http"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/handler"
 )
 
@@ -34,6 +35,10 @@ func run() error {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	if err := contract.SetProblemBaseURL(cfg.ProblemBaseURL); err != nil {
+		return fmt.Errorf("failed to set PROBLEM_BASE_URL: %w", err)
 	}
 
 	// Initialize structured JSON logger with service/env attributes

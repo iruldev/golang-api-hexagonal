@@ -74,7 +74,7 @@ development_status:
   4-1-implement-user-domain-entity: done
   4-2-implement-user-postgresql-repository: done
   4-3-implement-user-use-cases: done
-  4-4-implement-error-response-mapper: backlog
+  4-4-implement-error-response-mapper: done
   4-5-implement-transport-contracts-dtos: backlog
   4-6-implement-user-http-handlers: backlog
   epic-4-retrospective: optional

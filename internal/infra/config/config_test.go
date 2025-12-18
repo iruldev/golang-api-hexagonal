@@ -27,6 +27,7 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, "info", cfg.LogLevel, "LOG_LEVEL should default to info")
 	assert.Equal(t, "development", cfg.Env, "ENV should default to development")
 	assert.Equal(t, "golang-api-hexagonal", cfg.ServiceName, "SERVICE_NAME should default to golang-api-hexagonal")
+	assert.Equal(t, "https://api.example.com/problems/", cfg.ProblemBaseURL, "PROBLEM_BASE_URL should default to https://api.example.com/problems/")
 }
 
 func TestLoad_CustomValues(t *testing.T) {
@@ -35,6 +36,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "debug")
 	t.Setenv("ENV", "production")
 	t.Setenv("SERVICE_NAME", "my-custom-service")
+	t.Setenv("PROBLEM_BASE_URL", "https://my-custom-service.example/problems/")
 
 	cfg, err := Load()
 
@@ -43,6 +45,32 @@ func TestLoad_CustomValues(t *testing.T) {
 	assert.Equal(t, "debug", cfg.LogLevel)
 	assert.Equal(t, "production", cfg.Env)
 	assert.Equal(t, "my-custom-service", cfg.ServiceName)
+	assert.Equal(t, "https://my-custom-service.example/problems/", cfg.ProblemBaseURL)
+}
+
+func TestLoad_InvalidProblemBaseURL(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("PROBLEM_BASE_URL", "not-a-url")
+
+	cfg, err := Load()
+
+	assert.Nil(t, cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid PROBLEM_BASE_URL")
+	assert.Contains(t, err.Error(), "config.Load")
+}
+
+func TestLoad_ProblemBaseURLMustEndWithSlash(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("PROBLEM_BASE_URL", "https://example.com/problems")
+
+	cfg, err := Load()
+
+	assert.Nil(t, cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "PROBLEM_BASE_URL")
+	assert.Contains(t, err.Error(), "trailing slash")
+	assert.Contains(t, err.Error(), "config.Load")
 }
 
 func TestLoad_LogLevelUppercase(t *testing.T) {
