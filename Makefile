@@ -133,10 +133,11 @@ ci:
 .PHONY: check-mod-tidy
 check-mod-tidy:
 	@echo "📦 Checking go.mod is tidy..."
-	@if ! git diff --exit-code > /dev/null 2>&1; then \
+	@if [ -z "$$ALLOW_DIRTY" ] && ! git diff --exit-code > /dev/null 2>&1; then \
 		echo ""; \
 		echo "❌ Working tree is not clean (required for mod tidy check)"; \
 		echo "   Commit or stash changes, then rerun"; \
+		echo "   (or rerun with ALLOW_DIRTY=1 if you intentionally want to skip this clean-tree guard)"; \
 		echo ""; \
 		git --no-pager diff --name-only; \
 		exit 1; \
@@ -155,19 +156,24 @@ check-mod-tidy:
 .PHONY: check-fmt
 check-fmt:
 	@echo "📐 Checking code formatting (gofmt)..."
-	@if ! git diff --exit-code > /dev/null 2>&1; then \
+	@if [ -z "$$ALLOW_DIRTY" ] && ! git diff --exit-code > /dev/null 2>&1; then \
 		echo ""; \
 		echo "❌ Working tree is not clean (required for gofmt check)"; \
 		echo "   Commit or stash changes, then rerun"; \
+		echo "   (or rerun with ALLOW_DIRTY=1 if you intentionally want to skip this clean-tree guard)"; \
 		echo ""; \
 		git --no-pager diff --name-only; \
 		exit 1; \
 	fi
-	@FILES=$$(git ls-files '*.go'); \
-	if [ -n "$$FILES" ]; then \
-		gofmt -w $$FILES; \
+	@if [ -n "$$ALLOW_DIRTY" ]; then \
+		echo "Skipping gofmt write due to ALLOW_DIRTY=1 (manual gofmt recommended before commit)"; \
+	else \
+		FILES=$$(git ls-files '*.go'); \
+		if [ -n "$$FILES" ]; then \
+			gofmt -w $$FILES; \
+		fi; \
 	fi; \
-	if ! git diff --exit-code > /dev/null 2>&1; then \
+	if [ -z "$$ALLOW_DIRTY" ] && ! git diff --exit-code > /dev/null 2>&1; then \
 		echo ""; \
 		echo "❌ gofmt would change files"; \
 		echo "   Run 'gofmt -w .' and commit the changes"; \

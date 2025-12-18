@@ -61,6 +61,8 @@ func NewRouter(
 	r := chi.NewRouter()
 
 	// Global middleware stack (order matters!)
+	// SecureHeaders FIRST - ensures security headers on ALL responses including errors
+	r.Use(middleware.SecureHeaders)
 	r.Use(middleware.RequestID)
 	if tracingEnabled {
 		r.Use(middleware.Tracing)
