@@ -13,6 +13,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 
+	"github.com/iruldev/golang-api-hexagonal/internal/app/user"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/config"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
@@ -71,21 +72,41 @@ func run() error {
 
 	ctxPing, cancelPing := context.WithTimeout(ctx, 5*time.Second)
 	if err := db.Ping(ctxPing); err != nil {
-		logger.Warn("database not reachable at startup; service will start but ready will be not_ready")
-	} else {
-		logger.Info("database connected")
+		cancelPing()
+		return fmt.Errorf("database not reachable at startup: %w", err)
 	}
 	cancelPing()
+	logger.Info("database connected")
 
 	// Create handlers
 	healthHandler := handler.NewHealthHandler()
 	readyHandler := handler.NewReadyHandler(db)
 
+	// Create user-related dependencies
+	userRepo := postgres.NewUserRepo()
+	idGen := postgres.NewIDGenerator()
+
+	// Create a database querier (use the pool from reconnectingDB)
+	db.mu.RLock()
+	pool := db.pool
+	db.mu.RUnlock()
+
+	// Use a pool querier (start-up verified pool is available)
+	querier := postgres.NewPoolQuerier(pool.Pool())
+
+	// Create use cases
+	createUserUC := user.NewCreateUserUseCase(userRepo, idGen, querier)
+	getUserUC := user.NewGetUserUseCase(userRepo, querier)
+	listUsersUC := user.NewListUsersUseCase(userRepo, querier)
+
+	// Create user handler
+	userHandler := handler.NewUserHandler(createUserUC, getUserUC, listUsersUC)
+
 	// Initialize Prometheus metrics registry
 	metricsReg, httpMetrics := observability.NewMetricsRegistry()
 
 	// Create router with logger for request logging middleware
-	router := httpTransport.NewRouter(logger, cfg.OTELEnabled, metricsReg, httpMetrics, healthHandler, readyHandler)
+	router := httpTransport.NewRouter(logger, cfg.OTELEnabled, metricsReg, httpMetrics, healthHandler, readyHandler, userHandler)
 
 	// Create HTTP server
 	addr := fmt.Sprintf(":%d", cfg.Port)

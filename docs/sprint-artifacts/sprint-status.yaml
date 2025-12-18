@@ -76,7 +76,7 @@ development_status:
   4-3-implement-user-use-cases: done
   4-4-implement-error-response-mapper: done
   4-5-implement-transport-contracts-dtos: review
-  4-6-implement-user-http-handlers: backlog
+  4-6-implement-user-http-handlers: done
   epic-4-retrospective: optional
 
   # Epic 5: Security & Authentication Foundation

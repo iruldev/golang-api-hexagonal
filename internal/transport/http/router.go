@@ -3,7 +3,7 @@ package http
 
 import (
 	"log/slog"
-	"net/http"
+	stdhttp "net/http"
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
@@ -11,12 +11,26 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/shared/metrics"
-
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/middleware"
 )
 
+// UserRoutes defines the interface for user-related HTTP handlers.
+// This interface breaks the import cycle between http and handler packages.
+type UserRoutes interface {
+	CreateUser(w stdhttp.ResponseWriter, r *stdhttp.Request)
+	GetUser(w stdhttp.ResponseWriter, r *stdhttp.Request)
+	ListUsers(w stdhttp.ResponseWriter, r *stdhttp.Request)
+}
+
 // NewRouter creates a new chi router with the provided handlers and logger.
-func NewRouter(logger *slog.Logger, tracingEnabled bool, metricsReg *prometheus.Registry, httpMetrics metrics.HTTPMetrics, healthHandler, readyHandler http.Handler) chi.Router {
+func NewRouter(
+	logger *slog.Logger,
+	tracingEnabled bool,
+	metricsReg *prometheus.Registry,
+	httpMetrics metrics.HTTPMetrics,
+	healthHandler, readyHandler stdhttp.Handler,
+	userHandler UserRoutes,
+) chi.Router {
 	r := chi.NewRouter()
 
 	// Middleware stack (order matters!):
@@ -41,6 +55,15 @@ func NewRouter(logger *slog.Logger, tracingEnabled bool, metricsReg *prometheus.
 	// Health check endpoints
 	r.Get("/health", healthHandler.ServeHTTP)
 	r.Get("/ready", readyHandler.ServeHTTP)
+
+	// API v1 routes (only registered if userHandler is provided)
+	if userHandler != nil {
+		r.Route("/api/v1", func(r chi.Router) {
+			r.Post("/users", userHandler.CreateUser)
+			r.Get("/users/{id}", userHandler.GetUser)
+			r.Get("/users", userHandler.ListUsers)
+		})
+	}
 
 	return r
 }

@@ -1,6 +1,6 @@
 # Story 4.5: Implement Transport Contracts (DTOs)
 
-Status: review
+Status: done
 
 ## Story
 

@@ -83,7 +83,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("ready OK", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 		rec := httptest.NewRecorder()
@@ -97,7 +97,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("ready not ready", func(t *testing.T) {
 		db := &fakeDB{pingErr: assert.AnError}
 		readyHandler := NewReadyHandler(db)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 		rec := httptest.NewRecorder()
@@ -111,7 +111,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("health ok", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rec := httptest.NewRecorder()
@@ -131,7 +131,7 @@ func TestMetricsEndpoint(t *testing.T) {
 	db := &fakeDB{pingErr: nil}
 	readyHandler := NewReadyHandler(db)
 
-	r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler)
+	r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil)
 
 	t.Run("metrics endpoint returns 200", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)

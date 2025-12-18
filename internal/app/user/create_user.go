@@ -6,6 +6,7 @@ package user
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
@@ -13,6 +14,7 @@ import (
 
 // CreateUserRequest represents the input data for creating a new user.
 type CreateUserRequest struct {
+	ID        domain.ID
 	FirstName string
 	LastName  string
 	Email     string
@@ -44,11 +46,18 @@ func NewCreateUserUseCase(userRepo domain.UserRepository, idGen domain.IDGenerat
 // Returns AppError with appropriate Code for domain errors.
 func (uc *CreateUserUseCase) Execute(ctx context.Context, req CreateUserRequest) (CreateUserResponse, error) {
 	// Create a new user entity with generated ID
+	id := req.ID
+	if id.IsEmpty() {
+		id = uc.idGen.NewID()
+	}
+	now := time.Now().UTC()
 	user := &domain.User{
-		ID:        uc.idGen.NewID(),
+		ID:        id,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
 		Email:     req.Email,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 
 	// Validate the user entity using domain rules
