@@ -83,7 +83,11 @@ func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
 	require.NoError(t, err)
 
 	cleanup := func() {
-		// Clean up test data
+		// Clean up test data - order matters for foreign keys.
+		// Note: We explicitly delete from audit_events here even though this is user_repo_test.
+		// This coupling is necessary because audit_events may reference users (though not via FK, logic might vary)
+		// and we want a clean state for integration tests.
+		_, _ = pool.Exec(ctx, "DELETE FROM audit_events")
 		_, _ = pool.Exec(ctx, "DELETE FROM users")
 		db.Close()
 		pool.Close()

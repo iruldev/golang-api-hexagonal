@@ -100,7 +100,8 @@ func TestLoad_LogLevelUppercase(t *testing.T) {
 }
 
 func TestLoad_MissingRequired(t *testing.T) {
-	// Don't set DATABASE_URL
+	// Don't set DATABASE_URL, and ensure it's unset in case it's in the process env
+	t.Setenv("DATABASE_URL", "")
 
 	cfg, err := Load()
 

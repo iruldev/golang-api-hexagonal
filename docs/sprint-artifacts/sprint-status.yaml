@@ -91,7 +91,7 @@ development_status:
   # Epic 6: Audit Trail System
   epic-6: in-progress
   6-1-implement-audit-event-domain-model: done
-  6-2-implement-audit-event-postgresql-repository: backlog
+  6-2-implement-audit-event-postgresql-repository: done
   6-3-implement-pii-redaction-service: backlog
   6-4-implement-audit-event-service: backlog
   6-5-enable-extensible-audit-event-types: backlog
