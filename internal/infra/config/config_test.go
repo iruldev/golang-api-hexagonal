@@ -107,7 +107,7 @@ func TestLoad_MissingRequired(t *testing.T) {
 
 	assert.Nil(t, cfg)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "required key DATABASE_URL missing value")
+	assert.Contains(t, err.Error(), "DATABASE_URL")
 	assert.Contains(t, err.Error(), "config.Load")
 }
 
@@ -209,4 +209,48 @@ func TestConfig_IsProduction(t *testing.T) {
 			assert.Equal(t, tt.want, cfg.IsProduction())
 		})
 	}
+}
+
+func TestLoad_InvalidAuditRedactEmail(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("AUDIT_REDACT_EMAIL", "invalid")
+
+	cfg, err := Load()
+
+	assert.Nil(t, cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "AUDIT_REDACT_EMAIL")
+	assert.Contains(t, err.Error(), "'full' or 'partial'")
+}
+
+func TestLoad_AuditRedactEmailValues(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{"full mode", "full"},
+		{"partial mode", "partial"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+			t.Setenv("AUDIT_REDACT_EMAIL", tt.value)
+
+			cfg, err := Load()
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.value, cfg.AuditRedactEmail)
+		})
+	}
+}
+
+func TestLoad_AuditRedactEmailDefault(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	// Don't set AUDIT_REDACT_EMAIL to test default
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, "full", cfg.AuditRedactEmail, "AUDIT_REDACT_EMAIL should default to 'full'")
 }

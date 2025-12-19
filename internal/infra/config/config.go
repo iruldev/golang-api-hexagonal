@@ -45,6 +45,11 @@ type Config struct {
 	RateLimitRPS int `envconfig:"RATE_LIMIT_RPS" default:"100"`
 	// TrustProxy enables trusting X-Forwarded-For/X-Real-IP headers. Default: false.
 	TrustProxy bool `envconfig:"TRUST_PROXY" default:"false"`
+
+	// Audit
+	// AuditRedactEmail controls how email addresses are redacted in audit logs.
+	// Options: "full" (default, replaces with [REDACTED]) or "partial" (shows first 2 chars + domain).
+	AuditRedactEmail string `envconfig:"AUDIT_REDACT_EMAIL" default:"full"`
 }
 
 // Load reads configuration from environment variables.
@@ -63,6 +68,10 @@ func Load() (*Config, error) {
 }
 
 func (c *Config) Validate() error {
+	if strings.TrimSpace(c.DatabaseURL) == "" {
+		return fmt.Errorf("DATABASE_URL is required and cannot be empty")
+	}
+
 	if c.OTELEnabled && strings.TrimSpace(c.OTELExporterEndpoint) == "" {
 		return fmt.Errorf("OTEL_ENABLED is true but OTEL_EXPORTER_OTLP_ENDPOINT is empty")
 	}
@@ -104,6 +113,12 @@ func (c *Config) Validate() error {
 
 	if c.RateLimitRPS < 1 {
 		return fmt.Errorf("invalid RATE_LIMIT_RPS: must be greater than 0")
+	}
+
+	switch c.AuditRedactEmail {
+	case "full", "partial":
+	default:
+		return fmt.Errorf("invalid AUDIT_REDACT_EMAIL: must be 'full' or 'partial'")
 	}
 
 	return nil
