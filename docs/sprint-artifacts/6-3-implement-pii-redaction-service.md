@@ -76,6 +76,12 @@ so that **sensitive data is never stored in audit logs**.
   - [x] 6.2 Run `make test` to ensure all unit tests pass
   - [x] 6.3 Run `make ci` (or `ALLOW_DIRTY=1 make ci`) for full CI check
 
+- [x] Task 7: Address Code Review Findings (AI-Review-3)
+  - [x] 7.1 Refine `isPIIField` to use Smart Matching (boundary checks) for `token`, `secret`, `email`
+  - [x] 7.2 Prevent false positives like `tokenization_service` or `secretary`
+  - [x] 7.3 Add missing PII fields: `phone`, `mobile`, `dob`, `birth_date`, `passport`
+  - [x] 7.4 Update `robustness_test.go` to verify new behavior and fields
+
 ## Dependencies & Blockers
 
 - **Hard dependency:** Story 6.2 (Audit Event PostgreSQL Repository) - **DONE**
@@ -389,6 +395,9 @@ N/A
 - ✅ [Review-Fix-3] Enhanced PII matching to catch substrings (e.g., "access_token")
 - ✅ [Review-Fix-3] Moved PII field patterns to dedicated constants (maintainability)
 - ✅ [Code-Review] Verified robustness with dedicated test suite (robustness_test.go)
+- ✅ [Code-Review-Fix] Added `authtoken` (lowercase compound) to PII redaction list (Story 6.3 Code Review)
+- ✅ [Code-Review-Fix] Added `benchmark_test.go` to monitor RedactAndMarshal performance
+- ✅ [Code-Review-Fix] Improved Config validation in constructor logic
 
 
 ### Change Log
@@ -397,7 +406,11 @@ N/A
 - 2025-12-19: [AI-Review] Fixed recursion safety issue and added performance optimization TODO
 - 2025-12-19: [Polish] Fixed all low-priority review findings (constants, robustness, docs)
 - 2025-12-19: [AI-Review-2] Fixed 2 MEDIUM + 3 LOW issues: (M1) recursion returns empty map for security, (M2) config normalizes case, (L1-L3) improved test coverage
-- 2025-12-19: [Code-Review] Added `robustness_test.go` to verify PII matching edge cases and false positives
+- 2025-12-19: [Code-Review] Code Review Complete. Fixed Aggressive PII Matching (false positives) and added missing PII fields (phone, dob, etc.). Verified with `robustness_test.go`.
+- 2025-12-19: [Adversarial-Review] Identified and fixed lint error (empty branch) in robustness_test.go. Confirmed all changes committed.
+- 2025-12-19: [Adversarial-Code-Review] Addressed MEDIUM findings: Added `authtoken` handling, added Benchmarks, and improved Config validation. All tests passed.
+- 2025-12-19: [Adversarial-Review-2] Fixed CRITICAL PII Leaking Vulnerability: Iterative `hasWord` logic implemented to prevent partial matches shielding real PII. Added regression tests in `robustness_test.go`.
+- 2025-12-19: [Adversarial-Review-3] Addressed MEDIUM findings: Fixed untracked benchmark file, optimized RedactMap usage (allocation reduction), and refined PII matching to whitelist safe ID suffixes (e.g. `TokenId`). Verified with updated `robustness_test.go`.
 
 ### File List
 
@@ -406,6 +419,7 @@ N/A
 - `internal/shared/redact/redactor.go`
 - `internal/shared/redact/redactor_test.go`
 - `internal/shared/redact/robustness_test.go`
+- `internal/shared/redact/benchmark_test.go`
 
 **Modified Files:**
 - `internal/infra/config/config.go` (added AuditRedactEmail field + validation + case normalization)

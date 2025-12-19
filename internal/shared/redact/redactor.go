@@ -14,17 +14,23 @@ const RedactedValue = "[REDACTED]"
 
 // PII Field Patterns
 const (
-	// ExactMatchFields must match exactly (case-insensitive)
-	fieldSSN   = "ssn"
-	fieldEmail = "email"
-
 	// ContainsMatchFields are redacted if they appear anywhere in the key (case-insensitive)
 	fieldPassword      = "password"
+	fieldCreditCard    = "creditcard"
+	fieldCreditCardAlt = "credit_card"
+
+	// SmartMatchFields are redacted if they match as a whole word (snake_case, camelCase, or exact)
 	fieldToken         = "token"
 	fieldSecret        = "secret"
 	fieldAuthorization = "authorization"
-	fieldCreditCard    = "creditcard"
-	fieldCreditCardAlt = "credit_card"
+	fieldEmail         = "email"
+	fieldSSN           = "ssn"
+	fieldPhone         = "phone"
+	fieldMobile        = "mobile"
+	fieldDOB           = "dob"
+	fieldBirthDate     = "birth_date"
+	fieldPassport      = "passport"
+	fieldAuthToken     = "authtoken" // Lowercase compound
 )
 
 // PIIRedactor implements domain.Redactor for PII redaction.
@@ -38,12 +44,17 @@ const MaxRecursionDepth = 100
 // NewPIIRedactor creates a new PIIRedactor with the given configuration.
 func NewPIIRedactor(cfg domain.RedactorConfig) *PIIRedactor {
 	mode := strings.ToLower(strings.TrimSpace(cfg.EmailMode))
-	if mode == "" {
+	// Valid modes: full, partial
+	if mode != domain.EmailModeFull && mode != domain.EmailModePartial {
+		// Default to full redaction for safety if invalid/empty
 		mode = domain.EmailModeFull
 	}
 	return &PIIRedactor{emailMode: mode}
 }
 
+// RedactMap processes a map and returns a new map with PII fields redacted.
+// Original map is NOT modified.
+// Returns nil if input is nil.
 // RedactMap processes a map and returns a new map with PII fields redacted.
 // Original map is NOT modified.
 // Returns nil if input is nil.
@@ -79,17 +90,15 @@ func (r *PIIRedactor) redactMapInternal(data map[string]any, depth int) map[stri
 
 	result := make(map[string]any, len(data))
 	for k, v := range data {
-		result[k] = r.redactValue(k, v, depth)
+		result[k] = r.redactValue(k, strings.ToLower(k), v, depth)
 	}
 	return result
 }
 
 // redactValue processes a single value, redacting if it's a PII field or recursively processing nested structures.
-func (r *PIIRedactor) redactValue(key string, value any, depth int) any {
-	lowerKey := strings.ToLower(key)
-
+func (r *PIIRedactor) redactValue(key, lowerKey string, value any, depth int) any {
 	// Check if this key is a PII field
-	if r.isPIIField(lowerKey) {
+	if r.isPIIField(key, lowerKey) {
 		return r.redactPIIValue(lowerKey, value)
 	}
 
@@ -117,31 +126,113 @@ func (r *PIIRedactor) redactValue(key string, value any, depth int) any {
 }
 
 // isPIIField checks if a field name matches known PII patterns.
-// It uses a combination of exact matching and substring matching for robustness.
-func (r *PIIRedactor) isPIIField(lowerKey string) bool {
-	// 1. Exact matches for common short fields
-	if lowerKey == fieldSSN || lowerKey == fieldEmail {
-		return true
-	}
-
-	// 2. Substring matches for broader security (e.g., "user_password", "access_token", "MySecret")
-	// Using generic terms that usually indicate sensitivity
-	sensitiveTerms := []string{
+// It uses a combination of substring matching and smart word boundary detection.
+func (r *PIIRedactor) isPIIField(key, lowerKey string) bool {
+	// 1. Unsafe Substrings: Always redact if these appear anywhere
+	// "password" is almost never part of a non-sensitive field name
+	unsafeTerms := []string{
 		fieldPassword,
-		fieldToken,
-		fieldSecret,
-		fieldAuthorization,
 		fieldCreditCard,
 		fieldCreditCardAlt,
 	}
 
-	for _, term := range sensitiveTerms {
+	for _, term := range unsafeTerms {
 		if strings.Contains(lowerKey, term) {
 			return true
 		}
 	}
 
+	// 2. Safe Suffix Check:
+	// If it ends with "id", it's likely an identifier, not the secret itself.
+	// e.g. "token_id", "TokenID", "secretId"
+	if strings.HasSuffix(lowerKey, "id") || strings.HasSuffix(lowerKey, "_id") {
+		return false
+	}
+
+	// 3. Smart Matches: Redact only if it's a "whole word" match
+	// Avoids false positives like "tokenization" or "secretary"
+	smartTerms := []string{
+		fieldToken,
+		fieldSecret,
+		fieldAuthorization,
+		fieldEmail,
+		fieldSSN,
+		fieldPhone,
+		fieldMobile,
+		fieldDOB,
+		fieldBirthDate,
+		fieldPassport,
+		fieldAuthToken,
+	}
+
+	for _, term := range smartTerms {
+		if r.hasWord(key, lowerKey, term) {
+			return true
+		}
+	}
+
 	return false
+}
+
+// hasWord checks if 'term' exists in 'key' with proper boundaries (start, end, _, -, ., or CamelCase change).
+// key: original mixed-case key
+// lowerKey: lowercased key (optimization to avoid re-lowercasing)
+// term: lowercased search term
+func (r *PIIRedactor) hasWord(key, lowerKey, term string) bool {
+	start := 0
+	for {
+		idx := strings.Index(lowerKey[start:], term)
+		if idx == -1 {
+			return false
+		}
+
+		// Adjust index relative to original string
+		actualIdx := start + idx
+
+		// Check boundaries for this match
+		// Valid boundaries: Start of string, '_', '-', '.', or Digit
+		// OR: CamelCase transition (prev char is lower, start of term is Upper in original key)
+		isBoundaryBefore := true
+		if actualIdx > 0 {
+			prevChar := key[actualIdx-1]
+			isBoundarySymbol := prevChar == '_' || prevChar == '-' || prevChar == '.' || (prevChar >= '0' && prevChar <= '9')
+
+			// CamelCase check: "myToken" -> 'y' (lower) and 'T' (upper)
+			// We need to check if key[actualIdx] is Upper
+			isCamelBoundary := false
+			if !isBoundarySymbol {
+				// Check if current is upper (start of new word)
+				if key[actualIdx] >= 'A' && key[actualIdx] <= 'Z' {
+					isCamelBoundary = true
+				}
+			}
+
+			if !isBoundarySymbol && !isCamelBoundary {
+				isBoundaryBefore = false // Part of a previous word
+			}
+		}
+
+		isBoundaryAfter := true
+		endIdx := actualIdx + len(term)
+		if endIdx < len(key) {
+			nextChar := key[endIdx]
+			isBoundarySymbol := nextChar == '_' || nextChar == '-' || nextChar == '.' || (nextChar >= '0' && nextChar <= '9')
+
+			// CamelCase check: "TokenId" -> 'n' (lower) and 'I' (upper)
+			isCamelBoundary := nextChar >= 'A' && nextChar <= 'Z'
+
+			if !isBoundarySymbol && !isCamelBoundary {
+				isBoundaryAfter = false // Part of suffix
+			}
+		}
+
+		if isBoundaryBefore && isBoundaryAfter {
+			return true
+		}
+
+		// If this wasn't a valid match, continue searching past this occurrence
+		start = actualIdx + 1
+	}
 }
 
 // redactPIIValue redacts a PII value based on the field type.
