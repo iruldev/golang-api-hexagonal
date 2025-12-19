@@ -4,6 +4,7 @@ package redact
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
@@ -31,6 +32,8 @@ const (
 	fieldBirthDate     = "birth_date"
 	fieldPassport      = "passport"
 	fieldAuthToken     = "authtoken" // Lowercase compound
+	fieldAPIKey        = "apikey"
+	fieldAPIKeyAlt     = "api_key"
 )
 
 // PIIRedactor implements domain.Redactor for PII redaction.
@@ -55,25 +58,51 @@ func NewPIIRedactor(cfg domain.RedactorConfig) *PIIRedactor {
 // RedactMap processes a map and returns a new map with PII fields redacted.
 // Original map is NOT modified.
 // Returns nil if input is nil.
-// RedactMap processes a map and returns a new map with PII fields redacted.
-// Original map is NOT modified.
-// Returns nil if input is nil.
-// RedactMap processes a map and returns a new map with PII fields redacted.
-// Original map is NOT modified.
-// Returns nil if input is nil.
 func (r *PIIRedactor) RedactMap(data map[string]any) map[string]any {
 	return r.redactMapInternal(data, 0)
 }
 
-// Redact processes any valid JSON type (map, slice, or primitive) and returns redacted copy.
+// Redact processes any valid JSON type (map, slice, struct, or primitive) and returns redacted copy.
 // Original data is NOT modified.
+// STRUCT WARNING: Structs are converted to map[string]any via JSON roundtrip to respect json tags.
 func (r *PIIRedactor) Redact(data any) any {
+	if data == nil {
+		return nil
+	}
+
 	switch v := data.(type) {
 	case map[string]any:
 		return r.redactMapInternal(v, 0)
 	case []any:
 		return r.redactSlice(v, 0)
 	default:
+		// Check if it's a struct or pointer to struct
+		val := reflect.ValueOf(data)
+		kind := val.Kind()
+		if kind == reflect.Ptr {
+			kind = val.Elem().Kind()
+		}
+
+		if kind == reflect.Struct {
+			// Convert struct to map via JSON roundtrip to respect tags
+			// This is expensive but ensures safety and correctness (tags, unexported fields, etc.)
+			// TODO: Optimize this to use reflection directly + tag parsing to avoid double-serialization overhead.
+			// For high performance, callers should pass map[string]any if possible.
+			jsonBytes, err := json.Marshal(data)
+			if err != nil {
+				// FAIL-SAFE: Return nil to prevent PII leakage.
+				// Do NOT return original data as it may contain un-redacted PII.
+				return nil
+			}
+
+			var asMap map[string]any
+			if err := json.Unmarshal(jsonBytes, &asMap); err != nil {
+				return nil
+			}
+			return r.redactMapInternal(asMap, 0)
+		}
+
+		// Primitive types are returned as is
 		return v
 	}
 }
@@ -83,9 +112,10 @@ func (r *PIIRedactor) redactMapInternal(data map[string]any, depth int) map[stri
 		return nil
 	}
 	// Prevent stack overflow and PII leakage at extreme nesting depths.
-	// Return empty map (fail-safe) rather than unredacted data.
 	if depth > MaxRecursionDepth {
-		return map[string]any{}
+		return map[string]any{
+			"_REDACTED_": "Max Recursion Depth Exceeded",
+		}
 	}
 
 	result := make(map[string]any, len(data))
@@ -103,13 +133,14 @@ func (r *PIIRedactor) redactValue(key, lowerKey string, value any, depth int) an
 	}
 
 	// Recursively handle nested structures
-	// At max depth, return empty structures to prevent PII leakage
+	// At max depth, return marker to prevent PII leakage while indicating data loss
 	if depth >= MaxRecursionDepth {
 		switch value.(type) {
 		case map[string]any:
-			return map[string]any{} // Fail-safe: empty map
+			return map[string]any{"_REDACTED_": "Max Recursion Depth Exceeded"}
 		case []any:
-			return []any{} // Fail-safe: empty slice
+			// For slices, we can't easily insert a map key, so we return a slice with a string explanation
+			return []any{"MAX_RECURSION_DEPTH_EXCEEDED"}
 		default:
 			return value // Primitive values are safe
 		}
@@ -163,6 +194,8 @@ func (r *PIIRedactor) isPIIField(key, lowerKey string) bool {
 		fieldBirthDate,
 		fieldPassport,
 		fieldAuthToken,
+		fieldAPIKey,
+		fieldAPIKeyAlt,
 	}
 
 	for _, term := range smartTerms {
@@ -263,9 +296,11 @@ func (r *PIIRedactor) partialRedactEmail(email string) string {
 	domainPart := email[atIndex:] // includes @
 
 	// Show first 2 chars of local part (or all available if fewer)
+	// Safety improvement: If local part is shorter than 2 chars, redact it mostly to avoid leaking exact short length.
 	visibleChars := 2
 	if len(localPart) < visibleChars {
-		visibleChars = len(localPart)
+		// For very short usernames (e.g. "a@g.com"), show nothing of local part to avoid leaking single-letter user existence
+		visibleChars = 0
 	}
 
 	return localPart[:visibleChars] + "***" + domainPart
@@ -276,9 +311,9 @@ func (r *PIIRedactor) redactSlice(slice []any, depth int) []any {
 	if slice == nil {
 		return nil
 	}
-	// Fail-safe: return empty slice at max depth to prevent PII leakage.
+	// Fail-safe: return slice with marker at max depth to prevent PII leakage.
 	if depth > MaxRecursionDepth {
-		return []any{}
+		return []any{"MAX_RECURSION_DEPTH_EXCEEDED"}
 	}
 
 	result := make([]any, len(slice))
@@ -300,24 +335,19 @@ func (r *PIIRedactor) redactSlice(slice []any, depth int) []any {
 // IMPORTANT: If input is a struct, fields MUST have `json` tags to be correctly handled and redacted.
 // Returns the redacted data as JSON bytes suitable for AuditEvent.Payload.
 func RedactAndMarshal(redactor domain.Redactor, data any) ([]byte, error) {
-	// TODO: Performance optimization
-	// This function performs a triple transformation (Struct -> JSON -> Map -> Redacted Map -> JSON).
-	// For high-throughput audit logging, this might become a bottleneck.
-	// Consider implementing a direct reflection-based mapper or code generation to skip the intermediate JSON/Map steps.
-
 	if data == nil {
-		return nil, nil
+		return nil, nil // Consistent with original behavior, though json.Marshal returns "null"
 	}
 
 	var container any
 
+	// Optimization: If it's already a map or slice (or compatible), we can try to skip one unmarshal step
+	// BUT Redact(any) now handles Structs via internal Marshal/Unmarshal.
+	// So we can simplify this function greatly.
+
 	switch v := data.(type) {
-	case map[string]any:
-		container = v
-	case []any:
-		container = v
 	case []byte:
-		// Parse JSON bytes into container (map or slice)
+		// If it's pure JSON bytes, we MUST unmarshal to apply redaction
 		if len(v) == 0 {
 			return nil, nil
 		}
@@ -325,17 +355,12 @@ func RedactAndMarshal(redactor domain.Redactor, data any) ([]byte, error) {
 			return nil, fmt.Errorf("redact: failed to unmarshal JSON bytes: %w", err)
 		}
 	default:
-		// Assume it's a struct - marshal to JSON then unmarshal to generic container
-		jsonBytes, err := json.Marshal(v)
-		if err != nil {
-			return nil, fmt.Errorf("redact: failed to marshal input to JSON: %w", err)
-		}
-		if err := json.Unmarshal(jsonBytes, &container); err != nil {
-			return nil, fmt.Errorf("redact: failed to unmarshal JSON: %w", err)
-		}
+		// Let Redact handle the type switching and struct conversion
+		container = v
 	}
 
 	// Apply redaction
+	// If container was a struct, Redact will now handle conversion to map and redaction
 	redacted := redactor.Redact(container)
 
 	// Marshal to JSON bytes

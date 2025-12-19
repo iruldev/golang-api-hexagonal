@@ -156,9 +156,9 @@ func TestPIIRedactor_RedactMap_EmailPartialMode(t *testing.T) {
 		expected string
 	}{
 		{"normal email", "john.doe@example.com", "jo***@example.com"},
-		{"short local part", "a@example.com", "a***@example.com"},
+		{"short local part", "a@example.com", "***@example.com"},
 		{"two char local part", "ab@example.com", "ab***@example.com"},
-		{"single char local", "j@x.com", "j***@x.com"},
+		{"single char local", "j@x.com", "***@x.com"},
 	}
 
 	r := redact.NewPIIRedactor(domain.RedactorConfig{EmailMode: domain.EmailModePartial})
@@ -578,14 +578,18 @@ func TestPIIRedactor_RecursionLimit(t *testing.T) {
 	assert.NotNil(t, result)
 
 	// Traverse result to verify depth limit behavior
-	// The implementation now returns empty map at max depth (fail-safe)
-	// So we should be able to traverse up to the limit, then get empty maps
+	// The implementation now returns a marker map at max depth (fail-safe)
 	depth := 0
 	curr := result
 	for {
 		next, ok := curr["next"].(map[string]any)
-		if !ok || len(next) == 0 {
-			// Either no "next" key or it's an empty map (fail-safe at max depth)
+		if !ok {
+			// Check if we hit the marker
+			if val, exists := curr["_REDACTED_"]; exists {
+				assert.Equal(t, "Max Recursion Depth Exceeded", val)
+				break
+			}
+			// If no marker and no next, just break (end of chain)
 			break
 		}
 		curr = next
@@ -627,7 +631,7 @@ func TestPIIRedactor_RecursionLimit_PIINotLeaked(t *testing.T) {
 		}
 
 		next, ok := curr["next"].(map[string]any)
-		if !ok || len(next) == 0 {
+		if !ok {
 			break
 		}
 		curr = next
@@ -647,7 +651,59 @@ func TestRedactAndMarshal_UnmarshalableStruct(t *testing.T) {
 
 	input := BadStruct{Ch: make(chan int)}
 
-	_, err := redact.RedactAndMarshal(r, input)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to marshal input to JSON")
+	// Now returns fail-safe nil (marshaled to "null") instead of erroring or returning potentially leaked data
+	result, err := redact.RedactAndMarshal(r, input)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte("null"), result)
+}
+
+func TestPIIRedactor_Redact_Struct(t *testing.T) {
+	// New test to verify direct struct redaction capability
+	r := redact.NewPIIRedactor(domain.RedactorConfig{EmailMode: domain.EmailModeFull})
+
+	type User struct {
+		Name     string `json:"name"`
+		Password string `json:"password"`
+		APIKey   string `json:"api_key"`
+	}
+
+	input := User{
+		Name:     "John",
+		Password: "secret",
+		APIKey:   "123-abc-key",
+	}
+
+	// Redact should now treat struct as map (via JSON conversion) and redact it
+	result := r.Redact(input)
+
+	resMap, ok := result.(map[string]any)
+	require.True(t, ok, "Struct should be converted to map")
+
+	assert.Equal(t, "John", resMap["name"])
+	assert.Equal(t, "[REDACTED]", resMap["password"])
+	assert.Equal(t, "[REDACTED]", resMap["api_key"])
+}
+
+func TestPIIRedactor_APIKeyRedaction(t *testing.T) {
+	tests := []struct {
+		name  string
+		field string
+	}{
+		{"apikey", "apikey"},
+		{"api_key", "api_key"},
+		{"apiKey", "apiKey"},
+		{"API_KEY", "API_KEY"},
+	}
+
+	r := redact.NewPIIRedactor(domain.RedactorConfig{EmailMode: domain.EmailModeFull})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := map[string]any{
+				tt.field: "sensitive-value",
+			}
+			result := r.RedactMap(input)
+			assert.Equal(t, "[REDACTED]", result[tt.field])
+		})
+	}
 }

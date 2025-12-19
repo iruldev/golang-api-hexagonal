@@ -82,6 +82,10 @@ so that **sensitive data is never stored in audit logs**.
   - [x] 7.3 Add missing PII fields: `phone`, `mobile`, `dob`, `birth_date`, `passport`
   - [x] 7.4 Update `robustness_test.go` to verify new behavior and fields
 
+- [x] Task 8: Address Code Review Findings (Adversarial-Review-6)
+  - [x] 8.1 Performance: Added TODO to `Redact(struct)` to optimize JSON roundtrip overhead
+  - [x] 8.2 Privacy: Enhanced `partialRedactEmail` to fully mask local parts < 2 chars to avoid length leakage
+
 ## Dependencies & Blockers
 
 - **Hard dependency:** Story 6.2 (Audit Event PostgreSQL Repository) - **DONE**
@@ -387,7 +391,7 @@ N/A
 - ✅ `RedactAndMarshal` helper supports map, struct, and []byte inputs
 - ✅ Fixed pre-existing config test issue (empty DATABASE_URL validation)
 - ✅ [Review-Fix] Implemented recursion depth limit (100) to prevent stack overflow
-- ✅ [Review-Fix] Added performance TODO for struct serialization optimization
+- ✅ [Review-Fix] Added performance optimization TODO for struct serialization
 - ✅ [Review-Fix-2] Recursion limit now returns empty structures (not unredacted data)
 - ✅ [Review-Fix-2] Config AuditRedactEmail normalizes case before validation
 - ✅ [Review-Fix-2] Added test for unmarshalable struct in RedactAndMarshal
@@ -398,7 +402,11 @@ N/A
 - ✅ [Code-Review-Fix] Added `authtoken` (lowercase compound) to PII redaction list (Story 6.3 Code Review)
 - ✅ [Code-Review-Fix] Added `benchmark_test.go` to monitor RedactAndMarshal performance
 - ✅ [Code-Review-Fix] Improved Config validation in constructor logic
-
+- ✅ [Adversarial-Review] Refactored `Redact` to safely handle structs (via JSON roundtrip)
+- ✅ [Adversarial-Review] Added `api_key`/`apikey` to PII field list
+- ✅ [Adversarial-Review-4] Addressed HIGH risk of `Redact(struct)` returning unredacted data by implementing safe struct-to-map conversion. Added `api_key` to PII fields.
+- ✅ [Adversarial-Review-5] Fixed SECURITY RISK: `Redact` now returns nil (fail-safe) instead of original data if `json.Marshal` fails (prevent PII leakage).
+- ✅ [Adversarial-Review-5] Fixed SILENT DATA LOSS: `redactMapInternal` now inserts `_REDACTED_: Max Recursion Depth Exceeded` marker instead of empty map when recursion limit is hit.
 
 ### Change Log
 
@@ -411,6 +419,9 @@ N/A
 - 2025-12-19: [Adversarial-Code-Review] Addressed MEDIUM findings: Added `authtoken` handling, added Benchmarks, and improved Config validation. All tests passed.
 - 2025-12-19: [Adversarial-Review-2] Fixed CRITICAL PII Leaking Vulnerability: Iterative `hasWord` logic implemented to prevent partial matches shielding real PII. Added regression tests in `robustness_test.go`.
 - 2025-12-19: [Adversarial-Review-3] Addressed MEDIUM findings: Fixed untracked benchmark file, optimized RedactMap usage (allocation reduction), and refined PII matching to whitelist safe ID suffixes (e.g. `TokenId`). Verified with updated `robustness_test.go`.
+- 2025-12-19: [Adversarial-Review-4] Addressed HIGH risk of `Redact(struct)` returning unredacted data by implementing safe struct-to-map conversion. Added `api_key` to PII fields.
+- 2025-12-19: [Adversarial-Review-5] Fixed SECURITY RISK (struct fail-safe) and SILENT DATA LOSS (recursion marker) issues. Updated tests. Code Review Complete.
+- 2025-12-19: [Adversarial-Review-6] Fixed LOW privacy issue (short email masking) and added Performance TODO. Updated `redactor.go` and `redactor_test.go`.
 
 ### File List
 
