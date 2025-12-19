@@ -22,4 +22,8 @@ type Redactor interface {
 	// Original map is NOT modified.
 	// Returns nil if input is nil.
 	RedactMap(data map[string]any) map[string]any
+
+	// Redact processes any valid JSON type (map, slice, or primitive) and returns redacted copy.
+	// Original data is NOT modified.
+	Redact(data any) any
 }

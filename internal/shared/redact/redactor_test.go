@@ -32,8 +32,6 @@ func TestNewPIIRedactor_NormalizesConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := redact.NewPIIRedactor(domain.RedactorConfig{EmailMode: tt.input})
-			// We can't access private field directly but we can verify behavior
-			// If input normalizes to "partial", then partial redaction should work
 			if tt.expected == domain.EmailModePartial {
 				res := r.RedactMap(map[string]any{"email": "test@example.com"})
 				assert.Equal(t, "te***@example.com", res["email"])
@@ -56,6 +54,35 @@ func TestPIIRedactor_RedactMap_EmptyMap(t *testing.T) {
 	result := r.RedactMap(map[string]any{})
 	assert.NotNil(t, result)
 	assert.Empty(t, result)
+}
+
+func TestPIIRedactor_Redact(t *testing.T) {
+	r := redact.NewPIIRedactor(domain.RedactorConfig{EmailMode: domain.EmailModeFull})
+
+	t.Run("Map", func(t *testing.T) {
+		input := map[string]any{"password": "secret"}
+		result := r.Redact(input)
+		resMap, ok := result.(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, "[REDACTED]", resMap["password"])
+	})
+
+	t.Run("Slice", func(t *testing.T) {
+		input := []any{map[string]any{"password": "secret"}}
+		result := r.Redact(input)
+		resSlice, ok := result.([]any)
+		require.True(t, ok)
+		require.Len(t, resSlice, 1)
+		resMap, ok := resSlice[0].(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, "[REDACTED]", resMap["password"])
+	})
+
+	t.Run("Primitive", func(t *testing.T) {
+		input := "safe"
+		result := r.Redact(input)
+		assert.Equal(t, "safe", result)
+	})
 }
 
 func TestPIIRedactor_RedactMap_StandardPIIFields(t *testing.T) {
@@ -417,6 +444,26 @@ func TestRedactAndMarshal_StructInput(t *testing.T) {
 	assert.Equal(t, "John", output["name"])
 }
 
+func TestRedactAndMarshal_SliceInput(t *testing.T) {
+	r := redact.NewPIIRedactor(domain.RedactorConfig{EmailMode: domain.EmailModeFull})
+
+	input := []any{
+		map[string]any{"password": "secret"},
+		map[string]any{"name": "test"},
+	}
+
+	result, err := redact.RedactAndMarshal(r, input)
+	require.NoError(t, err)
+
+	var output []any
+	err = json.Unmarshal(result, &output)
+	require.NoError(t, err)
+	require.Len(t, output, 2)
+
+	item0 := output[0].(map[string]any)
+	assert.Equal(t, "[REDACTED]", item0["password"])
+}
+
 func TestRedactAndMarshal_InvalidJSONBytes(t *testing.T) {
 	r := redact.NewPIIRedactor(domain.RedactorConfig{EmailMode: domain.EmailModeFull})
 
@@ -527,26 +574,80 @@ func TestPIIRedactor_RecursionLimit(t *testing.T) {
 
 	result := r.RedactMap(deepMap)
 
-	// Traverse result to see where it stopped
-	// It should stop around depth 100
+	// Verify we didn't panic
+	assert.NotNil(t, result)
+
+	// Traverse result to verify depth limit behavior
+	// The implementation now returns empty map at max depth (fail-safe)
+	// So we should be able to traverse up to the limit, then get empty maps
 	depth := 0
 	curr := result
 	for {
 		next, ok := curr["next"].(map[string]any)
-		if !ok {
+		if !ok || len(next) == 0 {
+			// Either no "next" key or it's an empty map (fail-safe at max depth)
 			break
 		}
 		curr = next
 		depth++
 	}
 
-	// We expect depth to be limited to MaxRecursionDepth (100) or close to it depending on counting.
-	// Since we recurse 0..100, we should see about 100 levels.
-	// The implementation returns the `data` (map) as is when depth > 100.
-	// So effectively, the simplified logic might return the original map reference at the boundary.
-	// But let's just assert we didn't panic and depth is around 100.
-	assert.True(t, depth >= 100, "Should handle at least 100 levels")
+	// Should have traversed up to near MaxRecursionDepth levels before hitting empty map
+	assert.True(t, depth >= 98, "Should handle at least 98 levels before stopping")
+}
 
-	// Ensure we didn't crash
-	assert.NotNil(t, result)
+func TestPIIRedactor_RecursionLimit_PIINotLeaked(t *testing.T) {
+	r := redact.NewPIIRedactor(domain.RedactorConfig{EmailMode: domain.EmailModeFull})
+
+	// Create map with PII at depth 101 (beyond MaxRecursionDepth)
+	deepMap := make(map[string]any)
+	current := deepMap
+	for i := 0; i < 102; i++ {
+		next := make(map[string]any)
+		if i == 101 {
+			// This password is at depth 102, beyond MaxRecursionDepth
+			next["password"] = "secret-that-must-not-leak"
+		}
+		current["next"] = next
+		current = next
+	}
+
+	result := r.RedactMap(deepMap)
+
+	// Traverse to the deepest point we can reach
+	curr := result
+	foundPassword := false
+	for i := 0; i < 120; i++ {
+		// Check if password leaked at this level
+		if pwd, exists := curr["password"]; exists {
+			if pwd == "secret-that-must-not-leak" {
+				foundPassword = true
+				break
+			}
+		}
+
+		next, ok := curr["next"].(map[string]any)
+		if !ok || len(next) == 0 {
+			break
+		}
+		curr = next
+	}
+
+	// Password should NOT have leaked
+	assert.False(t, foundPassword, "Password should NOT leak beyond max recursion depth")
+}
+
+func TestRedactAndMarshal_UnmarshalableStruct(t *testing.T) {
+	r := redact.NewPIIRedactor(domain.RedactorConfig{EmailMode: domain.EmailModeFull})
+
+	// Channels cannot be marshaled to JSON
+	type BadStruct struct {
+		Ch chan int `json:"ch"`
+	}
+
+	input := BadStruct{Ch: make(chan int)}
+
+	_, err := redact.RedactAndMarshal(r, input)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to marshal input to JSON")
 }

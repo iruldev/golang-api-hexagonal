@@ -93,7 +93,7 @@ development_status:
   6-1-implement-audit-event-domain-model: done
   6-2-implement-audit-event-postgresql-repository: done
   6-3-implement-pii-redaction-service: done
-  6-4-implement-audit-event-service: backlog
+  6-4-implement-audit-event-service: ready-for-dev
   6-5-enable-extensible-audit-event-types: backlog
   epic-6-retrospective: optional
 

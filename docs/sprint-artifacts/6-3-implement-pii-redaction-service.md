@@ -382,12 +382,22 @@ N/A
 - ✅ Fixed pre-existing config test issue (empty DATABASE_URL validation)
 - ✅ [Review-Fix] Implemented recursion depth limit (100) to prevent stack overflow
 - ✅ [Review-Fix] Added performance TODO for struct serialization optimization
+- ✅ [Review-Fix-2] Recursion limit now returns empty structures (not unredacted data)
+- ✅ [Review-Fix-2] Config AuditRedactEmail normalizes case before validation
+- ✅ [Review-Fix-2] Added test for unmarshalable struct in RedactAndMarshal
+- ✅ [Review-Fix-2] Added test to verify PII does not leak at deep nesting
+- ✅ [Review-Fix-3] Enhanced PII matching to catch substrings (e.g., "access_token")
+- ✅ [Review-Fix-3] Moved PII field patterns to dedicated constants (maintainability)
+- ✅ [Code-Review] Verified robustness with dedicated test suite (robustness_test.go)
+
 
 ### Change Log
 
 - 2025-12-19: Implemented full PII redaction service with configuration, domain interface, shared implementation, and comprehensive tests
 - 2025-12-19: [AI-Review] Fixed recursion safety issue and added performance optimization TODO
 - 2025-12-19: [Polish] Fixed all low-priority review findings (constants, robustness, docs)
+- 2025-12-19: [AI-Review-2] Fixed 2 MEDIUM + 3 LOW issues: (M1) recursion returns empty map for security, (M2) config normalizes case, (L1-L3) improved test coverage
+- 2025-12-19: [Code-Review] Added `robustness_test.go` to verify PII matching edge cases and false positives
 
 ### File List
 
@@ -395,9 +405,11 @@ N/A
 - `internal/domain/redactor.go`
 - `internal/shared/redact/redactor.go`
 - `internal/shared/redact/redactor_test.go`
+- `internal/shared/redact/robustness_test.go`
 
 **Modified Files:**
-- `internal/infra/config/config.go` (added AuditRedactEmail field + validation)
+- `internal/infra/config/config.go` (added AuditRedactEmail field + validation + case normalization)
 - `internal/infra/config/config_test.go` (added AuditRedactEmail tests, fixed empty DATABASE_URL test)
 - `.env.example` (added AUDIT_REDACT_EMAIL documentation)
 - `docs/sprint-artifacts/sprint-status.yaml` (status updates)
+

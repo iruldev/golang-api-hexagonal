@@ -115,6 +115,7 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid RATE_LIMIT_RPS: must be greater than 0")
 	}
 
+	c.AuditRedactEmail = strings.ToLower(strings.TrimSpace(c.AuditRedactEmail))
 	switch c.AuditRedactEmail {
 	case "full", "partial":
 	default:
