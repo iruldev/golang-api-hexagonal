@@ -55,6 +55,413 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 
 ---
 
+## Hexagonal Architecture Developer Guide
+
+_This section provides a quick reference for developers to understand where to place code and how layers interact._
+
+### Hexagonal Architecture Principles
+
+The project follows **Hexagonal Architecture** (also known as **Ports and Adapters**), which separates business logic from external concerns:
+
+```
+        ┌─────────────────────────────────────────────────────────────┐
+        │                     EXTERNAL WORLD                          │
+        │   (HTTP Clients, Databases, Message Queues, File Systems)   │
+        └─────────────────────────────────────────────────────────────┘
+                  │                                    ▲
+                  ▼                                    │
+        ┌─────────────────┐                  ┌─────────────────┐
+        │    ADAPTERS     │                  │    ADAPTERS     │
+        │   (Driving)     │                  │   (Driven)      │
+        │   Transport     │                  │   Infra         │
+        └────────┬────────┘                  └────────┬────────┘
+                 │                                    │
+                 │         ┌──────────────────┐       │
+                 └────────▶│    APPLICATION   │◀──────┘
+                           │    (Use Cases)   │
+                           └────────┬─────────┘
+                                    │
+                           ┌────────▼─────────┐
+                           │     DOMAIN       │
+                           │ (Entities/Ports) │
+                           └──────────────────┘
+```
+
+**Core Concepts:**
+
+| Concept | Description | In This Project |
+|---------|-------------|-----------------|
+| **Ports** | Interfaces defined by the domain | Repository interfaces in `internal/domain/` |
+| **Adapters** | Implementations of ports | PostgreSQL repos in `internal/infra/postgres/` |
+| **Driving Adapters** | Trigger application | HTTP handlers in `internal/transport/http/` |
+| **Driven Adapters** | Called by application | Database, external APIs in `internal/infra/` |
+
+**Benefits:**
+
+1. **Testability** — Business logic can be tested without databases or HTTP
+2. **Maintainability** — Changes to infrastructure don't affect domain logic
+3. **Flexibility** — Swap PostgreSQL for MySQL without changing use cases
+4. **Clear boundaries** — Enforced by linting, violations fail CI
+
+---
+
+### Four Layers and Responsibilities
+
+```mermaid
+flowchart TB
+    subgraph External["External World"]
+        HTTP["HTTP Clients"]
+        DB[("PostgreSQL")]
+        OBS["Observability<br>(Logs, Traces, Metrics)"]
+    end
+    
+    subgraph Transport["Transport Layer<br>internal/transport/"]
+        H["Handlers"]
+        M["Middleware"]
+        DTO["DTOs/Contracts"]
+    end
+    
+    subgraph App["App Layer<br>internal/app/"]
+        UC["Use Cases"]
+        AUTH["Authorization"]
+    end
+    
+    subgraph Domain["Domain Layer<br>internal/domain/"]
+        E["Entities"]
+        RI["Repository Interfaces<br>(Ports)"]
+        DE["Domain Errors"]
+        Q["Querier/TxManager"]
+    end
+    
+    subgraph Infra["Infra Layer<br>internal/infra/"]
+        R["Repositories<br>(Adapters)"]
+        C["Config"]
+        L["Logger/Tracer"]
+    end
+    
+    HTTP --> H
+    H --> UC
+    UC --> E
+    UC --> RI
+    UC -.-> AUTH
+    R -.->|implements| RI
+    R --> DB
+    C --> OBS
+    L --> OBS
+    
+    style Domain fill:#e1f5fe,stroke:#01579b
+    style App fill:#fff3e0,stroke:#e65100
+    style Transport fill:#f3e5f5,stroke:#4a148c
+    style Infra fill:#e8f5e9,stroke:#1b5e20
+```
+
+**Dependency Direction:** `Transport → App → Domain ← Infra`
+
+#### Domain Layer (`internal/domain/`)
+
+The **innermost core** — contains business entities and contracts with NO external dependencies.
+
+| Responsibility | Example |
+|----------------|---------|
+| Entity definitions | `type User struct`, `type ID string` |
+| Repository interfaces (Ports) | `type UserRepository interface` |
+| Domain errors | `var ErrUserNotFound = errors.New(...)` |
+| Database abstractions | `type Querier interface`, `type TxManager interface` |
+
+```go
+// internal/domain/user.go
+package domain
+
+import "errors"
+
+// Entity
+type User struct {
+    ID        ID
+    Email     string
+    FirstName string
+    LastName  string
+    CreatedAt time.Time
+}
+
+// Port (interface)
+type UserRepository interface {
+    Create(ctx context.Context, q Querier, user *User) error
+    GetByID(ctx context.Context, q Querier, id ID) (*User, error)
+}
+
+// Domain error
+var ErrUserNotFound = errors.New("user not found")
+```
+
+**Allowed imports:** `$gostd` only (stdlib)  
+**Forbidden:** `slog`, `uuid`, `pgx`, `otel`, any external package
+
+---
+
+#### App Layer (`internal/app/`)
+
+Contains **use cases** (business logic) and orchestrates domain operations.
+
+| Responsibility | Example |
+|----------------|---------|
+| Use case implementation | `CreateUserUseCase.Execute()` |
+| Authorization checks | Permission validation before operations |
+| Transaction boundaries | Using `TxManager.WithTx()` |
+| Error conversion | Domain errors → `AppError` with codes |
+
+```go
+// internal/app/user/create_user.go
+package user
+
+func (uc *CreateUserUseCase) Execute(ctx context.Context, req CreateUserRequest) (*domain.User, error) {
+    // 1. Authorization check (happens HERE, not in middleware)
+    if !uc.canCreate(ctx) {
+        return nil, &AppError{Code: "FORBIDDEN", Message: "Not authorized"}
+    }
+    
+    // 2. Transaction boundary
+    var user *domain.User
+    err := uc.txManager.WithTx(ctx, func(tx domain.Querier) error {
+        user = &domain.User{ID: req.ID, Email: req.Email, ...}
+        return uc.userRepo.Create(ctx, tx, user)
+    })
+    
+    return user, err
+}
+```
+
+**Allowed imports:** `$gostd`, `internal/domain`  
+**Forbidden:** `slog`, `otel`, `uuid`, `net/http`, `pgx`, `transport`, `infra`
+
+---
+
+#### Transport Layer (`internal/transport/http/`)
+
+**Driving adapter** — handles HTTP concerns and converts between HTTP and domain.
+
+| Responsibility | Example |
+|----------------|---------|
+| HTTP handlers | `UserHandler.Create()` |
+| Middleware | Auth, logging, recovery, rate limit |
+| DTOs/Contracts | Request/response structs with JSON tags |
+| UUID generation | Generate UUID v7 for new entities |
+| Error mapping | `AppError.Code` → HTTP status + RFC 7807 |
+
+```go
+// internal/transport/http/handler/user.go
+package handler
+
+import "github.com/google/uuid"
+
+func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
+    // 1. Parse request
+    var req contract.CreateUserRequest
+    json.NewDecoder(r.Body).Decode(&req)
+    
+    // 2. Generate UUID v7 (at boundary)
+    id, _ := uuid.NewV7()
+    
+    // 3. Call use case
+    user, err := h.createUserUC.Execute(r.Context(), app.CreateUserRequest{
+        ID:    domain.ID(id.String()),
+        Email: req.Email,
+    })
+    
+    // 4. Map errors to HTTP (ONLY place that knows HTTP status codes)
+    if err != nil {
+        h.writeError(w, err)
+        return
+    }
+    
+    // 5. Return response
+    h.writeJSON(w, http.StatusCreated, contract.UserResponse{...})
+}
+```
+
+**Allowed imports:** `domain`, `app`, `chi`, `uuid`, `stdlib`  
+**Forbidden:** `pgx`, `internal/infra`
+
+---
+
+#### Infra Layer (`internal/infra/`)
+
+**Driven adapters** — implements domain interfaces with concrete technology.
+
+| Responsibility | Example |
+|----------------|---------|
+| Repository implementations | `postgres.UserRepo` implements `domain.UserRepository` |
+| Database connections | pgxpool setup |
+| Configuration | `config.Config` with envconfig |
+| Observability setup | Logger, tracer, metrics initialization |
+
+```go
+// internal/infra/postgres/user_repo.go
+package postgres
+
+import "github.com/google/uuid"
+
+func (r *UserRepo) Create(ctx context.Context, q domain.Querier, user *domain.User) error {
+    op := "userRepo.Create"
+    
+    // Parse domain.ID to uuid.UUID at infra boundary
+    id, err := uuid.Parse(string(user.ID))
+    if err != nil {
+        return fmt.Errorf("%s: invalid ID: %w", op, err)
+    }
+    
+    _, err = q.Exec(ctx, `INSERT INTO users (id, email, ...) VALUES ($1, $2, ...)`, id, user.Email)
+    if err != nil {
+        return fmt.Errorf("%s: %w", op, err)
+    }
+    
+    return nil
+}
+```
+
+**Allowed imports:** `domain`, `pgx`, `slog`, `otel`, `uuid`, external packages  
+**Forbidden:** `app`, `transport`
+
+---
+
+### Import Rules Between Layers
+
+The following table shows **allowed and forbidden** imports for each layer:
+
+| Layer | Can Import | CANNOT Import |
+|-------|------------|---------------|
+| **Domain** | `$gostd` only | `slog`, `uuid`, `pgx`, `otel`, ANY external |
+| **App** | `$gostd`, `internal/domain` | `slog`, `otel`, `uuid`, `net/http`, `pgx`, `transport`, `infra` |
+| **Transport** | `domain`, `app`, `chi`, `uuid`, `stdlib` | `pgx`, `internal/infra` |
+| **Infra** | `domain`, `pgx`, `slog`, `otel`, everything | `app`, `transport` |
+
+```
+                    ALLOWED IMPORT DIRECTION
+                    ========================
+                    
+    ┌──────────────────────────────────────────────────────┐
+    │                                                      │
+    │   Transport ──────────► App ──────────► Domain       │
+    │                          │                ▲          │
+    │                          │                │          │
+    │                          ▼                │          │
+    │                    ┌─────────────────────┐│          │
+    │                    │       Infra        ├┘          │
+    │                    │  (implements       │           │
+    │                    │   domain ports)    │           │
+    │                    └────────────────────┘           │
+    │                                                      │
+    │   ❌ Domain NEVER imports other layers               │
+    │   ❌ App NEVER imports transport/infra               │
+    │   ❌ Transport NEVER imports infra                   │
+    │   ❌ Infra NEVER imports app/transport               │
+    │                                                      │
+    └──────────────────────────────────────────────────────┘
+```
+
+---
+
+### Boundary Enforcement in Practice
+
+Layer boundaries are **enforced automatically** by the linter. Violations fail CI.
+
+#### Configuration Location
+
+**File:** `.golangci.yml`  
+**Linter:** `depguard` (dependency guard)
+
+```yaml
+# .golangci.yml - depguard rules excerpt
+linters-settings:
+  depguard:
+    rules:
+      domain-layer:
+        list-mode: strict
+        files:
+          - 'internal/domain/**'
+          - '!internal/domain/**/*_test.go'
+        allow:
+          - $gostd
+        deny:
+          - pkg: log/slog
+            desc: Domain layer must not log
+      
+      app-layer:
+        list-mode: strict
+        files:
+          - 'internal/app/**'
+          - '!internal/app/**/*_test.go'
+        allow:
+          - $gostd
+          - github.com/iruldev/golang-api-hexagonal/internal/domain
+        deny:
+          - pkg: log/slog
+            desc: App layer must not log directly
+          - pkg: github.com/jackc/pgx/v5
+            desc: App layer must not import database drivers
+          # ... more rules
+```
+
+#### Example Violation and Error Message
+
+**Scenario:** Developer accidentally imports `uuid` package in app layer.
+
+```go
+// ❌ WRONG: internal/app/user/create_user.go
+package user
+
+import "github.com/google/uuid"  // VIOLATION!
+
+func (uc *CreateUserUseCase) Execute(...) {
+    id := uuid.New()  // Should not generate UUIDs here
+    // ...
+}
+```
+
+**Error on `make lint`:**
+
+```
+internal/app/user/create_user.go:5:2: import 'github.com/google/uuid' is not 
+allowed from list 'app-layer': App layer must not import UUID library directly 
+(depguard)
+```
+
+#### CI Integration
+
+Boundary violations **automatically fail the CI build**:
+
+```yaml
+# .github/workflows/ci.yml
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+```
+
+**Enforcement Flow:**
+
+1. Developer pushes code with import violation
+2. CI runs `golangci-lint` with depguard enabled
+3. depguard detects forbidden import
+4. Lint step fails with clear error message
+5. Pull request cannot be merged until fixed
+
+#### References
+
+This boundary enforcement implements:
+- **FR45:** Linting rules detect import violations between layers
+- **FR46:** CI pipeline fails when boundary violations are detected  
+- **FR47:** Developer receives clear error messages indicating violation
+
+---
+
 ## Starter Template Evaluation
 
 ### Primary Technology Domain

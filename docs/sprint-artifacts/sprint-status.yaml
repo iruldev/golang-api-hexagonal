@@ -109,7 +109,7 @@ development_status:
   # Epic 8: Documentation & Developer Guides
   epic-8: in-progress
   8-1-create-readme-quick-start: done
-  8-2-document-architecture-and-layer-responsibilities: backlog
+  8-2-document-architecture-and-layer-responsibilities: done
   8-3-document-local-development-workflow: backlog
   8-4-document-observability-configuration: backlog
   8-5-create-guide-for-adding-new-modules: backlog
