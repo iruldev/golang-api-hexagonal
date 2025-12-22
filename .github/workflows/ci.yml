@@ -49,5 +49,23 @@ jobs:
       - name: Check coverage threshold
         run: make coverage
 
+      # Build verification: ensures Go binary compiles successfully
+      # Build failure will cause workflow to fail (fail-fast behavior)
       - name: Build
-        run: make build
+        run: make build BINARY_NAME=/dev/null
+
+      # Security scan: detect known vulnerabilities in dependencies
+      # govulncheck is the official Go vulnerability checker from golang.org/x
+      # Known CVEs will fail the workflow to prevent insecure deployments
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Security scan
+        run: govulncheck ./...
+
+      # Docker build: conditionally build image if Dockerfile exists
+      # This verifies the Dockerfile is valid but does NOT push the image
+      # Step is skipped gracefully when Dockerfile doesn't exist
+      - name: Build Docker image
+        if: hashFiles('Dockerfile') != ''
+        run: docker build . -t test:ci --no-cache
