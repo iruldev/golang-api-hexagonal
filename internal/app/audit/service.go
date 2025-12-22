@@ -1,6 +1,87 @@
 // Package audit provides use cases for audit event operations.
+//
 // This package follows hexagonal architecture principles - it depends only on the domain layer
 // and defines ports (interfaces) that infrastructure adapters must implement.
+//
+// # Overview
+//
+// The audit package provides the AuditService which handles:
+//   - Recording audit events with automatic PII redaction
+//   - Querying audit events by entity
+//
+// # Adding Audit Events to a New Module
+//
+// Follow these steps to integrate audit events into your module:
+//
+// 1. DEFINE EVENT TYPE CONSTANT in internal/domain/audit.go:
+//
+//	const EventOrderCreated = "order.created"
+//
+// 2. ADD DEPENDENCY to your use case struct:
+//
+//	type CreateOrderUseCase struct {
+//	    orderRepo    domain.OrderRepository
+//	    auditService *audit.AuditService  // Add this
+//	    txManager    domain.TxManager
+//	    db           domain.Querier
+//	}
+//
+// 3. UPDATE REQUEST STRUCT to carry context values:
+//
+//	type CreateOrderRequest struct {
+//	    // ... order fields ...
+//	    RequestID string    // Transport layer extracts this
+//	    ActorID   domain.ID // Transport layer extracts from JWT
+//	}
+//
+// 4. RECORD AUDIT EVENT within your transaction:
+//
+//	func (uc *CreateOrderUseCase) Execute(ctx context.Context, req CreateOrderRequest) error {
+//	    return uc.txManager.WithTx(ctx, func(tx domain.Querier) error {
+//	        // ... create order logic ...
+//
+//	        auditInput := audit.AuditEventInput{
+//	            EventType:  domain.EventOrderCreated,
+//	            ActorID:    req.ActorID,
+//	            EntityType: "order",
+//	            EntityID:   order.ID,
+//	            Payload:    order,  // Automatically PII-redacted
+//	            RequestID:  req.RequestID,
+//	        }
+//	        return uc.auditService.Record(ctx, tx, auditInput)
+//	    })
+//	}
+//
+// 5. UPDATE HANDLER to populate context values:
+//
+//	func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
+//	    req := order.CreateOrderRequest{
+//	        // ... order fields from body ...
+//	        RequestID: middleware.GetRequestID(r.Context()),
+//	        ActorID:   getActorIDFromContext(r.Context()),
+//	    }
+//	    resp, err := h.useCase.Execute(r.Context(), req)
+//	    // ...
+//	}
+//
+// 6. ADD TESTS verifying audit recording (see internal/app/user/create_user_test.go)
+//
+// # Developer Checklist
+//
+// Before considering your audit integration complete:
+//
+//   - [ ] Event type constant defined in domain layer
+//   - [ ] AuditService injected as dependency in use case
+//   - [ ] Request struct includes RequestID and ActorID fields
+//   - [ ] auditService.Record() called within transaction
+//   - [ ] Handler extracts and passes RequestID and ActorID
+//   - [ ] Unit tests mock AuditService and verify Record() is called
+//   - [ ] `make lint` passes (no architecture violations)
+//   - [ ] `make test` passes (all tests green)
+//
+// # Canonical Reference
+//
+// See internal/app/user/create_user.go for a complete working example.
 package audit
 
 import (
