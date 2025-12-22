@@ -1,18 +1,146 @@
-version: "2"
 run:
   timeout: 5m
-  relative-path-mode: gomod
   allow-parallel-runners: true
-  allow-serial-runners: true
-  concurrency: 4
+
 output:
   formats:
-    text:
-      path: stdout
-      print-linter-name: true
-      print-issued-lines: true
+    - format: text
+  print-issued-lines: true
+  print-linter-name: true
+
+linters-settings:
+  depguard:
+    rules:
+      Main:
+        list-mode: lax
+        files:
+          - $all
+          - '!**/internal/**'
+        allow:
+          - $gostd
+          - github.com/iruldev/golang-api-hexagonal
+          - github.com/go-chi
+          - github.com/google/uuid
+          - github.com/jackc/pgx
+          - github.com/kelseyhightower/envconfig
+          - github.com/go-playground/validator
+          - github.com/golang-jwt/jwt
+          - github.com/pressly/goose
+          - go.opentelemetry.io
+          - github.com/prometheus
+          - github.com/stretchr/testify
+      app-layer:
+        list-mode: strict
+        files:
+          - 'internal/app/**'
+          - '!internal/app/**/*_test.go'
+        allow:
+          - $gostd
+          - github.com/iruldev/golang-api-hexagonal/internal/domain
+        deny:
+          - pkg: log/slog
+            desc: App layer must not log directly
+          - pkg: go.opentelemetry.io
+            desc: App layer must not trace directly
+          - pkg: github.com/google/uuid
+            desc: App layer must not import UUID library directly
+          - pkg: net/http
+            desc: App layer must not import HTTP packages
+          - pkg: github.com/jackc/pgx/v5
+            desc: App layer must not import database drivers
+          - pkg: github.com/iruldev/golang-api-hexagonal/internal/transport
+            desc: App layer must not import transport layer
+          - pkg: github.com/iruldev/golang-api-hexagonal/internal/infra
+            desc: App layer must not import infra layer
+      app-layer-test:
+        list-mode: strict
+        files:
+          - 'internal/app/**/*_test.go'
+        allow:
+          - $gostd
+          - github.com/iruldev/golang-api-hexagonal/internal/domain
+          - github.com/stretchr/testify
+        deny:
+          - pkg: log/slog
+            desc: App tests must not log directly
+          - pkg: go.opentelemetry.io
+            desc: App tests must not trace directly
+          - pkg: github.com/google/uuid
+            desc: App tests must not import UUID library directly
+          - pkg: net/http
+            desc: App tests must not import HTTP packages
+          - pkg: github.com/jackc/pgx/v5
+            desc: App tests must not import database drivers
+          - pkg: github.com/iruldev/golang-api-hexagonal/internal/transport
+            desc: App tests must not import transport layer
+          - pkg: github.com/iruldev/golang-api-hexagonal/internal/infra
+            desc: App tests must not import infra layer
+      domain-layer:
+        list-mode: strict
+        files:
+          - 'internal/domain/**'
+          - '!internal/domain/**/*_test.go'
+        allow:
+          - $gostd
+        deny:
+          - pkg: log/slog
+            desc: Domain layer must not log
+      domain-layer-test:
+        list-mode: strict
+        files:
+          - 'internal/domain/**/*_test.go'
+        allow:
+          - $gostd
+          - github.com/stretchr/testify
+        deny:
+          - pkg: log/slog
+            desc: Domain tests must not log
+      infra-layer:
+        list-mode: lax
+        files:
+          - '**/internal/infra/**'
+        deny:
+          - pkg: github.com/iruldev/golang-api-hexagonal/internal/app
+            desc: Infra layer must not import app layer
+          - pkg: github.com/iruldev/golang-api-hexagonal/internal/transport
+            desc: Infra layer must not import transport layer
+      transport-layer-test:
+        list-mode: lax
+        files:
+          - '**/internal/transport/**/*_test.go'
+        deny:
+          - pkg: github.com/jackc/pgx/v5
+            desc: Transport layer must not import database drivers
+          - pkg: github.com/iruldev/golang-api-hexagonal/internal/infra
+            desc: Transport layer must not import infra directly (tests)
+      transport-layer:
+        list-mode: lax
+        files:
+          - '**/internal/transport/**'
+          - '!**/internal/transport/**/*_test.go'
+        deny:
+          - pkg: github.com/jackc/pgx/v5
+            desc: Transport layer must not import database drivers
+          - pkg: github.com/iruldev/golang-api-hexagonal/internal/infra/observability
+            desc: Transport layer must use shared interfaces for metrics
+          - pkg: github.com/iruldev/golang-api-hexagonal/internal/infra
+            desc: Transport layer must not import infra directly
+  errcheck:
+    check-type-assertions: false
+    check-blank: false
+    exclude-functions:
+      - (*encoding/json.Encoder).Encode
+      - (io.Writer).Write
+      - (net/http.ResponseWriter).Write
+      - io.WriteString
+      - (*go.opentelemetry.io/otel/sdk/trace.TracerProvider).Shutdown
+  staticcheck:
+    checks:
+      - all
+      - '-QF*'  # Disable quickfix suggestions
+
 linters:
-  default: none
+  disable-all: true
   enable:
     - depguard
     - errcheck
@@ -20,157 +148,17 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-  settings:
-    depguard:
-      rules:
-        Main:
-          list-mode: lax
-          files:
-            - $all
-            - '!**/internal/**'
-          allow:
-            - $gostd
-            - github.com/iruldev/golang-api-hexagonal
-            - github.com/go-chi
-            - github.com/google/uuid
-            - github.com/jackc/pgx
-            - github.com/kelseyhightower/envconfig
-            - github.com/go-playground/validator
-            - github.com/golang-jwt/jwt
-            - github.com/pressly/goose
-            - go.opentelemetry.io
-            - github.com/prometheus
-            - github.com/stretchr/testify
-        app-layer:
-          list-mode: strict
-          files:
-            - 'internal/app/**'
-            - '!internal/app/**/*_test.go'
-          allow:
-            - $gostd
-            - github.com/iruldev/golang-api-hexagonal/internal/domain
-          deny:
-            - pkg: log/slog
-              desc: App layer must not log directly
-            - pkg: go.opentelemetry.io
-              desc: App layer must not trace directly
-            - pkg: github.com/google/uuid
-              desc: App layer must not import UUID library directly
-            - pkg: net/http
-              desc: App layer must not import HTTP packages
-            - pkg: github.com/jackc/pgx/v5
-              desc: App layer must not import database drivers
-            - pkg: github.com/iruldev/golang-api-hexagonal/internal/transport
-              desc: App layer must not import transport layer
-            - pkg: github.com/iruldev/golang-api-hexagonal/internal/infra
-              desc: App layer must not import infra layer
-        app-layer-test:
-          list-mode: strict
-          files:
-            - 'internal/app/**/*_test.go'
-          allow:
-            - $gostd
-            - github.com/iruldev/golang-api-hexagonal/internal/domain
-            - github.com/stretchr/testify
-          deny:
-            - pkg: log/slog
-              desc: App tests must not log directly
-            - pkg: go.opentelemetry.io
-              desc: App tests must not trace directly
-            - pkg: github.com/google/uuid
-              desc: App tests must not import UUID library directly
-            - pkg: net/http
-              desc: App tests must not import HTTP packages
-            - pkg: github.com/jackc/pgx/v5
-              desc: App tests must not import database drivers
-            - pkg: github.com/iruldev/golang-api-hexagonal/internal/transport
-              desc: App tests must not import transport layer
-            - pkg: github.com/iruldev/golang-api-hexagonal/internal/infra
-              desc: App tests must not import infra layer
-        domain-layer:
-          list-mode: strict
-          files:
-            - 'internal/domain/**'
-            - '!internal/domain/**/*_test.go'
-          allow:
-            - $gostd
-          deny:
-            - pkg: log/slog
-              desc: Domain layer must not log
-        domain-layer-test:
-          list-mode: strict
-          files:
-            - 'internal/domain/**/*_test.go'
-          allow:
-            - $gostd
-            - github.com/stretchr/testify
-          deny:
-            - pkg: log/slog
-              desc: Domain tests must not log
-        infra-layer:
-          list-mode: lax
-          files:
-            - '**/internal/infra/**'
-          deny:
-            - pkg: github.com/iruldev/golang-api-hexagonal/internal/app
-              desc: Infra layer must not import app layer
-            - pkg: github.com/iruldev/golang-api-hexagonal/internal/transport
-              desc: Infra layer must not import transport layer
-        transport-layer-test:
-          list-mode: lax
-          files:
-            - '**/internal/transport/**/*_test.go'
-          deny:
-            - pkg: github.com/jackc/pgx/v5
-              desc: Transport layer must not import database drivers
-            - pkg: github.com/iruldev/golang-api-hexagonal/internal/infra
-              desc: Transport layer must not import infra directly (tests)
-        transport-layer:
-          list-mode: lax
-          files:
-            - '**/internal/transport/**'
-            - '!**/internal/transport/**/*_test.go'
-          deny:
-            - pkg: github.com/jackc/pgx/v5
-              desc: Transport layer must not import database drivers
-            - pkg: github.com/iruldev/golang-api-hexagonal/internal/infra/observability
-              desc: Transport layer must use shared interfaces for metrics
-            - pkg: github.com/iruldev/golang-api-hexagonal/internal/infra
-              desc: Transport layer must not import infra directly
-    errcheck:
-      check-type-assertions: false
-      check-blank: false
-      exclude-functions:
-        - (*encoding/json.Encoder).Encode
-        - (io.Writer).Write
-        - (net/http.ResponseWriter).Write
-        - io.WriteString
-        - (*go.opentelemetry.io/otel/sdk/trace.TracerProvider).Shutdown
-    staticcheck:
-      checks:
-        - all
-        - '-QF*'  # Disable quickfix suggestions
-  exclusions:
-    generated: lax
-    presets:
-      - comments
-      - common-false-positives
-      - legacy
-      - std-error-handling
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
-    rules:
-      # Exclude deprecated API warnings for specific patterns
-      - linters: [staticcheck]
-        text: "SA1019.*CloseNotifier"
-      - linters: [staticcheck]
-        text: "SA1019.*NewNoopTracerProvider"
-formatters:
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+
+issues:
+  exclude-dirs:
+    - third_party
+    - builtin
+    - examples
+  exclude-rules:
+    # Exclude deprecated API warnings for specific patterns
+    - linters:
+        - staticcheck
+      text: "SA1019.*CloseNotifier"
+    - linters:
+        - staticcheck
+      text: "SA1019.*NewNoopTracerProvider"
