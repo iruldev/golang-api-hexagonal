@@ -11,6 +11,24 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
+    # PostgreSQL service container for migration verification
+    # Provides clean database state for testing migration up/down cycles
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        # Healthcheck ensures PostgreSQL is ready before migration steps run
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -69,3 +87,25 @@ jobs:
       - name: Build Docker image
         if: hashFiles('Dockerfile') != ''
         run: docker build . -t test:ci --no-cache
+
+      # Install goose migration tool for database migration verification
+      # Uses same installation method as local development (go install)
+      - name: Install goose
+        run: go install github.com/pressly/goose/v3/cmd/goose@latest
+
+      # Migration verification: validates all migrations can be applied and rolled back
+      # Uses clean PostgreSQL service container - empty database state
+      # Migration up applies ALL migrations to verify forward compatibility
+      - name: Run migrations up
+        run: goose -dir migrations postgres "$DATABASE_URL" up
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_db?sslmode=disable
+
+      # Rollback all migrations to version 0 to verify down migrations
+      # This ensures reversibility of all database changes
+      # Full up/down cycle completes without error validates migration integrity
+      - name: Run migrations down
+        run: goose -dir migrations postgres "$DATABASE_URL" down-to 0
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_db?sslmode=disable
+
