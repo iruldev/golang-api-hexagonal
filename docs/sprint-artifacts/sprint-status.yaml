@@ -95,7 +95,7 @@ development_status:
   6-3-implement-pii-redaction-service: done
   6-4-implement-audit-event-service: done
   6-5-enable-extensible-audit-event-types: done
-  epic-6-retrospective: optional
+  epic-6-retrospective: completed
 
   # Epic 7: CI/CD Pipeline
   epic-7: backlog
