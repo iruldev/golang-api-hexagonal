@@ -24,11 +24,28 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
+      # Lint step uses golangci-lint with .golangci.yml configuration
+      # Includes depguard rules to enforce hexagonal architecture boundaries
+      # Boundary violations (e.g., domain importing infra) will fail this step
       - name: Run linter
         run: make lint
 
+      # Test step generates coverage.out profile for all packages
       - name: Run tests
         run: make test
+
+      # Upload coverage report as artifact for debugging and visibility
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.out
+          retention-days: 30
+
+      # Coverage enforcement: domain+app packages must maintain ≥80% coverage
+      # Uses Makefile target which implements threshold check
+      - name: Check coverage threshold
+        run: make coverage
 
       - name: Build
         run: make build
