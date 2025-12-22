@@ -4,6 +4,8 @@ A production-ready Go API built with hexagonal architecture, featuring comprehen
 
 ## 🚀 Quick Start
 
+⏱️ **Estimated time: ~15 minutes**
+
 ```bash
 # 1. Clone and setup
 git clone https://github.com/iruldev/golang-api-hexagonal.git
@@ -20,14 +22,39 @@ make migrate-up
 # 4. Run the service
 make run
 
-# 5. Test endpoints
+# 5. Verify endpoints
 curl http://localhost:8080/health
+# Expected: {"data":{"status":"ok"}}
+
 curl http://localhost:8080/ready
+# Expected: {"data":{"status":"ready","checks":{"database":"ok"}}}
+
+curl http://localhost:8080/metrics
+# Expected: Prometheus metrics in text format
+```
+
+### 🧪 First API Call (Optional)
+
+Once the service is running, try the Users API:
+
+```bash
+# Create a user
+curl -X POST http://localhost:8080/api/v1/users \
+  -H "Content-Type: application/json" \
+  -d '{"email":"john@example.com","firstName":"John","lastName":"Doe"}'
+# Expected: {"data":{"id":"<uuid>","email":"john@example.com",...}}
+
+# Get the user (replace <id> with the returned UUID)
+curl http://localhost:8080/api/v1/users/<id>
+
+# List all users
+curl http://localhost:8080/api/v1/users
+# Expected: {"data":[...],"pagination":{"page":1,"pageSize":20,...}}
 ```
 
 ## 📋 Requirements
 
-- **Go** 1.23+
+- **Go** 1.24+
 - **Docker** & Docker Compose
 - **Make**
 
