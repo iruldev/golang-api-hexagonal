@@ -98,8 +98,8 @@ development_status:
   epic-6-retrospective: completed
 
   # Epic 7: CI/CD Pipeline
-  epic-7: backlog
-  7-1-setup-github-actions-workflow: backlog
+  epic-7: in-progress
+  7-1-setup-github-actions-workflow: done
   7-2-implement-ci-lint-and-test-steps: backlog
   7-3-implement-ci-build-and-security-scan: backlog
   7-4-implement-ci-migration-verification: backlog
