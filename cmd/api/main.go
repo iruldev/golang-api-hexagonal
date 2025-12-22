@@ -13,10 +13,13 @@ import (
 
 	"go.opentelemetry.io/otel"
 
+	"github.com/iruldev/golang-api-hexagonal/internal/app/audit"
 	"github.com/iruldev/golang-api-hexagonal/internal/app/user"
+	"github.com/iruldev/golang-api-hexagonal/internal/domain"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/config"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
+	"github.com/iruldev/golang-api-hexagonal/internal/shared/redact"
 	httpTransport "github.com/iruldev/golang-api-hexagonal/internal/transport/http"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/handler"
@@ -86,6 +89,12 @@ func run() error {
 	userRepo := postgres.NewUserRepo()
 	idGen := postgres.NewIDGenerator()
 
+	// Create audit-related dependencies
+	redactorCfg := domain.RedactorConfig{EmailMode: domain.EmailModePartial}
+	piiRedactor := redact.NewPIIRedactor(redactorCfg)
+	auditEventRepo := postgres.NewAuditEventRepo()
+	auditService := audit.NewAuditService(auditEventRepo, piiRedactor, idGen)
+
 	// Create a database querier (use the pool from reconnectingDB)
 	db.mu.RLock()
 	pool := db.pool
@@ -94,8 +103,11 @@ func run() error {
 	// Use a pool querier (start-up verified pool is available)
 	querier := postgres.NewPoolQuerier(pool.Pool())
 
+	// Create transaction manager
+	txManager := postgres.NewTxManager(pool.Pool())
+
 	// Create use cases
-	createUserUC := user.NewCreateUserUseCase(userRepo, idGen, querier)
+	createUserUC := user.NewCreateUserUseCase(userRepo, auditService, idGen, txManager, querier)
 	getUserUC := user.NewGetUserUseCase(userRepo, querier)
 	listUsersUC := user.NewListUsersUseCase(userRepo, querier)
 

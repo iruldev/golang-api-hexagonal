@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
+	"github.com/iruldev/golang-api-hexagonal/internal/app/audit"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
 )
 
@@ -77,6 +78,61 @@ func (m *mockUserRepository) List(_ context.Context, _ domain.Querier, _ domain.
 		users = append(users, u)
 	}
 	return users, len(users), nil
+}
+
+// mockAuditService is a simplified test double for audit.AuditService.
+// Since AuditService is a concrete type, we create a real one with mock dependencies.
+type mockAuditDeps struct {
+	repo     *mockAuditEventRepository
+	redactor *mockRedactor
+	idGen    *mockIDGenerator
+}
+
+func newMockAuditService() (*audit.AuditService, *mockAuditDeps) {
+	repo := newMockAuditEventRepository()
+	redactor := newMockRedactor()
+	idGen := &mockIDGenerator{nextID: 100}
+	deps := &mockAuditDeps{repo: repo, redactor: redactor, idGen: idGen}
+	return audit.NewAuditService(repo, redactor, idGen), deps
+}
+
+// mockAuditEventRepository is a test double for domain.AuditEventRepository.
+type mockAuditEventRepository struct {
+	events      []*domain.AuditEvent
+	createError error
+}
+
+func newMockAuditEventRepository() *mockAuditEventRepository {
+	return &mockAuditEventRepository{
+		events: make([]*domain.AuditEvent, 0),
+	}
+}
+
+func (m *mockAuditEventRepository) Create(_ context.Context, _ domain.Querier, event *domain.AuditEvent) error {
+	if m.createError != nil {
+		return m.createError
+	}
+	m.events = append(m.events, event)
+	return nil
+}
+
+func (m *mockAuditEventRepository) ListByEntityID(_ context.Context, _ domain.Querier, _ string, _ domain.ID, _ domain.ListParams) ([]domain.AuditEvent, int, error) {
+	return nil, 0, nil
+}
+
+// mockRedactor is a test double for domain.Redactor.
+type mockRedactor struct{}
+
+func newMockRedactor() *mockRedactor { return &mockRedactor{} }
+
+func (m *mockRedactor) RedactMap(data map[string]any) map[string]any { return data }
+func (m *mockRedactor) Redact(data any) any                          { return data }
+
+// mockTxManager is a test double for domain.TxManager.
+type mockTxManager struct{}
+
+func (m *mockTxManager) WithTx(ctx context.Context, fn func(tx domain.Querier) error) error {
+	return fn(&mockQuerier{})
 }
 
 func TestCreateUserUseCase_Execute(t *testing.T) {
@@ -184,9 +240,11 @@ func TestCreateUserUseCase_Execute(t *testing.T) {
 			mockRepo := newMockUserRepository()
 			mockIDGen := newMockIDGenerator()
 			mockDB := &mockQuerier{}
+			mockAudit, _ := newMockAuditService()
+			mockTx := &mockTxManager{}
 			tt.setupMock(mockRepo)
 
-			useCase := NewCreateUserUseCase(mockRepo, mockIDGen, mockDB)
+			useCase := NewCreateUserUseCase(mockRepo, mockAudit, mockIDGen, mockTx, mockDB)
 			resp, err := useCase.Execute(context.Background(), tt.req)
 
 			if tt.wantErr != nil {
@@ -211,14 +269,78 @@ func TestCreateUserUseCase_Execute(t *testing.T) {
 	}
 }
 
+func TestCreateUserUseCase_Execute_AuditEventRecorded(t *testing.T) {
+	t.Run("records audit event on successful user creation", func(t *testing.T) {
+		mockRepo := newMockUserRepository()
+		mockIDGen := newMockIDGenerator()
+		mockDB := &mockQuerier{}
+		mockAudit, deps := newMockAuditService()
+		mockTx := &mockTxManager{}
+
+		useCase := NewCreateUserUseCase(mockRepo, mockAudit, mockIDGen, mockTx, mockDB)
+		req := CreateUserRequest{
+			FirstName: "John",
+			LastName:  "Doe",
+			Email:     "john@example.com",
+			RequestID: "req-123",
+			ActorID:   domain.ID("actor-456"),
+		}
+
+		resp, err := useCase.Execute(context.Background(), req)
+
+		require.NoError(t, err)
+		assert.False(t, resp.User.ID.IsEmpty())
+
+		// Verify audit event was recorded
+		require.Len(t, deps.repo.events, 1)
+		event := deps.repo.events[0]
+		assert.Equal(t, domain.EventUserCreated, event.EventType)
+		assert.Equal(t, "user", event.EntityType)
+		assert.Equal(t, resp.User.ID, event.EntityID)
+		assert.Equal(t, req.RequestID, event.RequestID)
+		assert.Equal(t, req.ActorID, event.ActorID)
+	})
+
+	t.Run("returns error when audit recording fails", func(t *testing.T) {
+		mockRepo := newMockUserRepository()
+		mockIDGen := newMockIDGenerator()
+		mockDB := &mockQuerier{}
+		mockAudit, deps := newMockAuditService()
+		// Configure audit repo to fail
+		deps.repo.createError = errors.New("audit database error")
+		mockTx := &mockTxManager{}
+
+		useCase := NewCreateUserUseCase(mockRepo, mockAudit, mockIDGen, mockTx, mockDB)
+		req := CreateUserRequest{
+			FirstName: "John",
+			LastName:  "Doe",
+			Email:     "john@example.com",
+			RequestID: "req-123",
+			ActorID:   domain.ID("actor-456"),
+		}
+
+		_, err := useCase.Execute(context.Background(), req)
+
+		require.Error(t, err)
+		var appErr *app.AppError
+		require.True(t, errors.As(err, &appErr))
+		assert.Equal(t, app.CodeInternalError, appErr.Code)
+		assert.Contains(t, appErr.Message, "audit")
+	})
+}
+
 func TestNewCreateUserUseCase(t *testing.T) {
 	mockRepo := newMockUserRepository()
 	mockIDGen := newMockIDGenerator()
 	mockDB := &mockQuerier{}
-	useCase := NewCreateUserUseCase(mockRepo, mockIDGen, mockDB)
+	mockAudit, _ := newMockAuditService()
+	mockTx := &mockTxManager{}
+	useCase := NewCreateUserUseCase(mockRepo, mockAudit, mockIDGen, mockTx, mockDB)
 
 	assert.NotNil(t, useCase)
 	assert.Equal(t, mockRepo, useCase.userRepo)
+	assert.Equal(t, mockAudit, useCase.auditService)
 	assert.Equal(t, mockIDGen, useCase.idGen)
+	assert.Equal(t, mockTx, useCase.txManager)
 	assert.Equal(t, mockDB, useCase.db)
 }
