@@ -27,8 +27,10 @@ jobs:
       # Lint step uses golangci-lint with .golangci.yml configuration
       # Includes depguard rules to enforce hexagonal architecture boundaries
       # Boundary violations (e.g., domain importing infra) will fail this step
-      - name: Run linter
-        run: make lint
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
 
       # Test step generates coverage.out profile for all packages
       - name: Run tests
