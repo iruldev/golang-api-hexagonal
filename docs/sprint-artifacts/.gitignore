@@ -1,3 +1,0 @@
-# Generated workflow artifacts (keep in workspace, avoid noisy git status)
-code-review-*.md
-validation-report-*.md
