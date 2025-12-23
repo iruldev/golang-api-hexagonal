@@ -112,6 +112,10 @@ linters-settings:
           - github.com/pressly/goose/v3
           - go.opentelemetry.io/otel
           - github.com/kelseyhightower/envconfig
+          - github.com/google/uuid
+          - github.com/prometheus/client_model/go
+          - github.com/prometheus/client_golang/prometheus
+          - github.com/prometheus/client_golang/prometheus/collectors
       transport-layer-test:
         list-mode: lax
         files:
@@ -136,6 +140,12 @@ linters-settings:
           - github.com/golang-jwt/jwt/v5
           - github.com/go-playground/validator/v10
           - github.com/prometheus/client_golang/prometheus
+          - github.com/google/uuid
+          - github.com/go-chi/httprate
+          - go.opentelemetry.io/otel
+          - go.opentelemetry.io/otel/attribute
+          - go.opentelemetry.io/otel/propagation
+          - go.opentelemetry.io/otel/trace
   errcheck:
     check-type-assertions: false
     check-blank: false
