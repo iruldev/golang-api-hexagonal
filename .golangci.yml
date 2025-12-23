@@ -1,10 +1,13 @@
+version: "2"
+
 run:
   timeout: 5m
   allow-parallel-runners: true
 
 output:
   formats:
-    - format: colored-line-number
+    text:
+      path: stdout
   print-issued-lines: true
   print-linter-name: true
 
@@ -96,14 +99,19 @@ linters-settings:
           - pkg: log/slog
             desc: Domain tests must not log
       infra-layer:
-        list-mode: lax
+        list-mode: strict
         files:
           - '**/internal/infra/**'
-        deny:
-          - pkg: github.com/iruldev/golang-api-hexagonal/internal/app
-            desc: Infra layer must not import app layer
-          - pkg: github.com/iruldev/golang-api-hexagonal/internal/transport
-            desc: Infra layer must not import transport layer
+          - '!**/internal/infra/**/*_test.go'
+        allow:
+          - $gostd
+          - github.com/iruldev/golang-api-hexagonal/internal/domain
+          - github.com/iruldev/golang-api-hexagonal/internal/shared
+          - github.com/iruldev/golang-api-hexagonal/internal/infra
+          - github.com/jackc/pgx/v5
+          - github.com/pressly/goose/v3
+          - go.opentelemetry.io/otel
+          - github.com/kelseyhightower/envconfig
       transport-layer-test:
         list-mode: lax
         files:
@@ -114,17 +122,20 @@ linters-settings:
           - pkg: github.com/iruldev/golang-api-hexagonal/internal/infra
             desc: Transport layer must not import infra directly (tests)
       transport-layer:
-        list-mode: lax
+        list-mode: strict
         files:
           - '**/internal/transport/**'
           - '!**/internal/transport/**/*_test.go'
-        deny:
-          - pkg: github.com/jackc/pgx/v5
-            desc: Transport layer must not import database drivers
-          - pkg: github.com/iruldev/golang-api-hexagonal/internal/infra/observability
-            desc: Transport layer must use shared interfaces for metrics
-          - pkg: github.com/iruldev/golang-api-hexagonal/internal/infra
-            desc: Transport layer must not import infra directly
+        allow:
+          - $gostd
+          - github.com/iruldev/golang-api-hexagonal/internal/app
+          - github.com/iruldev/golang-api-hexagonal/internal/domain
+          - github.com/iruldev/golang-api-hexagonal/internal/shared
+          - github.com/iruldev/golang-api-hexagonal/internal/transport
+          - github.com/go-chi/chi/v5
+          - github.com/golang-jwt/jwt/v5
+          - github.com/go-playground/validator/v10
+          - github.com/prometheus/client_golang/prometheus
   errcheck:
     check-type-assertions: false
     check-blank: false
@@ -162,3 +173,8 @@ issues:
     - linters:
         - staticcheck
       text: "SA1019.*NewNoopTracerProvider"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
