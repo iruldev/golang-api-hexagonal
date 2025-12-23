@@ -37,8 +37,9 @@ import (
 	"fmt"
 	"strings"
 
-	dto "github.com/prometheus/client_model/go"
 	"slices"
+
+	dto "github.com/prometheus/client_model/go"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
