@@ -112,6 +112,6 @@ development_status:
   8-2-document-architecture-and-layer-responsibilities: done
   8-3-document-local-development-workflow: done
   8-4-document-observability-configuration: done
-  8-5-create-guide-for-adding-new-modules: backlog
+  8-5-create-guide-for-adding-new-modules: done
   8-6-create-guide-for-adding-new-adapters: backlog
   epic-8-retrospective: optional
