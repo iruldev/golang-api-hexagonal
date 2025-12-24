@@ -41,6 +41,15 @@ func GetAuthContext(ctx context.Context) *AuthContext {
 	return nil
 }
 
+// GetSubjectID safely retrieves the subject ID from the context.
+// Returns empty string if no auth context is present.
+func GetSubjectID(ctx context.Context) string {
+	if ac := GetAuthContext(ctx); ac != nil {
+		return ac.SubjectID
+	}
+	return ""
+}
+
 // HasRole checks if the auth context has the specified role.
 func (ac *AuthContext) HasRole(role string) bool {
 	return ac != nil && ac.Role == role

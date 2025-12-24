@@ -493,6 +493,47 @@ func TestJWTAuth_GetClaimsFromContext(t *testing.T) {
 	assert.Equal(t, "jti-789", gotClaims.ID)
 }
 
+// TestJWTAuth_EnforcesHS256_ConstantTime validates AC #3:
+// Ensures we are STRICTLY configured to use HS256.
+// HS256 in golang-jwt uses hmac.Equal, which is a constant-time comparison.
+// This test ensures we don't accidentally enable alg:none or RSA (which might not be constant-time here).
+func TestJWTAuth_EnforcesHS256_ConstantTime(t *testing.T) {
+	// 1. Verify AllowedAlgorithm constant
+	assert.Equal(t, "HS256", AllowedAlgorithm, "Must use HS256 for constant-time HMAC")
+
+	// 2. Verify behavior: Reject valid JWT signed with different alg (e.g., HS384)
+	// even if the secret is correct. This proves we strictly enforce the algorithm
+	// associated with constant-time check.
+	handlerCalled := false
+	handler := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		handlerCalled = true
+	})
+
+	// Create valid token but with HS512 (arguably also constant time, but we want STRICT whitelist)
+	claims := &ctxutil.Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "user-123",
+			ExpiresAt: jwt.NewNumericDate(fixedTime.Add(1 * time.Hour)),
+		},
+	}
+	// HS512 is safe/constant-time usually, but our requirement is strict usage of configured alg.
+	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
+	tokenString, _ := token.SignedString(testSecret)
+
+	middleware := JWTAuth(testJWTAuthConfig())
+	wrapped := middleware(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenString)
+	rr := httptest.NewRecorder()
+
+	wrapped.ServeHTTP(rr, req)
+
+	// Should be rejected because we only allow HS256
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	assert.False(t, handlerCalled)
+}
+
 // =============================================================================
 // Story 2.2: JWT Claims Validation Tests
 // =============================================================================
@@ -560,6 +601,25 @@ func TestJWTAuth_WrongIssuer(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	assert.False(t, handlerCalled, "handler should not be called for wrong issuer")
+}
+
+func TestNormalizeRole(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"mixed case", "Admin", "admin"},
+		{"with spaces", "  User  ", "user"},
+		{"all caps", "ADMIN", "admin"},
+		{"already normal", "user", "user"},
+		{"empty", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, NormalizeRole(tt.input))
+		})
+	}
 }
 
 // TestJWTAuth_WrongAudience tests AC #2: token with wrong audience returns 401

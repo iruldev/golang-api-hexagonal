@@ -62,6 +62,21 @@ func TestGetAuthContext_WrongType(t *testing.T) {
 	assert.Nil(t, authCtx)
 }
 
+func TestGetSubjectID(t *testing.T) {
+	ctx := context.Background()
+
+	// Case 1: No auth context
+	assert.Equal(t, "", GetSubjectID(ctx))
+
+	// Case 2: With auth context
+	authCtx := &AuthContext{
+		SubjectID: "user-123",
+		Role:      RoleUser,
+	}
+	ctxWithAuth := SetAuthContext(ctx, authCtx)
+	assert.Equal(t, "user-123", GetSubjectID(ctxWithAuth))
+}
+
 func TestAuthContext_HasRole(t *testing.T) {
 	tests := []struct {
 		name     string
