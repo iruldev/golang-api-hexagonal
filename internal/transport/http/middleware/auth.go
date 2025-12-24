@@ -36,21 +36,59 @@ func NormalizeRole(role string) string {
 	return strings.ToLower(strings.TrimSpace(role))
 }
 
+// JWTAuthConfig holds configuration for JWTAuth middleware.
+type JWTAuthConfig struct {
+	// Secret is the key used for JWT signature validation (HS256).
+	Secret []byte
+	// Logger for authentication events.
+	Logger *slog.Logger
+	// Now provides the current time for token validation.
+	Now func() time.Time
+	// Issuer is the expected issuer claim. If non-empty, tokens must match.
+	Issuer string
+	// Audience is the expected audience claim. If non-empty, tokens must match.
+	Audience string
+	// ClockSkew is the tolerance for expired tokens.
+	ClockSkew time.Duration
+}
+
 // Note: test-only helpers for marking claims validated live in _test.go files.
 // Production must rely on JWTAuth + AuthContextBridge to set validated claims.
 
 // JWTAuth returns middleware that validates JWT tokens from the Authorization header.
-// The now function is injected for deterministic time testing (AC #3).
 //
 // Security considerations:
-//   - Only HS256 algorithm is accepted (AC #7, prevents algorithm confusion attacks)
+//   - Only HS256 algorithm is accepted (prevents algorithm confusion attacks)
+//   - Expiration (exp) claim is required
+//   - Issuer (iss) and Audience (aud) are validated if configured
+//   - Clock skew tolerance is configurable
 //   - No error details are exposed in responses (prevents enumeration/timing attacks)
 //   - Token must be in Authorization: Bearer <token> format
-func JWTAuth(secret []byte, logger *slog.Logger, now func() time.Time) func(http.Handler) http.Handler {
-	parser := jwt.NewParser(
+func JWTAuth(cfg JWTAuthConfig) func(http.Handler) http.Handler {
+	// Build parser options
+	parserOptions := []jwt.ParserOption{
 		jwt.WithValidMethods([]string{AllowedAlgorithm}),
-		jwt.WithTimeFunc(now), // Inject time function for exp/nbf validation (AC #3)
-	)
+		jwt.WithExpirationRequired(), // AC #1: Reject tokens without exp
+		jwt.WithTimeFunc(cfg.Now),
+	}
+
+	// Add issuer validation if configured
+	if cfg.Issuer != "" {
+		parserOptions = append(parserOptions, jwt.WithIssuer(cfg.Issuer))
+	}
+
+	// Add audience validation if configured
+	if cfg.Audience != "" {
+		parserOptions = append(parserOptions, jwt.WithAudience(cfg.Audience))
+	}
+
+	// Add clock skew tolerance if configured
+	if cfg.ClockSkew > 0 {
+		parserOptions = append(parserOptions, jwt.WithLeeway(cfg.ClockSkew))
+	}
+
+	parser := jwt.NewParser(parserOptions...)
+	logger := cfg.Logger
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -72,21 +110,21 @@ func JWTAuth(secret []byte, logger *slog.Logger, now func() time.Time) func(http
 
 			tokenString := parts[1]
 
-			// Parse and validate token (AC #2, #4, #7)
+			// Parse and validate token
 			claims := &ctxutil.Claims{}
 			token, err := parser.ParseWithClaims(tokenString, claims, func(_ *jwt.Token) (interface{}, error) {
-				return secret, nil
+				return cfg.Secret, nil
 			})
 
 			if err != nil || !token.Valid {
-				// AC #2, #4: Return 401 for any validation failure (malformed, wrong signature, expired)
+				// Return 401 for any validation failure (malformed, wrong signature, expired, wrong iss/aud)
 				// Do NOT expose the specific reason for failure (security requirement)
 				logger.WarnContext(r.Context(), "auth failed: invalid token", "error", err)
 				writeUnauthorized(w, r)
 				return
 			}
 
-			// Store claims in context for downstream handlers (AC #5)
+			// Store claims in context for downstream handlers
 			if strings.TrimSpace(claims.Subject) == "" {
 				logger.WarnContext(r.Context(), "auth failed: empty subject in claims")
 				writeUnauthorized(w, r)

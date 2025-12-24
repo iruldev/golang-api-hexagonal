@@ -34,6 +34,13 @@ type JWTConfig struct {
 	// Now provides the current time for token validation.
 	// Inject for deterministic testing; defaults to time.Now if nil.
 	Now func() time.Time
+	// Issuer is the expected issuer claim. If set, tokens must have matching iss claim.
+	Issuer string
+	// Audience is the expected audience claim. If set, tokens must have matching aud claim.
+	Audience string
+	// ClockSkew is the tolerance for expired tokens (e.g., 30s).
+	// Default: 0 (no tolerance).
+	ClockSkew time.Duration
 }
 
 // RateLimitConfig holds rate limiting configuration for the router.
@@ -100,7 +107,14 @@ func NewRouter(
 				if now == nil {
 					now = time.Now
 				}
-				r.Use(middleware.JWTAuth(jwtConfig.Secret, logger, now))
+				r.Use(middleware.JWTAuth(middleware.JWTAuthConfig{
+					Secret:    jwtConfig.Secret,
+					Logger:    logger,
+					Now:       now,
+					Issuer:    jwtConfig.Issuer,
+					Audience:  jwtConfig.Audience,
+					ClockSkew: jwtConfig.ClockSkew,
+				}))
 				r.Use(middleware.AuthContextBridge)
 			}
 

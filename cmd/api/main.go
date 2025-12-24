@@ -118,9 +118,12 @@ func run() error {
 
 	// Create router with logger for request logging middleware
 	jwtConfig := httpTransport.JWTConfig{
-		Enabled: cfg.JWTEnabled,
-		Secret:  []byte(cfg.JWTSecret),
-		Now:     nil, // Use time.Now in production
+		Enabled:   cfg.JWTEnabled,
+		Secret:    []byte(cfg.JWTSecret),
+		Now:       nil, // Use time.Now in production
+		Issuer:    cfg.JWTIssuer,
+		Audience:  cfg.JWTAudience,
+		ClockSkew: cfg.JWTClockSkew,
 	}
 	rateLimitConfig := httpTransport.RateLimitConfig{
 		RequestsPerSecond: cfg.RateLimitRPS,

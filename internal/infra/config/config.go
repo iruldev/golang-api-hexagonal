@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/kelseyhightower/envconfig"
 )
@@ -39,6 +40,12 @@ type Config struct {
 	JWTEnabled bool `envconfig:"JWT_ENABLED" default:"false"`
 	// JWTSecret is the secret key for JWT signing (required if JWTEnabled=true).
 	JWTSecret string `envconfig:"JWT_SECRET"`
+	// JWTIssuer is the expected issuer claim (optional).
+	JWTIssuer string `envconfig:"JWT_ISSUER"`
+	// JWTAudience is the expected audience claim (optional).
+	JWTAudience string `envconfig:"JWT_AUDIENCE"`
+	// JWTClockSkew is the tolerance for expired tokens (optional). Default: 0s.
+	JWTClockSkew time.Duration `envconfig:"JWT_CLOCK_SKEW" default:"0s"`
 
 	// Rate Limiting
 	// RateLimitRPS is the rate limit in requests per second. Default: 100.
