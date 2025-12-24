@@ -318,3 +318,78 @@ func TestLoad_DevelopmentAllowsNoJWT(t *testing.T) {
 	assert.Equal(t, "development", cfg.Env)
 	assert.False(t, cfg.JWTEnabled)
 }
+
+// =============================================================================
+// Story 2.4: JWT Secret Length Tests
+// =============================================================================
+
+// TestLoad_JWTSecretTooShort tests AC #1: JWT secret < 32 bytes fails
+func TestLoad_JWTSecretTooShort(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("JWT_ENABLED", "true")
+	t.Setenv("JWT_SECRET", "short-secret-20-byte") // 20 bytes
+
+	cfg, err := Load()
+
+	assert.Nil(t, cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "at least 32 bytes")
+}
+
+// TestLoad_JWTSecretExactly32Bytes tests boundary: 32 bytes is valid
+func TestLoad_JWTSecretExactly32Bytes(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("JWT_ENABLED", "true")
+	t.Setenv("JWT_SECRET", "12345678901234567890123456789012") // 32 bytes exactly
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.NotNil(t, cfg)
+	assert.True(t, cfg.JWTEnabled)
+}
+
+// TestLoad_JWTSecretOver32Bytes tests JWT secret > 32 bytes is valid
+func TestLoad_JWTSecretOver32Bytes(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("JWT_ENABLED", "true")
+	t.Setenv("JWT_SECRET", "this-is-a-very-long-secret-key-that-exceeds-32-bytes") // 52 bytes
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.NotNil(t, cfg)
+	assert.True(t, cfg.JWTEnabled)
+}
+
+// TestLoad_JWTSecretNormalization tests that whitespace is trimmed from secret
+func TestLoad_JWTSecretNormalization(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("JWT_ENABLED", "true")
+	// 32 bytes surrounded by spaces
+	secret := "   12345678901234567890123456789012   "
+	t.Setenv("JWT_SECRET", secret)
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, "12345678901234567890123456789012", cfg.JWTSecret, "Secret should be trimmed")
+	assert.Len(t, cfg.JWTSecret, 32)
+}
+
+// TestConfig_Redacted tests that sensitive fields are redacted
+func TestConfig_Redacted(t *testing.T) {
+	cfg := &Config{
+		DatabaseURL: "postgres://user:pass@localhost:5432/secret_db",
+		JWTSecret:   "extremely-sensitive-secret-key-123",
+		Port:        8080,
+	}
+
+	redacted := cfg.Redacted()
+
+	assert.NotContains(t, redacted, "pass")
+	assert.NotContains(t, redacted, "secret_db")
+	assert.NotContains(t, redacted, "extremely-sensitive")
+	assert.Contains(t, redacted, "[REDACTED]")
+	assert.Contains(t, redacted, "8080")
+}

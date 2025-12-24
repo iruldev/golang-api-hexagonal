@@ -59,6 +59,14 @@ type Config struct {
 	AuditRedactEmail string `envconfig:"AUDIT_REDACT_EMAIL" default:"full"`
 }
 
+// Redacted returns a safe string representation of the Config for logging.
+func (c *Config) Redacted() string {
+	safe := *c
+	safe.DatabaseURL = "[REDACTED]"
+	safe.JWTSecret = "[REDACTED]"
+	return fmt.Sprintf("%+v", safe)
+}
+
 // Load reads configuration from environment variables.
 // It returns an error if required fields are missing.
 func Load() (*Config, error) {
@@ -92,6 +100,10 @@ func (c *Config) Validate() error {
 
 	c.LogLevel = strings.ToLower(strings.TrimSpace(c.LogLevel))
 	c.Env = strings.ToLower(strings.TrimSpace(c.Env))
+	// Fix: Normalize JWTSecret by trimming whitespace and updating the struct
+	c.JWTSecret = strings.TrimSpace(c.JWTSecret)
+	c.AuditRedactEmail = strings.ToLower(strings.TrimSpace(c.AuditRedactEmail))
+
 	switch c.Env {
 	case "development", "staging", "production", "test":
 	default:
@@ -120,23 +132,24 @@ func (c *Config) Validate() error {
 		}
 		// The generic check below will ensure JWTSecret is set and valid,
 		// but we prefer a specific error message for production empty secret.
-		if strings.TrimSpace(c.JWTSecret) == "" {
+		if c.JWTSecret == "" {
 			return fmt.Errorf("ENV=production requires JWT_SECRET to be set")
 		}
 	}
 
-	if c.JWTEnabled && strings.TrimSpace(c.JWTSecret) == "" {
-		return fmt.Errorf("JWT_ENABLED is true but JWT_SECRET is empty")
-	}
-	if c.JWTEnabled && len(strings.TrimSpace(c.JWTSecret)) < 32 {
-		return fmt.Errorf("JWT_SECRET must be at least 32 bytes when JWT_ENABLED is true")
+	if c.JWTEnabled {
+		if c.JWTSecret == "" {
+			return fmt.Errorf("JWT_ENABLED is true but JWT_SECRET is empty")
+		}
+		if len(c.JWTSecret) < 32 {
+			return fmt.Errorf("JWT_SECRET must be at least 32 bytes when JWT_ENABLED is true")
+		}
 	}
 
 	if c.RateLimitRPS < 1 {
 		return fmt.Errorf("invalid RATE_LIMIT_RPS: must be greater than 0")
 	}
 
-	c.AuditRedactEmail = strings.ToLower(strings.TrimSpace(c.AuditRedactEmail))
 	switch c.AuditRedactEmail {
 	case "full", "partial":
 	default:
