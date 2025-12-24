@@ -6,10 +6,6 @@
 coverage.out
 
 # IDE/Editor
-.agent/
-.bmad/
-.claude/
-.cursor/
 .idea/
 .vscode/
 *.swp

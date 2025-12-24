@@ -90,7 +90,7 @@ func run() error {
 	idGen := postgres.NewIDGenerator()
 
 	// Create audit-related dependencies
-	redactorCfg := domain.RedactorConfig{EmailMode: domain.EmailModePartial}
+	redactorCfg := domain.RedactorConfig{EmailMode: cfg.AuditRedactEmail}
 	piiRedactor := redact.NewPIIRedactor(redactorCfg)
 	auditEventRepo := postgres.NewAuditEventRepo()
 	auditService := audit.NewAuditService(auditEventRepo, piiRedactor, idGen)
