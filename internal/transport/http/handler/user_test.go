@@ -352,6 +352,103 @@ func TestUserHandler_GetUser_InvalidUUIDVersion(t *testing.T) {
 	assert.Equal(t, "application/problem+json", rr.Header().Get("Content-Type"))
 }
 
+func TestUserHandler_GetUser_EmptyID(t *testing.T) {
+	mockCreateUC := new(MockCreateUserUseCase)
+	mockGetUC := new(MockGetUserUseCase)
+	mockListUC := new(MockListUsersUseCase)
+
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+
+	// Create request with empty ID
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/", nil)
+	rr := httptest.NewRecorder()
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Execute
+	h.GetUser(rr, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Equal(t, "application/problem+json", rr.Header().Get("Content-Type"))
+
+	var problemResp contract.ProblemDetail
+	err := json.Unmarshal(rr.Body.Bytes(), &problemResp)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusBadRequest, problemResp.Status)
+	assert.Equal(t, app.CodeValidationError, problemResp.Code)
+	assert.NotEmpty(t, problemResp.ValidationErrors)
+	assert.Equal(t, "id", problemResp.ValidationErrors[0].Field)
+}
+
+func TestUserHandler_GetUser_MixedCaseUUID(t *testing.T) {
+	mockCreateUC := new(MockCreateUserUseCase)
+	mockGetUC := new(MockGetUserUseCase)
+	mockListUC := new(MockListUsersUseCase)
+
+	// Valid v7 UUID
+	uuidStr := "019400a0-1234-7abc-8def-1234567890ab"
+	userID := domain.ID(uuidStr)
+	expectedUser := createTestUser()
+	expectedUser.ID = userID
+
+	// Expect the LOWERCASE ID to be passed to the use case
+	mockGetUC.On("Execute", mock.Anything, user.GetUserRequest{ID: userID}).
+		Return(user.GetUserResponse{User: expectedUser}, nil)
+
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+
+	// Create request with MIXED CASE UUID
+	mixedCaseUUID := "019400A0-1234-7ABC-8DEF-1234567890AB"
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+mixedCaseUUID, nil)
+	rr := httptest.NewRecorder()
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", mixedCaseUUID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Execute
+	h.GetUser(rr, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	mockGetUC.AssertExpectations(t)
+}
+
+func TestUserHandler_GetUser_NilUUID(t *testing.T) {
+	mockCreateUC := new(MockCreateUserUseCase)
+	mockGetUC := new(MockGetUserUseCase)
+	mockListUC := new(MockListUsersUseCase)
+
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+
+	// Nil UUID (all zeros) - technically valid format but version 0, so should fail v7 check
+	nilUUID := "00000000-0000-0000-0000-000000000000"
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+nilUUID, nil)
+	rr := httptest.NewRecorder()
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", nilUUID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Execute
+	h.GetUser(rr, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Equal(t, "application/problem+json", rr.Header().Get("Content-Type"))
+
+	var problemResp contract.ProblemDetail
+	err := json.Unmarshal(rr.Body.Bytes(), &problemResp)
+	require.NoError(t, err)
+
+	assert.Equal(t, "must be UUID v7 (time-ordered)", problemResp.ValidationErrors[0].Message)
+}
+
 // =============================================================================
 // ListUsers Handler Tests
 // =============================================================================

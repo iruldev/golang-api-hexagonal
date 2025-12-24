@@ -113,20 +113,23 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 
-	// Validate UUID format
+	// Validate UUID format and version
 	parsedID, err := uuid.Parse(idParam)
-	if err != nil || parsedID.Version() != 7 {
-		contract.WriteProblemJSON(w, r, &app.AppError{
-			Op:      "GetUser",
-			Code:    app.CodeValidationError,
-			Message: "Invalid user ID format",
-			Err:     err,
+	if err != nil {
+		contract.WriteValidationError(w, r, []contract.ValidationError{
+			{Field: "id", Message: "must be a valid UUID"},
+		})
+		return
+	}
+	if parsedID.Version() != 7 {
+		contract.WriteValidationError(w, r, []contract.ValidationError{
+			{Field: "id", Message: "must be UUID v7 (time-ordered)"},
 		})
 		return
 	}
 
 	// Execute use case
-	resp, err := h.getUC.Execute(r.Context(), user.GetUserRequest{ID: domain.ID(idParam)})
+	resp, err := h.getUC.Execute(r.Context(), user.GetUserRequest{ID: domain.ID(parsedID.String())})
 	if err != nil {
 		contract.WriteProblemJSON(w, r, err)
 		return
