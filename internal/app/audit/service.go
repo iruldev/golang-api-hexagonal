@@ -57,7 +57,7 @@
 //	func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 //	    req := order.CreateOrderRequest{
 //	        // ... order fields from body ...
-//	        RequestID: middleware.GetRequestID(r.Context()),
+//	        RequestID: ctxutil.GetRequestID(r.Context()),
 //	        ActorID:   getActorIDFromContext(r.Context()),
 //	    }
 //	    resp, err := h.useCase.Execute(r.Context(), req)

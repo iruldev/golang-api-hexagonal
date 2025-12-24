@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,7 +17,7 @@ func TestRequestID_GeneratesNewID(t *testing.T) {
 	// Arrange
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify request ID is in context
-		requestID := GetRequestID(r.Context())
+		requestID := ctxutil.GetRequestID(r.Context())
 		assert.NotEmpty(t, requestID, "requestId should be in context")
 		w.WriteHeader(http.StatusOK)
 	})
@@ -41,7 +42,7 @@ func TestRequestID_PassthroughExistingID(t *testing.T) {
 
 	var capturedID string
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedID = GetRequestID(r.Context())
+		capturedID = ctxutil.GetRequestID(r.Context())
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -64,7 +65,7 @@ func TestRequestID_IgnoresTooLongID(t *testing.T) {
 
 	var capturedID string
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedID = GetRequestID(r.Context())
+		capturedID = ctxutil.GetRequestID(r.Context())
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -87,7 +88,7 @@ func TestRequestID_IgnoresInvalidCharset(t *testing.T) {
 
 	var capturedID string
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedID = GetRequestID(r.Context())
+		capturedID = ctxutil.GetRequestID(r.Context())
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -123,10 +124,10 @@ func TestRequestID_ResponseHeader(t *testing.T) {
 func TestGetRequestID_ReturnsCorrectValue(t *testing.T) {
 	// Arrange
 	expectedID := "test-request-id"
-	ctx := context.WithValue(context.Background(), requestIDKey, expectedID)
+	ctx := ctxutil.SetRequestID(context.Background(), expectedID)
 
 	// Act
-	actualID := GetRequestID(ctx)
+	actualID := ctxutil.GetRequestID(ctx)
 
 	// Assert
 	assert.Equal(t, expectedID, actualID, "should return correct request ID from context")
@@ -134,21 +135,10 @@ func TestGetRequestID_ReturnsCorrectValue(t *testing.T) {
 
 func TestGetRequestID_ReturnsEmptyForNoValue(t *testing.T) {
 	// Act
-	actualID := GetRequestID(context.Background())
+	actualID := ctxutil.GetRequestID(context.Background())
 
 	// Assert
 	assert.Empty(t, actualID, "should return empty string when no request ID in context")
-}
-
-func TestGetRequestID_ReturnsEmptyForWrongType(t *testing.T) {
-	// Arrange
-	ctx := context.WithValue(context.Background(), requestIDKey, 12345) // wrong type
-
-	// Act
-	actualID := GetRequestID(ctx)
-
-	// Assert
-	assert.Empty(t, actualID, "should return empty string when value is wrong type")
 }
 
 func TestGenerateRequestID_UUIDFormat(t *testing.T) {
@@ -178,7 +168,7 @@ func TestRequestID_MultipleRequests(t *testing.T) {
 	// Arrange
 	var capturedIDs []string
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedIDs = append(capturedIDs, GetRequestID(r.Context()))
+		capturedIDs = append(capturedIDs, ctxutil.GetRequestID(r.Context()))
 		w.WriteHeader(http.StatusOK)
 	})
 

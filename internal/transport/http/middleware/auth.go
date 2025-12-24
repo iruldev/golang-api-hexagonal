@@ -12,6 +12,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
@@ -95,7 +96,7 @@ func JWTAuth(cfg JWTAuthConfig) func(http.Handler) http.Handler {
 			// Extract token from Authorization header (AC #1)
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				logger.DebugContext(r.Context(), "auth failed: missing specific authentication header")
+				observability.LoggerFromContext(r.Context(), logger).DebugContext(r.Context(), "auth failed: missing specific authentication header")
 				writeUnauthorized(w, r)
 				return
 			}
@@ -104,7 +105,7 @@ func JWTAuth(cfg JWTAuthConfig) func(http.Handler) http.Handler {
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
 				// Story 2.9: Never log Authorization header - it contains sensitive tokens
-				logger.WarnContext(r.Context(), "auth failed: invalid header format")
+				observability.LoggerFromContext(r.Context(), logger).WarnContext(r.Context(), "auth failed: invalid header format")
 				writeUnauthorized(w, r)
 				return
 			}
@@ -120,14 +121,14 @@ func JWTAuth(cfg JWTAuthConfig) func(http.Handler) http.Handler {
 			if err != nil || !token.Valid {
 				// Return 401 for any validation failure (malformed, wrong signature, expired, wrong iss/aud)
 				// Do NOT expose the specific reason for failure (security requirement)
-				logger.WarnContext(r.Context(), "auth failed: invalid token", "error", err)
+				observability.LoggerFromContext(r.Context(), logger).WarnContext(r.Context(), "auth failed: invalid token", "error", err)
 				writeUnauthorized(w, r)
 				return
 			}
 
 			// Store claims in context for downstream handlers
 			if strings.TrimSpace(claims.Subject) == "" {
-				logger.WarnContext(r.Context(), "auth failed: empty subject in claims")
+				observability.LoggerFromContext(r.Context(), logger).WarnContext(r.Context(), "auth failed: empty subject in claims")
 				writeUnauthorized(w, r)
 				return
 			}

@@ -1,17 +1,14 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
 // contextKey is a custom type to avoid context key collisions.
 type contextKey string
-
-// requestIDKey is the context key for storing request ID.
-const requestIDKey contextKey = "requestId"
 
 // headerXRequestID is the HTTP header name for request ID.
 const headerXRequestID = "X-Request-ID"
@@ -33,25 +30,10 @@ func RequestID(next http.Handler) http.Handler {
 		w.Header().Set(headerXRequestID, requestID)
 
 		// Inject into context
-		ctx := context.WithValue(r.Context(), requestIDKey, requestID)
+		ctx := ctxutil.SetRequestID(r.Context(), requestID)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
-}
-
-// GetRequestID retrieves the request ID from the context.
-// Returns an empty string if no request ID is present.
-func GetRequestID(ctx context.Context) string {
-	if id, ok := ctx.Value(requestIDKey).(string); ok {
-		return id
-	}
-	return ""
-}
-
-// SetRequestID returns a new context with the given request ID.
-// This is useful for testing handlers that depend on RequestID from context.
-func SetRequestID(ctx context.Context, requestID string) context.Context {
-	return context.WithValue(ctx, requestIDKey, requestID)
 }
 
 // generateRequestID creates a new UUID v7 request ID.

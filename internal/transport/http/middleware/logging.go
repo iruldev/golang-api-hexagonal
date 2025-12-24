@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
 const (
@@ -35,7 +36,7 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			next.ServeHTTP(ww, r)
 
 			// Capture request ID from context (set by RequestID middleware)
-			requestID := GetRequestID(r.Context())
+			requestID := ctxutil.GetRequestID(r.Context())
 			if requestID == "" {
 				// Fallback to prevent empty requestId in logs when RequestID middleware is missing/misordered.
 				requestID = generateRequestID()

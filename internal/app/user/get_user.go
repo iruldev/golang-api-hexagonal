@@ -11,6 +11,7 @@ import (
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
 )
 
 // GetUserRequest represents the input data for getting a user by ID.
@@ -61,7 +62,7 @@ func (uc *GetUserUseCase) Execute(ctx context.Context, req GetUserRequest) (GetU
 	// Also fail-closed for missing or unknown roles.
 	if authCtx == nil || strings.TrimSpace(authCtx.Role) == "" || strings.TrimSpace(authCtx.SubjectID) == "" {
 		// Story 2.8: Audit log authorization denial
-		uc.logger.WarnContext(ctx, "authorization denied: no auth context or invalid credentials",
+		observability.LoggerFromContext(ctx, uc.logger).WarnContext(ctx, "authorization denied: no auth context or invalid credentials",
 			"resourceId", req.ID,
 		)
 		return GetUserResponse{}, &app.AppError{
@@ -75,7 +76,7 @@ func (uc *GetUserUseCase) Execute(ctx context.Context, req GetUserRequest) (GetU
 	// Only known roles are allowed; unknown roles are denied even if subject matches.
 	if !authCtx.IsAdmin() && !authCtx.IsUser() {
 		// Story 2.8: Audit log unknown role denial
-		uc.logger.WarnContext(ctx, "authorization denied: unknown role",
+		observability.LoggerFromContext(ctx, uc.logger).WarnContext(ctx, "authorization denied: unknown role",
 			"actorId", authCtx.SubjectID,
 			"role", authCtx.Role,
 			"resourceId", req.ID,
@@ -92,7 +93,7 @@ func (uc *GetUserUseCase) Execute(ctx context.Context, req GetUserRequest) (GetU
 	// - Regular users can only access their own profile
 	if authCtx.IsUser() && authCtx.SubjectID != string(req.ID) {
 		// Story 2.8: Audit log IDOR attempt
-		uc.logger.WarnContext(ctx, "authorization denied: IDOR attempt",
+		observability.LoggerFromContext(ctx, uc.logger).WarnContext(ctx, "authorization denied: IDOR attempt",
 			"actorId", authCtx.SubjectID,
 			"resourceId", req.ID,
 		)
@@ -104,7 +105,7 @@ func (uc *GetUserUseCase) Execute(ctx context.Context, req GetUserRequest) (GetU
 	}
 
 	// Story 2.8: Audit log authorization granted
-	uc.logger.DebugContext(ctx, "authorization granted",
+	observability.LoggerFromContext(ctx, uc.logger).DebugContext(ctx, "authorization granted",
 		"actorId", authCtx.SubjectID,
 		"role", authCtx.Role,
 		"resourceId", req.ID,

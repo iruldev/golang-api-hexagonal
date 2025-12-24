@@ -2,10 +2,12 @@
 package observability
 
 import (
+	"context"
 	"log/slog"
 	"os"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/config"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
 // Logger key constants for consistent log field names.
@@ -61,4 +63,14 @@ func parseLogLevel(level string) slog.Level {
 // but ensuring consistent serialization (e.g., for slices).
 func Any(key string, value interface{}) slog.Attr {
 	return slog.Any(key, value)
+}
+
+// LoggerFromContext returns a logger enriched with request_id from context.
+// If request_id is not present in context, returns the base logger unchanged.
+// This enables request correlation across all log entries in a request lifecycle.
+func LoggerFromContext(ctx context.Context, base *slog.Logger) *slog.Logger {
+	if requestID := ctxutil.GetRequestID(ctx); requestID != "" {
+		return base.With(LogKeyRequestID, requestID)
+	}
+	return base
 }

@@ -21,7 +21,7 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/app/user"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
-	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/middleware"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
 // MockCreateUserUseCase mocks the CreateUserUseCase.
@@ -592,7 +592,7 @@ func TestUserHandler_CreateUser_PropagatesRequestIDAndActorID(t *testing.T) {
 
 	// Setup context with RequestID (simulating middleware)
 	ctx := req.Context()
-	ctx = middleware.SetRequestID(ctx, "test-request-123")
+	ctx = ctxutil.SetRequestID(ctx, "test-request-123")
 
 	// Setup context with AuthContext (simulating auth middleware)
 	authCtx := &app.AuthContext{SubjectID: "actor-user-456", Role: app.RoleUser}
@@ -638,7 +638,7 @@ func TestUserHandler_CreateUser_EmptyActorIDWhenNoAuthContext(t *testing.T) {
 
 	// Setup context with RequestID but NO AuthContext (unauthenticated request)
 	ctx := req.Context()
-	ctx = middleware.SetRequestID(ctx, "anon-request-789")
+	ctx = ctxutil.SetRequestID(ctx, "anon-request-789")
 	req = req.WithContext(ctx)
 	rr := httptest.NewRecorder()
 

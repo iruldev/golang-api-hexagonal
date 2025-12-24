@@ -14,7 +14,7 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/app/user"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
-	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/middleware"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
 type createUserExecutor interface {
@@ -81,7 +81,7 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract context values for audit trail
-	reqID := middleware.GetRequestID(r.Context())
+	reqID := ctxutil.GetRequestID(r.Context())
 	var actorID domain.ID
 	if authCtx := app.GetAuthContext(r.Context()); authCtx != nil {
 		actorID = domain.ID(authCtx.SubjectID)
