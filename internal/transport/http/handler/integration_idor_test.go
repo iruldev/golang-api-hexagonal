@@ -72,7 +72,7 @@ func TestIntegration_IDORPrevention(t *testing.T) {
 	metricsReg, httpMetrics := newTestMetricsRegistry()
 
 	// Real UseCase (NOT mocked) to verify the logic inside UseCase is called
-	realUseCase := user.NewGetUserUseCase(mockRepo, mockDB)
+	realUseCase := user.NewGetUserUseCase(mockRepo, mockDB, logger)
 
 	// Mock other use cases required by NewUserHandler
 	mockCreateUC := new(MockCreateUserUseCase) // from user_test.go

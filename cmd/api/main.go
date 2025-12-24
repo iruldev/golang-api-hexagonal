@@ -107,7 +107,7 @@ func run() error {
 
 	// Create use cases
 	createUserUC := user.NewCreateUserUseCase(userRepo, auditService, idGen, txManager, querier)
-	getUserUC := user.NewGetUserUseCase(userRepo, querier)
+	getUserUC := user.NewGetUserUseCase(userRepo, querier, logger)
 	listUsersUC := user.NewListUsersUseCase(userRepo, querier)
 
 	// Create user handler

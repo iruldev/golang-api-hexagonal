@@ -6,6 +6,7 @@ package user
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
@@ -26,16 +27,19 @@ type GetUserResponse struct {
 // It demonstrates the app-layer authorization pattern per architecture.md:
 // - Authorization checks happen at START of use case, before any DB calls.
 // - Admins can get any user, regular users can only get their own profile.
+// Story 2.8: Includes audit logging for authorization decisions.
 type GetUserUseCase struct {
 	userRepo domain.UserRepository
 	db       domain.Querier
+	logger   *slog.Logger
 }
 
 // NewGetUserUseCase creates a new instance of GetUserUseCase.
-func NewGetUserUseCase(userRepo domain.UserRepository, db domain.Querier) *GetUserUseCase {
+func NewGetUserUseCase(userRepo domain.UserRepository, db domain.Querier, logger *slog.Logger) *GetUserUseCase {
 	return &GetUserUseCase{
 		userRepo: userRepo,
 		db:       db,
+		logger:   logger.With("usecase", "GetUser"),
 	}
 }
 
@@ -54,6 +58,10 @@ func (uc *GetUserUseCase) Execute(ctx context.Context, req GetUserRequest) (GetU
 	// This enforces AC #1 - protected routes require authentication
 	// Also fail-closed for missing or unknown roles.
 	if authCtx == nil || strings.TrimSpace(authCtx.Role) == "" || strings.TrimSpace(authCtx.SubjectID) == "" {
+		// Story 2.8: Audit log authorization denial
+		uc.logger.WarnContext(ctx, "authorization denied: no auth context or invalid credentials",
+			"resourceId", req.ID,
+		)
 		return GetUserResponse{}, &app.AppError{
 			Op:      "GetUser",
 			Code:    app.CodeForbidden,
@@ -64,6 +72,12 @@ func (uc *GetUserUseCase) Execute(ctx context.Context, req GetUserRequest) (GetU
 
 	// Only known roles are allowed; unknown roles are denied even if subject matches.
 	if !authCtx.IsAdmin() && !authCtx.IsUser() {
+		// Story 2.8: Audit log unknown role denial
+		uc.logger.WarnContext(ctx, "authorization denied: unknown role",
+			"actorId", authCtx.SubjectID,
+			"role", authCtx.Role,
+			"resourceId", req.ID,
+		)
 		return GetUserResponse{}, &app.AppError{
 			Op:      "GetUser",
 			Code:    app.CodeForbidden,
@@ -75,12 +89,24 @@ func (uc *GetUserUseCase) Execute(ctx context.Context, req GetUserRequest) (GetU
 	// - Admins can access any user
 	// - Regular users can only access their own profile
 	if authCtx.IsUser() && authCtx.SubjectID != string(req.ID) {
+		// Story 2.8: Audit log IDOR attempt
+		uc.logger.WarnContext(ctx, "authorization denied: IDOR attempt",
+			"actorId", authCtx.SubjectID,
+			"resourceId", req.ID,
+		)
 		return GetUserResponse{}, &app.AppError{
 			Op:      "GetUser",
 			Code:    app.CodeForbidden,
 			Message: "Access denied",
 		}
 	}
+
+	// Story 2.8: Audit log authorization granted
+	uc.logger.DebugContext(ctx, "authorization granted",
+		"actorId", authCtx.SubjectID,
+		"role", authCtx.Role,
+		"resourceId", req.ID,
+	)
 
 	user, err := uc.userRepo.GetByID(ctx, uc.db, req.ID)
 	if err != nil {

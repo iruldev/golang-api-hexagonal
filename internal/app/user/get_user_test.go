@@ -3,12 +3,15 @@
 package user
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
@@ -125,7 +128,7 @@ func TestGetUserUseCase_Execute(t *testing.T) {
 			mockDB := &mockQuerierGetUser{}
 			tt.setupMock(mockRepo)
 
-			useCase := NewGetUserUseCase(mockRepo, mockDB)
+			useCase := NewGetUserUseCase(mockRepo, mockDB, slog.Default())
 			// Use admin auth context for these tests (admin can access any user)
 			ctx := app.SetAuthContext(context.Background(), &app.AuthContext{
 				SubjectID: "admin-user",
@@ -154,11 +157,12 @@ func TestGetUserUseCase_Execute(t *testing.T) {
 func TestNewGetUserUseCase(t *testing.T) {
 	mockRepo := newMockUserRepositoryGetUser()
 	mockDB := &mockQuerierGetUser{}
-	useCase := NewGetUserUseCase(mockRepo, mockDB)
+	useCase := NewGetUserUseCase(mockRepo, mockDB, slog.Default())
 
 	assert.NotNil(t, useCase)
 	assert.Equal(t, mockRepo, useCase.userRepo)
 	assert.Equal(t, mockDB, useCase.db)
+	assert.NotNil(t, useCase.logger)
 }
 
 func TestGetUserUseCase_Execute_Authorization(t *testing.T) {
@@ -169,6 +173,8 @@ func TestGetUserUseCase_Execute_Authorization(t *testing.T) {
 		setupContext func() context.Context
 		wantCode     string
 		wantErr      bool
+		wantLogMsg   string
+		wantLogAttr  string
 	}{
 		{
 			name: "admin can access any user",
@@ -225,8 +231,10 @@ func TestGetUserUseCase_Execute_Authorization(t *testing.T) {
 					Role:      app.RoleUser,
 				})
 			},
-			wantCode: app.CodeForbidden,
-			wantErr:  true,
+			wantCode:    app.CodeForbidden,
+			wantErr:     true,
+			wantLogMsg:  "authorization denied: IDOR attempt",
+			wantLogAttr: "resourceId",
 		},
 		{
 			name: "empty role is forbidden even when subject matches",
@@ -245,8 +253,10 @@ func TestGetUserUseCase_Execute_Authorization(t *testing.T) {
 					Role:      "",
 				})
 			},
-			wantCode: app.CodeForbidden,
-			wantErr:  true,
+			wantCode:    app.CodeForbidden,
+			wantErr:     true,
+			wantLogMsg:  "authorization denied: no auth context or invalid credentials",
+			wantLogAttr: "resourceId",
 		},
 		{
 			name: "unknown role is forbidden even when subject matches",
@@ -265,8 +275,10 @@ func TestGetUserUseCase_Execute_Authorization(t *testing.T) {
 					Role:      "power-user",
 				})
 			},
-			wantCode: app.CodeForbidden,
-			wantErr:  true,
+			wantCode:    app.CodeForbidden,
+			wantErr:     true,
+			wantLogMsg:  "authorization denied: unknown role",
+			wantLogAttr: `"role":"power-user"`,
 		},
 		{
 			name: "admin role without subject is forbidden (fail-closed)",
@@ -303,8 +315,10 @@ func TestGetUserUseCase_Execute_Authorization(t *testing.T) {
 			setupContext: func() context.Context {
 				return context.Background() // No auth context
 			},
-			wantCode: app.CodeForbidden,
-			wantErr:  true,
+			wantCode:    app.CodeForbidden,
+			wantErr:     true,
+			wantLogMsg:  "authorization denied: no auth context or invalid credentials",
+			wantLogAttr: "resourceId",
 		},
 	}
 
@@ -314,9 +328,22 @@ func TestGetUserUseCase_Execute_Authorization(t *testing.T) {
 			mockDB := &mockQuerierGetUser{}
 			tt.setupMock(mockRepo)
 
-			useCase := NewGetUserUseCase(mockRepo, mockDB)
+			var buf bytes.Buffer
+			// Use JSON handler for easier parsing if needed, or text for simple contains check
+			// We set level to Debug to capture all logs
+			h := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+			logger := slog.New(h)
+
+			useCase := NewGetUserUseCase(mockRepo, mockDB, logger)
 			ctx := tt.setupContext()
 			resp, err := useCase.Execute(ctx, tt.req)
+
+			if tt.wantLogMsg != "" {
+				assert.Contains(t, buf.String(), tt.wantLogMsg, "expected log message not found")
+			}
+			if tt.wantLogAttr != "" {
+				assert.Contains(t, buf.String(), tt.wantLogAttr, "expected log attribute not found")
+			}
 
 			if tt.wantErr {
 				require.Error(t, err)
