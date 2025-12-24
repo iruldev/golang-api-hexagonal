@@ -23,6 +23,7 @@ import (
 	httpTransport "github.com/iruldev/golang-api-hexagonal/internal/transport/http"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/handler"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -95,10 +96,8 @@ func run() error {
 	auditEventRepo := postgres.NewAuditEventRepo()
 	auditService := audit.NewAuditService(auditEventRepo, piiRedactor, idGen)
 
-	// Create a database querier (use the pool from reconnectingDB)
-	db.mu.RLock()
-	pool := db.pool
-	db.mu.RUnlock()
+	// Create a database querier using the Pool() getter for safer access
+	pool := db.Pool()
 
 	// Use a pool querier (start-up verified pool is available)
 	querier := postgres.NewPoolQuerier(pool.Pool())
@@ -182,16 +181,30 @@ func run() error {
 	return nil
 }
 
+// Pooler defines the interface for a database pool.
+type Pooler interface {
+	Ping(context.Context) error
+	Close()
+	Pool() *pgxpool.Pool
+}
+
 // reconnectingDB lazily establishes a database pool and retries on readiness checks.
 type reconnectingDB struct {
-	dsn  string
-	mu   sync.RWMutex
-	pool *postgres.Pool
-	log  *slog.Logger
+	dsn         string
+	mu          sync.RWMutex
+	pool        Pooler
+	log         *slog.Logger
+	poolCreator func(context.Context, string) (Pooler, error)
 }
 
 func newReconnectingDB(dsn string, log *slog.Logger) *reconnectingDB {
-	return &reconnectingDB{dsn: dsn, log: log}
+	return &reconnectingDB{
+		dsn: dsn,
+		log: log,
+		poolCreator: func(ctx context.Context, dsn string) (Pooler, error) {
+			return postgres.NewPool(ctx, dsn)
+		},
+	}
 }
 
 // Ping ensures a pool exists and is healthy; recreates the pool on failure.
@@ -205,7 +218,7 @@ func (r *reconnectingDB) Ping(ctx context.Context) error {
 		// Create pool under write lock (double-check pattern)
 		r.mu.Lock()
 		if r.pool == nil {
-			newPool, err := postgres.NewPool(ctx, r.dsn)
+			newPool, err := r.poolCreator(ctx, r.dsn)
 			if err != nil {
 				r.mu.Unlock()
 				return err
@@ -217,11 +230,9 @@ func (r *reconnectingDB) Ping(ctx context.Context) error {
 	}
 
 	if err := pool.Ping(ctx); err != nil {
-		r.log.Warn("database ping failed; resetting pool", slog.Any("err", err))
-		r.mu.Lock()
-		pool.Close()
-		r.pool = nil
-		r.mu.Unlock()
+		// pgxpool handles reconnection automatically - don't close the pool
+		// Closing invalidates references held by querier/txManager causing panics
+		r.log.Warn("database ping failed", slog.Any("err", err))
 		return err
 	}
 
@@ -236,4 +247,12 @@ func (r *reconnectingDB) Close() {
 		r.pool.Close()
 		r.pool = nil
 	}
+}
+
+// Pool returns the current pool for database operations.
+// This should be called after a successful Ping() to ensure the pool exists.
+func (r *reconnectingDB) Pool() Pooler {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.pool
 }
