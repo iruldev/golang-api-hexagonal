@@ -59,8 +59,8 @@ func TestRequestID_PassthroughExistingID(t *testing.T) {
 
 func TestRequestID_IgnoresTooLongID(t *testing.T) {
 	// Arrange
-	// 51 characters
-	longID := "123456789012345678901234567890123456789012345678901"
+	// 65 characters
+	longID := "12345678901234567890123456789012345678901234567890123456789012345"
 
 	var capturedID string
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

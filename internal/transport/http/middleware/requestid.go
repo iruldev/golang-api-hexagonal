@@ -66,7 +66,7 @@ func generateRequestID() string {
 
 // isValidRequestID checks if the ID is safe and valid (length <= 50, printable ASCII safe chars).
 func isValidRequestID(id string) bool {
-	if id == "" || len(id) > 50 {
+	if id == "" || len(id) > 64 {
 		return false
 	}
 	// Allow alphanumeric, hyphen, underscore, colon, dot
