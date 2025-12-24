@@ -51,6 +51,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	t.Setenv("ENV", "production")
 	t.Setenv("SERVICE_NAME", "my-custom-service")
 	t.Setenv("PROBLEM_BASE_URL", "https://my-custom-service.example/problems/")
+	// Production requires JWT (Story 2.3)
+	t.Setenv("JWT_ENABLED", "true")
+	t.Setenv("JWT_SECRET", "this-is-a-32-byte-secret-key!!@@")
 
 	cfg, err := Load()
 
@@ -60,8 +63,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	assert.Equal(t, "production", cfg.Env)
 	assert.Equal(t, "my-custom-service", cfg.ServiceName)
 	assert.Equal(t, "https://my-custom-service.example/problems/", cfg.ProblemBaseURL)
-	// We didn't set them in env, so they should be defaults, but let's test setting them separately if needed or just assume existing test is fine.
-	// Actually, let's update the test to set them.
+	assert.True(t, cfg.JWTEnabled)
 }
 
 func TestLoad_InvalidProblemBaseURL(t *testing.T) {
@@ -253,4 +255,66 @@ func TestLoad_AuditRedactEmailDefault(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "full", cfg.AuditRedactEmail, "AUDIT_REDACT_EMAIL should default to 'full'")
+}
+
+// =============================================================================
+// Story 2.3: Production Guard Tests
+// =============================================================================
+
+// TestLoad_ProductionRequiresJWTEnabled tests AC #1, #2: production requires JWT_ENABLED=true
+func TestLoad_ProductionRequiresJWTEnabled(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("ENV", "production")
+	t.Setenv("JWT_ENABLED", "false") // Not enabled in production
+	// JWT_SECRET is irrelevant here because we fail on JWT_ENABLED=false first
+
+	cfg, err := Load()
+
+	assert.Nil(t, cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ENV=production requires JWT_ENABLED=true")
+}
+
+// TestLoad_ProductionRequiresJWTSecret tests AC #1: production requires JWT_SECRET
+func TestLoad_ProductionRequiresJWTSecret(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("ENV", "production")
+	t.Setenv("JWT_ENABLED", "true")
+	t.Setenv("JWT_SECRET", "") // Empty secret in production
+
+	cfg, err := Load()
+
+	assert.Nil(t, cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ENV=production requires JWT_SECRET to be set")
+}
+
+// TestLoad_ProductionWithValidJWT tests AC #2: production with valid JWT passes
+func TestLoad_ProductionWithValidJWT(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("ENV", "production")
+	t.Setenv("JWT_ENABLED", "true")
+	t.Setenv("JWT_SECRET", "this-is-a-32-byte-secret-key!!@@")
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.NotNil(t, cfg)
+	assert.Equal(t, "production", cfg.Env)
+	assert.True(t, cfg.JWTEnabled)
+}
+
+// TestLoad_DevelopmentAllowsNoJWT tests development can run without JWT
+func TestLoad_DevelopmentAllowsNoJWT(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("ENV", "development")
+	t.Setenv("JWT_ENABLED", "false")
+	t.Setenv("JWT_SECRET", "") // Empty is OK in development
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.NotNil(t, cfg)
+	assert.Equal(t, "development", cfg.Env)
+	assert.False(t, cfg.JWTEnabled)
 }

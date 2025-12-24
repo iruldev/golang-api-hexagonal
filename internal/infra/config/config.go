@@ -91,6 +91,7 @@ func (c *Config) Validate() error {
 	}
 
 	c.LogLevel = strings.ToLower(strings.TrimSpace(c.LogLevel))
+	c.Env = strings.ToLower(strings.TrimSpace(c.Env))
 	switch c.Env {
 	case "development", "staging", "production", "test":
 	default:
@@ -109,6 +110,19 @@ func (c *Config) Validate() error {
 
 	if c.MaxRequestSize < 1 {
 		return fmt.Errorf("invalid MAX_REQUEST_SIZE: must be greater than 0")
+	}
+
+	// Production environment requires JWT authentication (Story 2.3, Option B - Strict)
+	// This prevents accidentally running without auth in production.
+	if c.Env == "production" {
+		if !c.JWTEnabled {
+			return fmt.Errorf("ENV=production requires JWT_ENABLED=true")
+		}
+		// The generic check below will ensure JWTSecret is set and valid,
+		// but we prefer a specific error message for production empty secret.
+		if strings.TrimSpace(c.JWTSecret) == "" {
+			return fmt.Errorf("ENV=production requires JWT_SECRET to be set")
+		}
 	}
 
 	if c.JWTEnabled && strings.TrimSpace(c.JWTSecret) == "" {
