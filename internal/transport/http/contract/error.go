@@ -16,7 +16,7 @@ import (
 )
 
 // ProblemBaseURL is the default base URL for problem type URIs.
-const ProblemBaseURL = "https://api.example.com/problems/"
+const ProblemBaseURL = "https://configured-url-missing.com/problems/"
 
 var problemBaseURL atomic.Value // string
 
@@ -33,6 +33,36 @@ const (
 	ProblemTypeForbiddenSlug       = "forbidden"
 	ProblemTypeRateLimitSlug       = "rate-limit-exceeded"
 )
+
+type errorDef struct {
+	Status int
+	Title  string
+	Slug   string
+}
+
+var errorRegistry = map[string]errorDef{
+	app.CodeUserNotFound:      {http.StatusNotFound, "User Not Found", ProblemTypeNotFoundSlug},
+	app.CodeEmailExists:       {http.StatusConflict, "Email Already Exists", ProblemTypeConflictSlug},
+	app.CodeValidationError:   {http.StatusBadRequest, "Validation Error", ProblemTypeValidationErrorSlug},
+	app.CodeRequestTooLarge:   {http.StatusRequestEntityTooLarge, "Request Entity Too Large", ProblemTypeValidationErrorSlug},
+	app.CodeUnauthorized:      {http.StatusUnauthorized, "Unauthorized", ProblemTypeUnauthorizedSlug},
+	app.CodeForbidden:         {http.StatusForbidden, "Forbidden", ProblemTypeForbiddenSlug},
+	app.CodeRateLimitExceeded: {http.StatusTooManyRequests, "Too Many Requests", ProblemTypeRateLimitSlug},
+	app.CodeInternalError:     {http.StatusInternalServerError, "Internal Server Error", ProblemTypeInternalErrorSlug},
+}
+
+var defaultErrorDef = errorDef{
+	Status: http.StatusInternalServerError,
+	Title:  "Internal Server Error",
+	Slug:   ProblemTypeInternalErrorSlug,
+}
+
+func getErrorDef(code string) errorDef {
+	if def, ok := errorRegistry[code]; ok {
+		return def
+	}
+	return defaultErrorDef
+}
 
 func SetProblemBaseURL(baseURL string) error {
 	trimmed := strings.TrimSpace(baseURL)
@@ -69,73 +99,16 @@ type ValidationError struct {
 
 // mapCodeToStatus maps AppError.Code to HTTP status code.
 func mapCodeToStatus(code string) int {
-	switch code {
-	case app.CodeUserNotFound:
-		return http.StatusNotFound // 404
-	case app.CodeEmailExists:
-		return http.StatusConflict // 409
-	case app.CodeValidationError:
-		return http.StatusBadRequest // 400
-	case app.CodeRequestTooLarge:
-		return http.StatusRequestEntityTooLarge // 413
-	case app.CodeUnauthorized:
-		return http.StatusUnauthorized // 401
-	case app.CodeForbidden:
-		return http.StatusForbidden // 403
-	case app.CodeRateLimitExceeded:
-		return http.StatusTooManyRequests // 429
-	case app.CodeInternalError:
-		return http.StatusInternalServerError // 500
-	default:
-		return http.StatusInternalServerError // 500
-	}
+	return getErrorDef(code).Status
 }
 
 // codeToTitle returns a human-readable title for the error code.
 func codeToTitle(code string) string {
-	switch code {
-	case app.CodeUserNotFound:
-		return "User Not Found"
-	case app.CodeEmailExists:
-		return "Email Already Exists"
-	case app.CodeValidationError:
-		return "Validation Error"
-	case app.CodeRequestTooLarge:
-		return "Request Entity Too Large"
-	case app.CodeUnauthorized:
-		return "Unauthorized"
-	case app.CodeForbidden:
-		return "Forbidden"
-	case app.CodeRateLimitExceeded:
-		return "Too Many Requests"
-	case app.CodeInternalError:
-		return "Internal Server Error"
-	default:
-		return "Internal Server Error"
-	}
+	return getErrorDef(code).Title
 }
 
 func codeToTypeSlug(code string) string {
-	switch code {
-	case app.CodeValidationError:
-		return ProblemTypeValidationErrorSlug
-	case app.CodeUserNotFound:
-		return ProblemTypeNotFoundSlug
-	case app.CodeEmailExists:
-		return ProblemTypeConflictSlug
-	case app.CodeRequestTooLarge:
-		return ProblemTypeValidationErrorSlug
-	case app.CodeUnauthorized:
-		return ProblemTypeUnauthorizedSlug
-	case app.CodeForbidden:
-		return ProblemTypeForbiddenSlug
-	case app.CodeRateLimitExceeded:
-		return ProblemTypeRateLimitSlug
-	case app.CodeInternalError:
-		return ProblemTypeInternalErrorSlug
-	default:
-		return ProblemTypeInternalErrorSlug
-	}
+	return getErrorDef(code).Slug
 }
 
 // problemTypeURL returns the RFC 7807 type URL.
