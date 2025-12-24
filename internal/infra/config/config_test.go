@@ -127,7 +127,7 @@ func TestLoad_InvalidPort(t *testing.T) {
 
 func TestLoad_InvalidPortRange(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
-	t.Setenv("PORT", "0")
+	t.Setenv("PORT", "-1") // -1 is invalid (Story 2.5a allowed 0 for dynamic allocation)
 
 	cfg, err := Load()
 
@@ -392,4 +392,83 @@ func TestConfig_Redacted(t *testing.T) {
 	assert.NotContains(t, redacted, "extremely-sensitive")
 	assert.Contains(t, redacted, "[REDACTED]")
 	assert.Contains(t, redacted, "8080")
+}
+
+// =============================================================================
+// Story 2.5a: InternalPort Tests
+// =============================================================================
+
+// TestLoad_InternalPortDefault tests default value is 8081
+func TestLoad_InternalPortDefault(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, 8081, cfg.InternalPort, "INTERNAL_PORT should default to 8081")
+	assert.Equal(t, "127.0.0.1", cfg.InternalBindAddress, "INTERNAL_BIND_ADDRESS should default to 127.0.0.1")
+}
+
+// TestLoad_InternalPortCustom tests custom value works
+func TestLoad_InternalPortCustom(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("INTERNAL_PORT", "9091")
+	t.Setenv("INTERNAL_BIND_ADDRESS", "0.0.0.0")
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, 9091, cfg.InternalPort)
+	assert.Equal(t, "0.0.0.0", cfg.InternalBindAddress)
+}
+
+// TestLoad_InternalPortCollision tests collision with PORT fails
+func TestLoad_InternalPortCollision(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("PORT", "8080")
+	t.Setenv("INTERNAL_PORT", "8080") // Same as PORT
+
+	cfg, err := Load()
+
+	assert.Nil(t, cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "INTERNAL_PORT must differ from PORT")
+}
+
+// TestLoad_InternalPortInvalidRange tests invalid port range
+func TestLoad_InternalPortInvalidRange(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("INTERNAL_PORT", "-1")
+
+	cfg, err := Load()
+
+	assert.Nil(t, cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid INTERNAL_PORT")
+}
+
+// TestLoad_DynamicPorts tests that port 0 is allowed (Story 2.5a Review Fix)
+func TestLoad_DynamicPorts(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("PORT", "0")
+	t.Setenv("INTERNAL_PORT", "0")
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, 0, cfg.Port)
+	assert.Equal(t, 0, cfg.InternalPort)
+	// No collision error because both are 0
+}
+
+// TestLoad_InternalBindAddressEmpty tests validation
+func TestLoad_InternalBindAddressEmpty(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("INTERNAL_BIND_ADDRESS", "")
+
+	cfg, err := Load()
+
+	assert.Nil(t, cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "INTERNAL_BIND_ADDRESS cannot be empty")
 }

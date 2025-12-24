@@ -124,16 +124,15 @@ func TestIntegrationRoutes(t *testing.T) {
 }
 
 // TestMetricsEndpoint verifies the /metrics endpoint behavior.
+// Story 2.5b: /metrics is now on internal router only.
 func TestMetricsEndpoint(t *testing.T) {
-	healthHandler := NewHealthHandler()
 	logger := testLogger()
-	metricsReg, httpMetrics := newTestMetricsRegistry()
-	db := &fakeDB{pingErr: nil}
-	readyHandler := NewReadyHandler(db)
+	metricsReg, _ := newTestMetricsRegistry()
 
-	r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{})
+	// Use internal router for /metrics tests (Story 2.5b)
+	r := httpTransport.NewInternalRouter(logger, metricsReg, new(testHTTPMetrics))
 
-	t.Run("metrics endpoint returns 200", func(t *testing.T) {
+	t.Run("metrics endpoint returns 200 on internal router", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 		rec := httptest.NewRecorder()
 
@@ -153,13 +152,6 @@ func TestMetricsEndpoint(t *testing.T) {
 	})
 
 	t.Run("metrics contains Go runtime metrics", func(t *testing.T) {
-		// First make some requests to generate metrics
-		for i := 0; i < 3; i++ {
-			req := httptest.NewRequest(http.MethodGet, "/health", nil)
-			rec := httptest.NewRecorder()
-			r.ServeHTTP(rec, req)
-		}
-
 		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 		rec := httptest.NewRecorder()
 

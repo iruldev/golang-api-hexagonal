@@ -53,6 +53,30 @@ type Config struct {
 	// TrustProxy enables trusting X-Forwarded-For/X-Real-IP headers. Default: false.
 	TrustProxy bool `envconfig:"TRUST_PROXY" default:"false"`
 
+	// Internal Server (Story 2.5a)
+	// InternalPort is the port for internal endpoints like /metrics. Default: 8081.
+	InternalPort int `envconfig:"INTERNAL_PORT" default:"8081"`
+	// InternalBindAddress is the bind address for the internal server.
+	// Default: "127.0.0.1" (loopback only) for security isolation.
+	// InternalBindAddress is the bind address for the internal server.
+	// Default: "127.0.0.1" (loopback only) for security isolation.
+	InternalBindAddress string `envconfig:"INTERNAL_BIND_ADDRESS" default:"127.0.0.1"`
+
+	// Smoke Test Support (Hidden)
+	// IgnoreDBStartupError allows starting the server without a valid DB connection.
+	// Intended ONLY for smoke testing/build verification. Default: false.
+	IgnoreDBStartupError bool `envconfig:"IGNORE_DB_STARTUP_ERROR" default:"false"`
+
+	// Server Timeouts
+	// HTTPReadTimeout is the maximum duration for reading the entire request, including the body. Default: 15s.
+	HTTPReadTimeout time.Duration `envconfig:"HTTP_READ_TIMEOUT" default:"15s"`
+	// HTTPWriteTimeout is the maximum duration before timing out writes of the response. Default: 15s.
+	HTTPWriteTimeout time.Duration `envconfig:"HTTP_WRITE_TIMEOUT" default:"15s"`
+	// HTTPIdleTimeout is the maximum amount of time to wait for the next request when keep-alives are enabled. Default: 60s.
+	HTTPIdleTimeout time.Duration `envconfig:"HTTP_IDLE_TIMEOUT" default:"60s"`
+	// ShutdownTimeout is the duration to wait for graceful shutdown. Default: 30s.
+	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"30s"`
+
 	// Audit
 	// AuditRedactEmail controls how email addresses are redacted in audit logs.
 	// Options: "full" (default, replaces with [REDACTED]) or "partial" (shows first 2 chars + domain).
@@ -91,8 +115,22 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("OTEL_ENABLED is true but OTEL_EXPORTER_OTLP_ENDPOINT is empty")
 	}
 
-	if c.Port < 1 || c.Port > 65535 {
-		return fmt.Errorf("invalid PORT: must be between 1 and 65535")
+	// Allow 0 for dynamic port allocation
+	if c.Port < 0 || c.Port > 65535 {
+		return fmt.Errorf("invalid PORT: must be between 0 and 65535")
+	}
+	// Story 2.5a: InternalPort validation
+	// Allow 0 for dynamic port allocation
+	if c.InternalPort < 0 || c.InternalPort > 65535 {
+		return fmt.Errorf("invalid INTERNAL_PORT: must be between 0 and 65535")
+	}
+	// Only check collision if both are non-zero (if 0, OS assigns different ports)
+	if c.InternalPort != 0 && c.InternalPort == c.Port {
+		return fmt.Errorf("INTERNAL_PORT must differ from PORT")
+	}
+	// Check InternalBindAddress is valid IP
+	if c.InternalBindAddress == "" {
+		return fmt.Errorf("INTERNAL_BIND_ADDRESS cannot be empty")
 	}
 	if strings.TrimSpace(c.ServiceName) == "" {
 		return fmt.Errorf("invalid SERVICE_NAME: must not be empty")

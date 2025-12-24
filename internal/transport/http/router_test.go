@@ -190,3 +190,61 @@ func TestNewRouter_HealthCheck_NoAuth(t *testing.T) {
 	require.Equal(t, stdhttp.StatusOK, w.Code)
 	assert.Equal(t, "OK", w.Body.String())
 }
+
+// =============================================================================
+// Story 2.5b: Internal Router Tests
+// =============================================================================
+
+// TestNewRouter_MetricsNotExposed tests that /metrics returns 404 on public router
+func TestNewRouter_MetricsNotExposed(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	metricsReg := prometheus.NewRegistry()
+	mockMetrics := new(MockHTTPMetrics)
+	mockMetrics.On("IncRequest", mock.Anything, mock.Anything, mock.Anything).Return()
+	mockMetrics.On("ObserveRequestDuration", mock.Anything, mock.Anything, mock.Anything).Return()
+
+	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
+	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
+
+	jwtConfig := JWTConfig{Enabled: false}
+	rateLimitConfig := RateLimitConfig{RequestsPerSecond: 100}
+
+	router := NewRouter(
+		logger,
+		false,
+		metricsReg,
+		mockMetrics,
+		healthHandler,
+		readyHandler,
+		nil, // no user handler
+		1024,
+		jwtConfig,
+		rateLimitConfig,
+	)
+
+	// /metrics should return 404 on public router
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, stdhttp.StatusNotFound, w.Code, "/metrics should not be exposed on public router")
+}
+
+// TestNewInternalRouter_MetricsAvailable tests that /metrics returns 200 on internal router
+func TestNewInternalRouter_MetricsAvailable(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	metricsReg := prometheus.NewRegistry()
+	mockMetrics := new(MockHTTPMetrics)
+	mockMetrics.On("IncRequest", mock.Anything, mock.Anything, mock.Anything).Return()
+	mockMetrics.On("ObserveRequestDuration", mock.Anything, mock.Anything, mock.Anything).Return()
+
+	router := NewInternalRouter(logger, metricsReg, mockMetrics)
+
+	// /metrics should return 200 on internal router
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, stdhttp.StatusOK, w.Code, "/metrics should be available on internal router")
+	// Note: Empty registry returns empty metrics, which is valid
+}

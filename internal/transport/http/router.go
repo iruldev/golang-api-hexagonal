@@ -91,8 +91,7 @@ func NewRouter(
 	r.Use(middleware.BodyLimiter(maxRequestSize))
 	r.Use(chiMiddleware.Recoverer)
 
-	// Metrics endpoint (no auth required)
-	r.Handle("/metrics", promhttp.HandlerFor(metricsReg, promhttp.HandlerOpts{}))
+	// NOTE: /metrics endpoint moved to internal router (Story 2.5b)
 
 	// Health check endpoints (no auth required)
 	r.Get("/health", healthHandler.ServeHTTP)
@@ -129,6 +128,29 @@ func NewRouter(
 			r.Get("/users", userHandler.ListUsers)
 		})
 	}
+
+	return r
+}
+
+// NewInternalRouter creates a router for internal endpoints like /metrics.
+// This router should be bound to INTERNAL_PORT for security isolation.
+// Story 2.5b: Separated from public router to protect internal metrics.
+func NewInternalRouter(
+	logger *slog.Logger,
+	metricsReg *prometheus.Registry,
+	httpMetrics metrics.HTTPMetrics,
+) *chi.Mux {
+	r := chi.NewRouter()
+
+	// Recovery middleware to prevent panics from crashing internal server
+	r.Use(chiMiddleware.Recoverer)
+	// Apply metrics middleware to track requests to internal endpoints
+	r.Use(middleware.Metrics(httpMetrics))
+
+	// Metrics endpoint (internal only)
+	r.Handle("/metrics", promhttp.HandlerFor(metricsReg, promhttp.HandlerOpts{}))
+
+	logger.Debug("internal router configured", slog.String("endpoints", "/metrics"))
 
 	return r
 }

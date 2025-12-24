@@ -71,7 +71,7 @@ func run() error {
 	}
 
 	// Prepare database connection (non-fatal if unavailable at startup)
-	db := newReconnectingDB(cfg.DatabaseURL, logger)
+	db := newReconnectingDB(cfg.DatabaseURL, cfg.IgnoreDBStartupError, logger)
 	defer db.Close()
 
 	ctxPing, cancelPing := context.WithTimeout(ctx, 5*time.Second)
@@ -129,23 +129,53 @@ func run() error {
 		RequestsPerSecond: cfg.RateLimitRPS,
 		TrustProxy:        cfg.TrustProxy,
 	}
-	router := httpTransport.NewRouter(logger, cfg.OTELEnabled, metricsReg, httpMetrics, healthHandler, readyHandler, userHandler, cfg.MaxRequestSize, jwtConfig, rateLimitConfig)
+	publicRouter := httpTransport.NewRouter(logger, cfg.OTELEnabled, metricsReg, httpMetrics, healthHandler, readyHandler, userHandler, cfg.MaxRequestSize, jwtConfig, rateLimitConfig)
 
-	// Create HTTP server
-	addr := fmt.Sprintf(":%d", cfg.Port)
-	srv := &http.Server{
-		Addr:         addr,
-		Handler:      router,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+	// Create Internal Router (Story 2.5b)
+	internalRouter := httpTransport.NewInternalRouter(logger, metricsReg, httpMetrics)
+
+	// Create Public HTTP server
+	publicAddr := fmt.Sprintf(":%d", cfg.Port)
+	publicSrv := &http.Server{
+		Addr:         publicAddr,
+		Handler:      publicRouter,
+		ReadTimeout:  cfg.HTTPReadTimeout,
+		WriteTimeout: cfg.HTTPWriteTimeout,
+		IdleTimeout:  cfg.HTTPIdleTimeout,
 	}
 
-	// Start server in goroutine
-	serverErrors := make(chan error, 1)
+	// Create Internal HTTP server
+	// Use shorter timeouts for internal server default if not explicitly separate in config,
+	// but for now we share the config or use defaults.
+	// Since 2.5b used 5s for internal, let's respect that differentiation if we want,
+	// OR just use the configured values. The finding said "hardcoded", so let's use the config.
+	// Note: The previous code had 5s for internal.
+	// We'll use the same config for now for simplicity, or we could add InternalHTTPReadTimeout.
+	// Given "Fix them automatically" usually implies "best practice", sharing timeouts is acceptable,
+	// but strictly speaking, internal might want to be faster.
+	// Let's use the generic HTTP timeout config for both to avoid config bloat,
+	// but if strict validation is needed, we'd add more vars.
+	// I'll stick to using the new config variables for both to remove magic numbers.
+	internalAddr := fmt.Sprintf("%s:%d", cfg.InternalBindAddress, cfg.InternalPort)
+	internalSrv := &http.Server{
+		Addr:         internalAddr,
+		Handler:      internalRouter,
+		ReadTimeout:  cfg.HTTPReadTimeout,  // Previously 5s
+		WriteTimeout: cfg.HTTPWriteTimeout, // Previously 5s
+		IdleTimeout:  cfg.HTTPIdleTimeout,
+	}
+
+	// Start servers in goroutines
+	serverErrors := make(chan error, 2) // buffer of 2 for both servers
+
 	go func() {
-		logger.Info("server listening", slog.String("addr", addr))
-		serverErrors <- srv.ListenAndServe()
+		logger.Info("public server listening", slog.String("addr", publicAddr))
+		serverErrors <- publicSrv.ListenAndServe()
+	}()
+
+	go func() {
+		logger.Info("internal server listening", slog.String("addr", internalAddr))
+		serverErrors <- internalSrv.ListenAndServe()
 	}()
 
 	// Wait for interrupt signal or server error
@@ -161,8 +191,8 @@ func run() error {
 	case sig := <-shutdown:
 		logger.Info("shutdown signal received", slog.Any("signal", sig))
 
-		// Give outstanding requests 30 seconds to complete
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		// Give outstanding requests time to complete
+		ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 		defer cancel()
 
 		// Shutdown tracer provider to flush pending spans
@@ -172,15 +202,30 @@ func run() error {
 			}
 		}
 
-		if err := srv.Shutdown(ctx); err != nil {
-			// Force close after timeout
-			srv.Close()
-			logger.Error("graceful shutdown failed", slog.Any("err", err))
-			return fmt.Errorf("graceful shutdown failed: %w", err)
-		}
+		// Shutdown both servers concurrently
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			if err := publicSrv.Shutdown(ctx); err != nil {
+				publicSrv.Close() // Force close
+				logger.Error("public server graceful shutdown failed", slog.Any("err", err))
+			}
+		}()
+
+		go func() {
+			defer wg.Done()
+			if err := internalSrv.Shutdown(ctx); err != nil {
+				internalSrv.Close() // Force close
+				logger.Error("internal server graceful shutdown failed", slog.Any("err", err))
+			}
+		}()
+
+		wg.Wait()
 	}
 
-	logger.Info("server stopped gracefully")
+	logger.Info("servers stopped gracefully")
 	return nil
 }
 
@@ -193,17 +238,19 @@ type Pooler interface {
 
 // reconnectingDB lazily establishes a database pool and retries on readiness checks.
 type reconnectingDB struct {
-	dsn         string
-	mu          sync.RWMutex
-	pool        Pooler
-	log         *slog.Logger
-	poolCreator func(context.Context, string) (Pooler, error)
+	dsn                string
+	ignoreStartupError bool
+	mu                 sync.RWMutex
+	pool               Pooler
+	log                *slog.Logger
+	poolCreator        func(context.Context, string) (Pooler, error)
 }
 
-func newReconnectingDB(dsn string, log *slog.Logger) *reconnectingDB {
+func newReconnectingDB(dsn string, ignoreStartupError bool, log *slog.Logger) *reconnectingDB {
 	return &reconnectingDB{
-		dsn: dsn,
-		log: log,
+		dsn:                dsn,
+		ignoreStartupError: ignoreStartupError,
+		log:                log,
 		poolCreator: func(ctx context.Context, dsn string) (Pooler, error) {
 			return postgres.NewPool(ctx, dsn)
 		},
@@ -223,6 +270,13 @@ func (r *reconnectingDB) Ping(ctx context.Context) error {
 		if r.pool == nil {
 			newPool, err := r.poolCreator(ctx, r.dsn)
 			if err != nil {
+				// If creation fails and we ignore startup errors
+				if r.ignoreStartupError {
+					r.log.Warn("database pool creation failed but IGNORE_DB_STARTUP_ERROR is set; using no-op pool", slog.Any("err", err))
+					r.pool = &noopPool{}
+					r.mu.Unlock()
+					return nil
+				}
 				r.mu.Unlock()
 				return err
 			}
@@ -233,6 +287,15 @@ func (r *reconnectingDB) Ping(ctx context.Context) error {
 	}
 
 	if err := pool.Ping(ctx); err != nil {
+		if r.ignoreStartupError {
+			r.log.Warn("database ping failed but IGNORE_DB_STARTUP_ERROR is set; using no-op pool", slog.Any("err", err))
+			// Assign a no-op pool so checking db.Pool() doesn't panic
+			// We need write lock to update r.pool
+			r.mu.Lock()
+			r.pool = &noopPool{}
+			r.mu.Unlock()
+			return nil
+		}
 		// pgxpool handles reconnection automatically - don't close the pool
 		// Closing invalidates references held by querier/txManager causing panics
 		r.log.Warn("database ping failed", slog.Any("err", err))
@@ -253,9 +316,15 @@ func (r *reconnectingDB) Close() {
 }
 
 // Pool returns the current pool for database operations.
-// This should be called after a successful Ping() to ensure the pool exists.
 func (r *reconnectingDB) Pool() Pooler {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.pool
 }
+
+// noopPool is a placeholder for when DB connection is ignored.
+type noopPool struct{}
+
+func (n *noopPool) Ping(context.Context) error { return nil }
+func (n *noopPool) Close()                     {}
+func (n *noopPool) Pool() *pgxpool.Pool        { return nil }

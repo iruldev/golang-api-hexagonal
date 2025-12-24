@@ -29,7 +29,7 @@ curl http://localhost:8080/health
 curl http://localhost:8080/ready
 # Expected: {"data":{"status":"ready","checks":{"database":"ok"}}}
 
-curl http://localhost:8080/metrics
+curl http://localhost:8081/metrics
 # Expected: Prometheus metrics in text format
 ```
 
@@ -128,6 +128,8 @@ Configuration via environment variables (using `envconfig`):
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | ✅ | - | PostgreSQL connection string |
 | `PORT` | ❌ | `8080` | HTTP server port |
+| `INTERNAL_PORT` | ❌ | `8081` | Internal server port (metrics) |
+| `INTERNAL_BIND_ADDRESS` | ❌ | `127.0.0.1` | Internal bind address |
 | `LOG_LEVEL` | ❌ | `info` | Logging level (debug, info, warn, error) |
 | `ENV` | ❌ | `development` | Environment (development, staging, production, test) |
 | `SERVICE_NAME` | ❌ | `golang-api-hexagonal` | Service name for observability |
@@ -136,6 +138,7 @@ Example:
 ```bash
 export DATABASE_URL="postgres://postgres:postgres@localhost:5432/golang_api_hexagonal?sslmode=disable"
 export PORT=8080
+export INTERNAL_PORT=8081
 export LOG_LEVEL=info
 export ENV=development
 ```
@@ -158,7 +161,55 @@ export ENV=development
 }
 ```
 
+## 🔐 Internal Port (Metrics Protection)
+
+The application runs **two HTTP servers** to isolate internal endpoints:
+
+| Server | Port | Endpoints | Purpose |
+|--------|------|-----------|---------|
+| **Public** | `PORT` (8080) | `/health`, `/ready`, `/api/v1/*` | External traffic |
+| **Internal** | `INTERNAL_PORT` (8081) | `/metrics` | Metrics scraping only |
+
+### Why Separate Ports?
+
+The `/metrics` endpoint is protected on a separate internal port to:
+- **Prevent information disclosure**: Metrics can reveal sensitive operational data
+- **Enable network-level isolation**: Firewall rules can restrict access to internal port
+- **Support secure Prometheus scraping**: Only internal services can scrape metrics
+
+### Accessing /metrics
+
+```bash
+# Local development
+curl http://localhost:8081/metrics
+
+# Docker (expose internal port)
+docker run -p 8080:8080 -p 8081:8081 your-image
+
+# Kubernetes: Create ClusterIP service for internal port
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp-internal
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8081
+      targetPort: 8081
+      name: metrics
+```
+
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `INTERNAL_PORT` | `8081` | Port for internal endpoints |
+| `INTERNAL_BIND_ADDRESS` | `127.0.0.1` | Bind address (loopback for security) |
+
+> **Note:** In production, set `INTERNAL_BIND_ADDRESS=0.0.0.0` if exposing to container network.
+
 ## 🗄️ Database Migrations
+
 
 Migrations use [goose](https://github.com/pressly/goose) and are located in `migrations/`.
 
