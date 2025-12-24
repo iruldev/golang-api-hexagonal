@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
@@ -16,8 +17,6 @@ const (
 	logKeyStatus    = "status"
 	logKeyDuration  = "duration_ms"
 	logKeyBytes     = "bytes"
-	logKeyTraceID   = "traceId"
-	logKeySpanID    = "spanId"
 )
 
 // RequestLogger returns a middleware that logs HTTP request completion.
@@ -67,12 +66,12 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 
 			// Add traceId only if present (absent when tracing disabled)
 			if traceID := GetTraceID(r.Context()); traceID != "" {
-				args = append(args, logKeyTraceID, traceID)
+				args = append(args, observability.LogKeyTraceID, traceID)
 			}
 
 			// Add spanId only if present (absent when tracing disabled)
 			if spanID := GetSpanID(r.Context()); spanID != "" {
-				args = append(args, logKeySpanID, spanID)
+				args = append(args, observability.LogKeySpanID, spanID)
 			}
 
 			// Log request completion with structured fields using request context (for context-aware handlers).

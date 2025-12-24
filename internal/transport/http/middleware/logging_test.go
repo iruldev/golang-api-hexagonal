@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
@@ -194,12 +195,12 @@ func TestRequestLogger_IncludesTraceIDWhenTracingEnabled(t *testing.T) {
 	require.NoError(t, err)
 
 	// Then: traceId is present and has correct format (32 hex chars)
-	traceID, ok := logEntry["traceId"].(string)
+	traceID, ok := logEntry[observability.LogKeyTraceID].(string)
 	assert.True(t, ok, "traceId should be a string")
 	assert.Len(t, traceID, 32, "traceId should be 32 hex characters")
 
 	// Then: spanId is present and has correct format (16 hex chars)
-	spanID, ok := logEntry["spanId"].(string)
+	spanID, ok := logEntry[observability.LogKeySpanID].(string)
 	assert.True(t, ok, "spanId should be a string")
 	assert.Len(t, spanID, 16, "spanId should be 16 hex characters")
 }
@@ -234,11 +235,11 @@ func TestRequestLogger_ExcludesTraceIDWhenTracingDisabled(t *testing.T) {
 	require.NoError(t, err)
 
 	// Then: traceId field is ABSENT (not empty string) - AC#2
-	_, traceIDExists := logEntry["traceId"]
+	_, traceIDExists := logEntry[observability.LogKeyTraceID]
 	assert.False(t, traceIDExists, "traceId should be absent when tracing disabled, not empty")
 
 	// Then: spanId field is ABSENT (not empty string) - AC#2
-	_, spanIDExists := logEntry["spanId"]
+	_, spanIDExists := logEntry[observability.LogKeySpanID]
 	assert.False(t, spanIDExists, "spanId should be absent when tracing disabled, not empty")
 
 	// But requestId should still be present

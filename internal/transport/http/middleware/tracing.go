@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
@@ -12,9 +13,6 @@ import (
 )
 
 const tracerName = "github.com/iruldev/golang-api-hexagonal/transport/http"
-
-// traceIDKey is the context key for storing trace ID.
-const traceIDKey contextKey = "traceId"
 
 // Tracing returns a middleware that creates spans for HTTP requests.
 // It extracts W3C Trace Context from incoming headers (traceparent) for distributed tracing,
@@ -40,9 +38,11 @@ func Tracing(next http.Handler) http.Handler {
 		)
 		defer span.End()
 
-		// Store trace ID in context for logging correlation
+		// Store trace ID and span ID in context for logging correlation
 		traceID := span.SpanContext().TraceID().String()
-		ctx = context.WithValue(ctx, traceIDKey, traceID)
+		spanID := span.SpanContext().SpanID().String()
+		ctx = ctxutil.SetTraceID(ctx, traceID)
+		ctx = ctxutil.SetSpanID(ctx, spanID)
 
 		// Use response wrapper to capture status code
 		ww := NewResponseWrapper(w)
@@ -70,7 +70,8 @@ func Tracing(next http.Handler) http.Handler {
 // GetTraceID retrieves the trace ID from the context.
 // Returns an empty string if tracing is disabled or no trace ID is present.
 func GetTraceID(ctx context.Context) string {
-	if id, ok := ctx.Value(traceIDKey).(string); ok && id != "00000000000000000000000000000000" {
+	// First, check ctxutil context (set by Tracing middleware)
+	if id := ctxutil.GetTraceID(ctx); id != "" && id != ctxutil.EmptyTraceID {
 		return id
 	}
 
@@ -81,7 +82,7 @@ func GetTraceID(ctx context.Context) string {
 	}
 
 	traceID := spanCtx.TraceID().String()
-	if traceID == "00000000000000000000000000000000" {
+	if traceID == ctxutil.EmptyTraceID {
 		return ""
 	}
 
@@ -92,13 +93,19 @@ func GetTraceID(ctx context.Context) string {
 // Returns an empty string (16 zero chars) if no active span is present.
 // Span ID format: 16 hex characters (64 bits).
 func GetSpanID(ctx context.Context) string {
+	// First, check ctxutil context (set by Tracing middleware)
+	if id := ctxutil.GetSpanID(ctx); id != "" && id != ctxutil.EmptySpanID {
+		return id
+	}
+
+	// Fallback to OTel span context
 	spanCtx := trace.SpanContextFromContext(ctx)
 	if !spanCtx.HasSpanID() {
 		return ""
 	}
 	spanID := spanCtx.SpanID().String()
 	// Check for zero span ID (invalid/no tracing)
-	if spanID == "0000000000000000" {
+	if spanID == ctxutil.EmptySpanID {
 		return ""
 	}
 	return spanID

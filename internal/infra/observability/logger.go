@@ -16,6 +16,7 @@ const (
 	LogKeyEnv       = "env"
 	LogKeyRequestID = "requestId"
 	LogKeyTraceID   = "traceId"
+	LogKeySpanID    = "spanId"
 	LogKeyMethod    = "method"
 	LogKeyRoute     = "route"
 	LogKeyStatus    = "status"
@@ -65,12 +66,19 @@ func Any(key string, value interface{}) slog.Attr {
 	return slog.Any(key, value)
 }
 
-// LoggerFromContext returns a logger enriched with request_id from context.
-// If request_id is not present in context, returns the base logger unchanged.
+// LoggerFromContext returns a logger enriched with request_id, trace_id, and span_id from context.
+// If any ID is not present in context, that field is omitted from the logger.
 // This enables request correlation across all log entries in a request lifecycle.
 func LoggerFromContext(ctx context.Context, base *slog.Logger) *slog.Logger {
+	enriched := base
 	if requestID := ctxutil.GetRequestID(ctx); requestID != "" {
-		return base.With(LogKeyRequestID, requestID)
+		enriched = enriched.With(LogKeyRequestID, requestID)
 	}
-	return base
+	if traceID := ctxutil.GetTraceID(ctx); traceID != "" && traceID != ctxutil.EmptyTraceID {
+		enriched = enriched.With(LogKeyTraceID, traceID)
+	}
+	if spanID := ctxutil.GetSpanID(ctx); spanID != "" && spanID != ctxutil.EmptySpanID {
+		enriched = enriched.With(LogKeySpanID, spanID)
+	}
+	return enriched
 }

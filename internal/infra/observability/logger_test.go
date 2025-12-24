@@ -215,3 +215,73 @@ func TestLoggerFromContext_WithoutRequestID(t *testing.T) {
 	assert.False(t, hasRequestID, "request_id should NOT be present when context is empty")
 	assert.Equal(t, "test message", logEntry["msg"])
 }
+
+func TestLoggerFromContext_WithTraceID(t *testing.T) {
+	var buf bytes.Buffer
+
+	handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})
+	baseLogger := slog.New(handler)
+
+	// Set trace ID in context
+	ctx := ctxutil.SetTraceID(context.Background(), "abc123def456789012345678901234")
+
+	// Get enriched logger
+	enrichedLogger := LoggerFromContext(ctx, baseLogger)
+
+	// Log a message
+	enrichedLogger.Info("test message")
+
+	// Parse and verify
+	var logEntry map[string]interface{}
+	err := json.Unmarshal(buf.Bytes(), &logEntry)
+	require.NoError(t, err)
+
+	assert.Equal(t, "abc123def456789012345678901234", logEntry["traceId"], "trace_id should be present in log")
+}
+
+func TestLoggerFromContext_WithAllIDs(t *testing.T) {
+	var buf bytes.Buffer
+
+	handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})
+	baseLogger := slog.New(handler)
+
+	// Set all IDs in context
+	ctx := context.Background()
+	ctx = ctxutil.SetRequestID(ctx, "req-123")
+	ctx = ctxutil.SetTraceID(ctx, "trace-abc-def")
+	ctx = ctxutil.SetSpanID(ctx, "span-xyz-123")
+
+	// Get enriched logger
+	enrichedLogger := LoggerFromContext(ctx, baseLogger)
+	enrichedLogger.Info("test message")
+
+	// Parse and verify
+	var logEntry map[string]interface{}
+	err := json.Unmarshal(buf.Bytes(), &logEntry)
+	require.NoError(t, err)
+
+	assert.Equal(t, "req-123", logEntry["requestId"])
+	assert.Equal(t, "trace-abc-def", logEntry["traceId"])
+	assert.Equal(t, "span-xyz-123", logEntry[LogKeySpanID])
+}
+
+func TestLoggerFromContext_ZeroTraceIDFiltered(t *testing.T) {
+	var buf bytes.Buffer
+
+	handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})
+	baseLogger := slog.New(handler)
+
+	// Set zero trace ID (should be filtered)
+	ctx := ctxutil.SetTraceID(context.Background(), "00000000000000000000000000000000")
+
+	enrichedLogger := LoggerFromContext(ctx, baseLogger)
+	enrichedLogger.Info("test message")
+
+	var logEntry map[string]interface{}
+	err := json.Unmarshal(buf.Bytes(), &logEntry)
+	require.NoError(t, err)
+
+	// Zero trace ID should NOT appear
+	_, hasTraceID := logEntry["traceId"]
+	assert.False(t, hasTraceID, "zero trace_id should NOT be present")
+}
