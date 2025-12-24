@@ -21,8 +21,10 @@ CREATE TABLE IF NOT EXISTS schema_info (
 
 -- Insert initial record to verify migration ran (idempotent)
 INSERT INTO schema_info (version, description)
-VALUES ('0.0.1', 'Initial schema setup - golang-api-hexagonal')
-ON CONFLICT (id) DO NOTHING;
+SELECT '0.0.1', 'Initial schema setup - golang-api-hexagonal'
+WHERE NOT EXISTS (
+    SELECT 1 FROM schema_info WHERE version = '0.0.1'
+);
 
 -- +goose StatementEnd
 
