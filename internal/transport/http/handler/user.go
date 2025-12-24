@@ -14,6 +14,7 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/app/user"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/middleware"
 )
 
 type createUserExecutor interface {
@@ -79,12 +80,21 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Extract context values for audit trail
+	reqID := middleware.GetRequestID(r.Context())
+	var actorID domain.ID
+	if authCtx := app.GetAuthContext(r.Context()); authCtx != nil {
+		actorID = domain.ID(authCtx.SubjectID)
+	}
+
 	// Map to app layer request
 	appReq := user.CreateUserRequest{
 		ID:        domain.ID(id.String()),
 		Email:     req.Email,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
+		RequestID: reqID,
+		ActorID:   actorID,
 	}
 
 	// Execute use case

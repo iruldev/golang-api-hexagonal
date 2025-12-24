@@ -53,7 +53,7 @@ func TestRequestLogger_LogsRequestFields(t *testing.T) {
 	// Verify requestId is present and is 32 hex characters
 	requestID, ok := logEntry["requestId"].(string)
 	assert.True(t, ok, "requestId should be a string")
-	assert.Len(t, requestID, 32, "requestId should be 32 hex characters from custom RequestID middleware")
+	assert.Len(t, requestID, 36, "requestId should be 36 characters (UUID) from custom RequestID middleware")
 }
 
 func TestRequestLogger_CapturesErrorStatus(t *testing.T) {

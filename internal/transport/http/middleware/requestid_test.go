@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -28,7 +30,9 @@ func TestRequestID_GeneratesNewID(t *testing.T) {
 	// Assert
 	responseID := rec.Header().Get(headerXRequestID)
 	assert.NotEmpty(t, responseID, "X-Request-ID should be in response header")
-	assert.Len(t, responseID, 32, "request ID should be 32 hex characters")
+	assert.Len(t, responseID, 36, "request ID should be 36 characters (UUID)")
+	_, err := uuid.Parse(responseID)
+	assert.NoError(t, err, "request ID should be a valid UUID")
 }
 
 func TestRequestID_PassthroughExistingID(t *testing.T) {
@@ -51,6 +55,52 @@ func TestRequestID_PassthroughExistingID(t *testing.T) {
 	// Assert
 	assert.Equal(t, providedID, capturedID, "should passthrough provided request ID")
 	assert.Equal(t, providedID, rec.Header().Get(headerXRequestID), "response header should contain provided ID")
+}
+
+func TestRequestID_IgnoresTooLongID(t *testing.T) {
+	// Arrange
+	// 51 characters
+	longID := "123456789012345678901234567890123456789012345678901"
+
+	var capturedID string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedID = GetRequestID(r.Context())
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set(headerXRequestID, longID)
+	rec := httptest.NewRecorder()
+
+	// Act
+	RequestID(handler).ServeHTTP(rec, req)
+
+	// Assert
+	assert.NotEqual(t, longID, capturedID, "should NOT passthrough long request ID")
+	assert.Len(t, capturedID, 36, "should generate new valid UUID v7")
+	assert.NoError(t, uuid.Validate(capturedID), "should be valid UUID")
+}
+
+func TestRequestID_IgnoresInvalidCharset(t *testing.T) {
+	// Arrange
+	invalidID := "user-id-with-bad-char-$"
+
+	var capturedID string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedID = GetRequestID(r.Context())
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set(headerXRequestID, invalidID)
+	rec := httptest.NewRecorder()
+
+	// Act
+	RequestID(handler).ServeHTTP(rec, req)
+
+	// Assert
+	assert.NotEqual(t, invalidID, capturedID, "should NOT passthrough invalid charset")
+	assert.Len(t, capturedID, 36, "should generate new valid UUID v7")
 }
 
 func TestRequestID_ResponseHeader(t *testing.T) {
@@ -101,18 +151,17 @@ func TestGetRequestID_ReturnsEmptyForWrongType(t *testing.T) {
 	assert.Empty(t, actualID, "should return empty string when value is wrong type")
 }
 
-func TestGenerateRequestID_HexFormat(t *testing.T) {
+func TestGenerateRequestID_UUIDFormat(t *testing.T) {
 	// Act
 	id := generateRequestID()
 
 	// Assert
-	assert.Len(t, id, 32, "generated ID should be 32 hex characters (16 bytes)")
+	assert.Len(t, id, 36, "generated ID should be 36 characters (UUID)")
 
-	// Verify it's valid hex
-	for _, c := range id {
-		assert.True(t, (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'),
-			"character %c should be valid lowercase hex", c)
-	}
+	// Verify it's valid UUID
+	parsed, err := uuid.Parse(id)
+	assert.NoError(t, err, "should be valid UUID")
+	assert.Equal(t, uuid.Version(7), parsed.Version(), "should be UUID v7")
 }
 
 func TestGenerateRequestID_Unique(t *testing.T) {

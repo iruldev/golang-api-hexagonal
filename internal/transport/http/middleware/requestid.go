@@ -2,13 +2,9 @@ package middleware
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
-	"io"
 	"net/http"
-	"strconv"
-	"time"
+
+	"github.com/google/uuid"
 )
 
 // contextKey is a custom type to avoid context key collisions.
@@ -28,7 +24,8 @@ func RequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestID := r.Header.Get(headerXRequestID)
 
-		if requestID == "" {
+		// Validate request ID (prevent DoS/DB truncation/Injection)
+		if !isValidRequestID(requestID) {
 			requestID = generateRequestID()
 		}
 
@@ -51,14 +48,39 @@ func GetRequestID(ctx context.Context) string {
 	return ""
 }
 
-// generateRequestID creates a new random request ID.
-// It generates 16 random bytes and encodes them as hex (32 characters).
+// SetRequestID returns a new context with the given request ID.
+// This is useful for testing handlers that depend on RequestID from context.
+func SetRequestID(ctx context.Context, requestID string) context.Context {
+	return context.WithValue(ctx, requestIDKey, requestID)
+}
+
+// generateRequestID creates a new UUID v7 request ID.
 func generateRequestID() string {
-	b := make([]byte, 16)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		// Fallback to time-based hash to avoid empty/partial IDs if rand fails
-		fallback := sha256.Sum256([]byte(strconv.FormatInt(time.Now().UnixNano(), 10)))
-		copy(b, fallback[:])
+	id, err := uuid.NewV7()
+	if err != nil {
+		// Fallback to v4 if v7 fails (rare)
+		return uuid.NewString()
 	}
-	return hex.EncodeToString(b)
+	return id.String()
+}
+
+// isValidRequestID checks if the ID is safe and valid (length <= 50, printable ASCII safe chars).
+func isValidRequestID(id string) bool {
+	if id == "" || len(id) > 50 {
+		return false
+	}
+	// Allow alphanumeric, hyphen, underscore, colon, dot
+	for _, c := range id {
+		if !isSafeChar(c) {
+			return false
+		}
+	}
+	return true
+}
+
+func isSafeChar(c rune) bool {
+	return (c >= 'a' && c <= 'z') ||
+		(c >= 'A' && c <= 'Z') ||
+		(c >= '0' && c <= '9') ||
+		c == '-' || c == '_' || c == ':' || c == '.'
 }

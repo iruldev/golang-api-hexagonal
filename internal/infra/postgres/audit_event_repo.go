@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/google/uuid"
 
@@ -35,11 +36,14 @@ func (r *AuditEventRepo) Create(ctx context.Context, q domain.Querier, event *do
 	// Handle nullable ActorID
 	var actorID *uuid.UUID
 	if !event.ActorID.IsEmpty() {
-		parsed, err := uuid.Parse(string(event.ActorID))
-		if err != nil {
-			return fmt.Errorf("%s: parse ActorID: %w", op, err)
+		// Attempt to parse. If it's not a valid UUID (e.g. system user, legacy ID),
+		// we treat it as NULL (system/unauthenticated) rather than failing the transaction.
+		if parsed, err := uuid.Parse(string(event.ActorID)); err == nil {
+			actorID = &parsed
+		} else {
+			// Log the dropped ActorID for debugging integration issues
+			slog.Warn("audit_event_repo: dropping invalid ActorID", "op", op, "actor_id", event.ActorID, "error", err)
 		}
-		actorID = &parsed
 	}
 
 	_, err = q.Exec(ctx, `
