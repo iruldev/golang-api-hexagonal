@@ -82,12 +82,19 @@ func NewRouter(
 	// SecureHeaders FIRST - ensures security headers on ALL responses including errors
 	r.Use(middleware.SecureHeaders)
 	r.Use(middleware.RequestID)
+
+	// Story 2.6: Only trust proxy headers (X-Forwarded-For, X-Real-IP) when explicitly configured.
+	// This prevents IP spoofing when not behind a trusted proxy.
+	// MUST be before Logger and Metrics so they see the real IP.
+	if rateLimitConfig.TrustProxy {
+		r.Use(chiMiddleware.RealIP)
+	}
+
 	if tracingEnabled {
 		r.Use(middleware.Tracing)
 	}
 	r.Use(middleware.Metrics(httpMetrics))
 	r.Use(middleware.RequestLogger(logger))
-	r.Use(chiMiddleware.RealIP)
 	r.Use(middleware.BodyLimiter(maxRequestSize))
 	r.Use(chiMiddleware.Recoverer)
 
@@ -146,6 +153,8 @@ func NewInternalRouter(
 	r.Use(chiMiddleware.Recoverer)
 	// Apply metrics middleware to track requests to internal endpoints
 	r.Use(middleware.Metrics(httpMetrics))
+	// Internal router logs are useful for debugging scraping issues
+	r.Use(middleware.RequestLogger(logger))
 
 	// Metrics endpoint (internal only)
 	r.Handle("/metrics", promhttp.HandlerFor(metricsReg, promhttp.HandlerOpts{}))

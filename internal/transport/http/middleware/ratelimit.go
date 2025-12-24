@@ -33,7 +33,7 @@ type RateLimitConfig struct {
 //
 // AC #1: Unauthenticated requests use resolved client IP as key.
 // AC #2: Authenticated requests use claims.Subject (userId) as key.
-// AC #3,4: IP resolution respects TRUST_PROXY setting.
+// AC #3,4: IP resolution relies on global RealIP middleware (respects TRUST_PROXY).
 // AC #5: Returns 429 with RFC 7807 and Retry-After header.
 // AC #6: Uses go-chi/httprate.
 // AC #7: Rate limit is configurable via RATE_LIMIT_RPS.
@@ -41,7 +41,7 @@ func RateLimiter(cfg RateLimitConfig) func(http.Handler) http.Handler {
 	return httprate.Limit(
 		cfg.RequestsPerSecond,
 		RateLimitWindow,
-		httprate.WithKeyFuncs(keyFunc(cfg.TrustProxy)),
+		httprate.WithKeyFuncs(keyFunc()),
 		httprate.WithLimitHandler(rateLimitExceededHandler),
 	)
 }
@@ -49,7 +49,7 @@ func RateLimiter(cfg RateLimitConfig) func(http.Handler) http.Handler {
 // keyFunc returns the rate limit key based on JWT claims or IP.
 // It checks for authenticated user first (per-user limiting),
 // then falls back to IP-based limiting for unauthenticated requests.
-func keyFunc(trustProxy bool) httprate.KeyFunc {
+func keyFunc() httprate.KeyFunc {
 	return func(r *http.Request) (string, error) {
 		// Try to get user ID from JWT claims first (AC #2)
 		if claims := ctxutil.GetClaims(r.Context()); claims != nil {
@@ -60,36 +60,20 @@ func keyFunc(trustProxy bool) httprate.KeyFunc {
 		}
 
 		// Fallback to IP-based limiting (AC #1)
-		ip := resolveClientIP(r, trustProxy)
+		ip := resolveClientIP(r)
 		return "ip:" + ip, nil
 	}
 }
 
 // resolveClientIP extracts the client IP address from the request.
-// If trustProxy is true, it checks X-Forwarded-For and X-Real-IP headers first.
-// Otherwise, it uses the RemoteAddr (AC #3, #4).
-func resolveClientIP(r *http.Request, trustProxy bool) string {
-	if trustProxy {
-		// AC #3: Check X-Forwarded-For first (comma-separated, leftmost is client)
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			// Take the first IP in the comma-separated list
-			if idx := strings.Index(xff, ","); idx != -1 {
-				return strings.TrimSpace(xff[:idx])
-			}
-			return strings.TrimSpace(xff)
-		}
-
-		// Check X-Real-IP as fallback
-		if xri := r.Header.Get("X-Real-IP"); xri != "" {
-			return strings.TrimSpace(xri)
-		}
-	}
-
-	// AC #4: Use RemoteAddr when TRUST_PROXY=false
-	// RemoteAddr format is "ip:port", extract just the IP
+// It relies on r.RemoteAddr, which is normalized by the global RealIP middleware
+// if TRUST_PROXY is enabled.
+func resolveClientIP(r *http.Request) string {
+	// AC #4: Use RemoteAddr (already normalized by RealIP middleware if configured)
+	// RemoteAddr format is "ip:port" (default) or "ip" (if RealIP ran)
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		// If SplitHostPort fails, RemoteAddr might not have a port
+		// If SplitHostPort fails (e.g. valid IP with no port), use as is
 		return r.RemoteAddr
 	}
 	return ip

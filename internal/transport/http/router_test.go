@@ -248,3 +248,100 @@ func TestNewInternalRouter_MetricsAvailable(t *testing.T) {
 	assert.Equal(t, stdhttp.StatusOK, w.Code, "/metrics should be available on internal router")
 	// Note: Empty registry returns empty metrics, which is valid
 }
+
+// =============================================================================
+// Story 2.6: TRUST_PROXY-Aware RealIP Tests
+// =============================================================================
+
+// TestNewRouter_TrustProxyFalse_IgnoresXFF tests that X-Forwarded-For is ignored when TrustProxy=false
+func TestNewRouter_TrustProxyFalse_IgnoresXFF(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	metricsReg := prometheus.NewRegistry()
+	mockMetrics := new(MockHTTPMetrics)
+	mockMetrics.On("IncRequest", mock.Anything, mock.Anything, mock.Anything).Return()
+	mockMetrics.On("ObserveRequestDuration", mock.Anything, mock.Anything, mock.Anything).Return()
+
+	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		// Write the RemoteAddr to response body to verify it wasn't modified by RealIP
+		w.WriteHeader(stdhttp.StatusOK)
+		w.Write([]byte(r.RemoteAddr))
+	})
+	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
+
+	jwtConfig := JWTConfig{Enabled: false}
+	rateLimitConfig := RateLimitConfig{
+		RequestsPerSecond: 100,
+		TrustProxy:        false, // RealIP middleware should NOT be applied
+	}
+
+	router := NewRouter(
+		logger,
+		false,
+		metricsReg,
+		mockMetrics,
+		healthHandler,
+		readyHandler,
+		nil,
+		1024,
+		jwtConfig,
+		rateLimitConfig,
+	)
+
+	// Request with X-Forwarded-For header - should be IGNORED
+	req := httptest.NewRequest("GET", "/health", nil)
+	req.RemoteAddr = "192.168.1.100:12345"
+	req.Header.Set("X-Forwarded-For", "203.0.113.50")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, stdhttp.StatusOK, w.Code)
+	// RemoteAddr should NOT be modified (RealIP middleware not applied)
+	assert.Contains(t, w.Body.String(), "192.168.1.100", "RemoteAddr should be original, not X-Forwarded-For")
+	assert.NotContains(t, w.Body.String(), "203.0.113.50", "X-Forwarded-For should be ignored when TrustProxy=false")
+}
+
+// TestNewRouter_TrustProxyTrue_UsesXFF tests that X-Forwarded-For is used when TrustProxy=true
+func TestNewRouter_TrustProxyTrue_UsesXFF(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	metricsReg := prometheus.NewRegistry()
+	mockMetrics := new(MockHTTPMetrics)
+	mockMetrics.On("IncRequest", mock.Anything, mock.Anything, mock.Anything).Return()
+	mockMetrics.On("ObserveRequestDuration", mock.Anything, mock.Anything, mock.Anything).Return()
+
+	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		// Write the RemoteAddr to response body to verify it WAS modified by RealIP
+		w.WriteHeader(stdhttp.StatusOK)
+		w.Write([]byte(r.RemoteAddr))
+	})
+	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
+
+	jwtConfig := JWTConfig{Enabled: false}
+	rateLimitConfig := RateLimitConfig{
+		RequestsPerSecond: 100,
+		TrustProxy:        true, // RealIP middleware SHOULD be applied
+	}
+
+	router := NewRouter(
+		logger,
+		false,
+		metricsReg,
+		mockMetrics,
+		healthHandler,
+		readyHandler,
+		nil,
+		1024,
+		jwtConfig,
+		rateLimitConfig,
+	)
+
+	// Request with X-Forwarded-For header - should be USED
+	req := httptest.NewRequest("GET", "/health", nil)
+	req.RemoteAddr = "192.168.1.100:12345"
+	req.Header.Set("X-Forwarded-For", "203.0.113.50")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, stdhttp.StatusOK, w.Code)
+	// RemoteAddr SHOULD be modified by RealIP middleware
+	assert.Contains(t, w.Body.String(), "203.0.113.50", "RemoteAddr should be from X-Forwarded-For when TrustProxy=true")
+}
