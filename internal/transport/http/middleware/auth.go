@@ -103,7 +103,8 @@ func JWTAuth(cfg JWTAuthConfig) func(http.Handler) http.Handler {
 			// Validate Bearer token format
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-				logger.WarnContext(r.Context(), "auth failed: invalid header format", "header", authHeader)
+				// Story 2.9: Never log Authorization header - it contains sensitive tokens
+				logger.WarnContext(r.Context(), "auth failed: invalid header format")
 				writeUnauthorized(w, r)
 				return
 			}

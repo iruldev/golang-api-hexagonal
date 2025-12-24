@@ -28,6 +28,8 @@ type GetUserResponse struct {
 // - Authorization checks happen at START of use case, before any DB calls.
 // - Admins can get any user, regular users can only get their own profile.
 // Story 2.8: Includes audit logging for authorization decisions.
+const OpGetUser = "GetUser"
+
 type GetUserUseCase struct {
 	userRepo domain.UserRepository
 	db       domain.Querier
@@ -63,7 +65,7 @@ func (uc *GetUserUseCase) Execute(ctx context.Context, req GetUserRequest) (GetU
 			"resourceId", req.ID,
 		)
 		return GetUserResponse{}, &app.AppError{
-			Op:      "GetUser",
+			Op:      OpGetUser,
 			Code:    app.CodeForbidden,
 			Message: "Access denied",
 			Err:     app.ErrNoAuthContext,
@@ -79,7 +81,7 @@ func (uc *GetUserUseCase) Execute(ctx context.Context, req GetUserRequest) (GetU
 			"resourceId", req.ID,
 		)
 		return GetUserResponse{}, &app.AppError{
-			Op:      "GetUser",
+			Op:      OpGetUser,
 			Code:    app.CodeForbidden,
 			Message: "Access denied",
 		}
@@ -95,7 +97,7 @@ func (uc *GetUserUseCase) Execute(ctx context.Context, req GetUserRequest) (GetU
 			"resourceId", req.ID,
 		)
 		return GetUserResponse{}, &app.AppError{
-			Op:      "GetUser",
+			Op:      OpGetUser,
 			Code:    app.CodeForbidden,
 			Message: "Access denied",
 		}
@@ -112,14 +114,14 @@ func (uc *GetUserUseCase) Execute(ctx context.Context, req GetUserRequest) (GetU
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
 			return GetUserResponse{}, &app.AppError{
-				Op:      "GetUser",
+				Op:      OpGetUser,
 				Code:    app.CodeUserNotFound,
 				Message: "User not found",
 				Err:     err,
 			}
 		}
 		return GetUserResponse{}, &app.AppError{
-			Op:      "GetUser",
+			Op:      OpGetUser,
 			Code:    app.CodeInternalError,
 			Message: "Failed to get user",
 			Err:     err,
