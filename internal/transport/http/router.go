@@ -100,7 +100,7 @@ func NewRouter(
 				if now == nil {
 					now = time.Now
 				}
-				r.Use(middleware.JWTAuth(jwtConfig.Secret, now))
+				r.Use(middleware.JWTAuth(jwtConfig.Secret, logger, now))
 				r.Use(middleware.AuthContextBridge)
 			}
 

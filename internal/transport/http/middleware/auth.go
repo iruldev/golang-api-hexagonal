@@ -4,6 +4,7 @@ package middleware
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -27,6 +28,9 @@ func isClaimsValidated(ctx context.Context) bool {
 	return ok && val
 }
 
+// AllowedAlgorithm is the only allowed JWT signing method (HS256).
+const AllowedAlgorithm = "HS256"
+
 // NormalizeRole lowercases and trims a role string for consistent comparisons.
 func NormalizeRole(role string) string {
 	return strings.ToLower(strings.TrimSpace(role))
@@ -42,9 +46,9 @@ func NormalizeRole(role string) string {
 //   - Only HS256 algorithm is accepted (AC #7, prevents algorithm confusion attacks)
 //   - No error details are exposed in responses (prevents enumeration/timing attacks)
 //   - Token must be in Authorization: Bearer <token> format
-func JWTAuth(secret []byte, now func() time.Time) func(http.Handler) http.Handler {
+func JWTAuth(secret []byte, logger *slog.Logger, now func() time.Time) func(http.Handler) http.Handler {
 	parser := jwt.NewParser(
-		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithValidMethods([]string{AllowedAlgorithm}),
 		jwt.WithTimeFunc(now), // Inject time function for exp/nbf validation (AC #3)
 	)
 
@@ -53,6 +57,7 @@ func JWTAuth(secret []byte, now func() time.Time) func(http.Handler) http.Handle
 			// Extract token from Authorization header (AC #1)
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
+				logger.DebugContext(r.Context(), "auth failed: missing specific authentication header")
 				writeUnauthorized(w, r)
 				return
 			}
@@ -60,6 +65,7 @@ func JWTAuth(secret []byte, now func() time.Time) func(http.Handler) http.Handle
 			// Validate Bearer token format
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+				logger.WarnContext(r.Context(), "auth failed: invalid header format", "header", authHeader)
 				writeUnauthorized(w, r)
 				return
 			}
@@ -75,12 +81,14 @@ func JWTAuth(secret []byte, now func() time.Time) func(http.Handler) http.Handle
 			if err != nil || !token.Valid {
 				// AC #2, #4: Return 401 for any validation failure (malformed, wrong signature, expired)
 				// Do NOT expose the specific reason for failure (security requirement)
+				logger.WarnContext(r.Context(), "auth failed: invalid token", "error", err)
 				writeUnauthorized(w, r)
 				return
 			}
 
 			// Store claims in context for downstream handlers (AC #5)
 			if strings.TrimSpace(claims.Subject) == "" {
+				logger.WarnContext(r.Context(), "auth failed: empty subject in claims")
 				writeUnauthorized(w, r)
 				return
 			}

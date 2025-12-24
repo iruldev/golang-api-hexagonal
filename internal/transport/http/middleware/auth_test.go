@@ -4,6 +4,8 @@ package middleware
 
 import (
 	"encoding/json"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,6 +31,11 @@ func nowFunc() func() time.Time {
 	return func() time.Time { return fixedTime }
 }
 
+// noopLogger returns a logger that discards all output
+func noopLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
 // generateValidToken creates a valid JWT token for testing
 func generateValidToken(t *testing.T, expOffset time.Duration) string {
 	t.Helper()
@@ -52,7 +59,7 @@ func TestJWTAuth_MissingHeader(t *testing.T) {
 		handlerCalled = true
 	})
 
-	middleware := JWTAuth(testSecret, nowFunc())
+	middleware := JWTAuth(testSecret, noopLogger(), nowFunc())
 	wrapped := middleware(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -78,7 +85,7 @@ func TestJWTAuth_MalformedToken(t *testing.T) {
 		handlerCalled = true
 	})
 
-	middleware := JWTAuth(testSecret, nowFunc())
+	middleware := JWTAuth(testSecret, noopLogger(), nowFunc())
 	wrapped := middleware(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -114,7 +121,7 @@ func TestJWTAuth_InvalidSignature(t *testing.T) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, _ := token.SignedString(wrongSecret)
 
-	middleware := JWTAuth(testSecret, nowFunc())
+	middleware := JWTAuth(testSecret, noopLogger(), nowFunc())
 	wrapped := middleware(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -137,7 +144,7 @@ func TestJWTAuth_ExpiredToken(t *testing.T) {
 	// Token expired 1 hour ago
 	tokenString := generateValidToken(t, -1*time.Hour)
 
-	middleware := JWTAuth(testSecret, nowFunc())
+	middleware := JWTAuth(testSecret, noopLogger(), nowFunc())
 	wrapped := middleware(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -163,7 +170,7 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 	// Token expires in 1 hour (valid)
 	tokenString := generateValidToken(t, 1*time.Hour)
 
-	middleware := JWTAuth(testSecret, nowFunc())
+	middleware := JWTAuth(testSecret, noopLogger(), nowFunc())
 	wrapped := middleware(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -198,7 +205,7 @@ func TestJWTAuth_SetsAuthContext(t *testing.T) {
 	tokenString, err := token.SignedString(testSecret)
 	require.NoError(t, err)
 
-	middleware := JWTAuth(testSecret, nowFunc())
+	middleware := JWTAuth(testSecret, noopLogger(), nowFunc())
 	wrapped := middleware(AuthContextBridge(handler))
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -234,7 +241,7 @@ func TestJWTAuth_NormalizesRoleCase(t *testing.T) {
 	tokenString, err := token.SignedString(testSecret)
 	require.NoError(t, err)
 
-	middleware := JWTAuth(testSecret, nowFunc())
+	middleware := JWTAuth(testSecret, noopLogger(), nowFunc())
 	wrapped := middleware(AuthContextBridge(handler))
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -262,7 +269,7 @@ func TestJWTAuth_BearerCaseInsensitive(t *testing.T) {
 
 			tokenString := generateValidToken(t, 1*time.Hour)
 
-			middleware := JWTAuth(testSecret, nowFunc())
+			middleware := JWTAuth(testSecret, noopLogger(), nowFunc())
 			wrapped := middleware(handler)
 
 			req := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -285,7 +292,7 @@ func TestJWTAuth_InvalidAuthScheme(t *testing.T) {
 
 	tokenString := generateValidToken(t, 1*time.Hour)
 
-	middleware := JWTAuth(testSecret, nowFunc())
+	middleware := JWTAuth(testSecret, noopLogger(), nowFunc())
 	wrapped := middleware(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -304,7 +311,7 @@ func TestJWTAuth_EmptyBearerToken(t *testing.T) {
 		handlerCalled = true
 	})
 
-	middleware := JWTAuth(testSecret, nowFunc())
+	middleware := JWTAuth(testSecret, noopLogger(), nowFunc())
 	wrapped := middleware(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -333,7 +340,7 @@ func TestJWTAuth_WrongAlgorithm(t *testing.T) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS384, claims)
 	tokenString, _ := token.SignedString(testSecret)
 
-	middleware := JWTAuth(testSecret, nowFunc())
+	middleware := JWTAuth(testSecret, noopLogger(), nowFunc())
 	wrapped := middleware(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -344,6 +351,35 @@ func TestJWTAuth_WrongAlgorithm(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	assert.False(t, handlerCalled, "handler should not be called for wrong algorithm")
+}
+
+func TestJWTAuth_AlgNone(t *testing.T) {
+	handlerCalled := false
+	handler := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		handlerCalled = true
+	})
+
+	// Create token with "none" algorithm (critical vulnerability check)
+	token := jwt.New(jwt.SigningMethodNone)
+	claims := token.Claims.(jwt.MapClaims)
+	claims["sub"] = "user-123"
+	claims["exp"] = float64(fixedTime.Add(1 * time.Hour).Unix())
+
+	// Unsigned token
+	tokenString, err := token.SignedString(jwt.UnsafeAllowNoneSignatureType)
+	require.NoError(t, err)
+
+	middleware := JWTAuth(testSecret, noopLogger(), nowFunc())
+	wrapped := middleware(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenString)
+	rr := httptest.NewRecorder()
+
+	wrapped.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	assert.False(t, handlerCalled, "handler should not be called for alg:none")
 }
 
 func TestJWTAuth_TimeInjection(t *testing.T) {
@@ -367,7 +403,7 @@ func TestJWTAuth_TimeInjection(t *testing.T) {
 		})
 
 		beforeExp := func() time.Time { return expTime.Add(-1 * time.Hour) }
-		middleware := JWTAuth(testSecret, beforeExp)
+		middleware := JWTAuth(testSecret, noopLogger(), beforeExp)
 		wrapped := middleware(handler)
 
 		req := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -388,7 +424,7 @@ func TestJWTAuth_TimeInjection(t *testing.T) {
 		})
 
 		afterExp := func() time.Time { return expTime.Add(1 * time.Hour) }
-		middleware := JWTAuth(testSecret, afterExp)
+		middleware := JWTAuth(testSecret, noopLogger(), afterExp)
 		wrapped := middleware(handler)
 
 		req := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -423,7 +459,7 @@ func TestJWTAuth_GetClaimsFromContext(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	middleware := JWTAuth(testSecret, nowFunc())
+	middleware := JWTAuth(testSecret, noopLogger(), nowFunc())
 	wrapped := middleware(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
