@@ -53,6 +53,9 @@ type RateLimitConfig struct {
 	TrustProxy bool
 }
 
+// BasePath is the versioned base path for the API.
+const BasePath = "/api/v1"
+
 // NewRouter creates a new chi router with the provided handlers and logger.
 //
 // Middleware ordering:
@@ -106,7 +109,7 @@ func NewRouter(
 
 	// API v1 routes (protected when JWT is enabled)
 	if userHandler != nil {
-		r.Route("/api/v1", func(r chi.Router) {
+		r.Route(BasePath, func(r chi.Router) {
 			// Apply JWT auth middleware if enabled
 			if jwtConfig.Enabled {
 				now := jwtConfig.Now

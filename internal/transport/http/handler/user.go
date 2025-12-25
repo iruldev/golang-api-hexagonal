@@ -3,6 +3,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -30,9 +31,10 @@ type listUsersExecutor interface {
 
 // UserHandler handles user-related HTTP requests.
 type UserHandler struct {
-	createUC createUserExecutor
-	getUC    getUserExecutor
-	listUC   listUsersExecutor
+	createUC     createUserExecutor
+	getUC        getUserExecutor
+	listUC       listUsersExecutor
+	resourcePath string
 }
 
 // NewUserHandler creates a new UserHandler.
@@ -40,11 +42,13 @@ func NewUserHandler(
 	createUC createUserExecutor,
 	getUC getUserExecutor,
 	listUC listUsersExecutor,
+	resourcePath string,
 ) *UserHandler {
 	return &UserHandler{
-		createUC: createUC,
-		getUC:    getUC,
-		listUC:   listUC,
+		createUC:     createUC,
+		getUC:        getUC,
+		listUC:       listUC,
+		resourcePath: resourcePath,
 	}
 }
 
@@ -95,6 +99,11 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	// Map to response
 	userResp := contract.ToUserResponse(resp.User)
+
+	// Set Location header for 201 Created (before writing response body)
+	location := fmt.Sprintf("%s/%s", h.resourcePath, resp.User.ID)
+	w.Header().Set("Location", location)
+
 	_ = contract.WriteJSON(w, http.StatusCreated, contract.DataResponse[contract.UserResponse]{Data: userResp})
 }
 

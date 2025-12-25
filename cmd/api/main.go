@@ -145,7 +145,7 @@ func run() error {
 	listUsersUC := user.NewListUsersUseCase(userRepo, querier)
 
 	// Create user handler
-	userHandler := handler.NewUserHandler(createUserUC, getUserUC, listUsersUC)
+	userHandler := handler.NewUserHandler(createUserUC, getUserUC, listUsersUC, httpTransport.BasePath+"/users")
 
 	// Initialize Prometheus metrics registry
 	metricsReg, httpMetrics := observability.NewMetricsRegistry()

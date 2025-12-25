@@ -20,6 +20,7 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/app/user"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
+	httpTransport "github.com/iruldev/golang-api-hexagonal/internal/transport/http"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
@@ -55,6 +56,8 @@ func (m *MockListUsersUseCase) Execute(ctx context.Context, req user.ListUsersRe
 }
 
 // Helpers for creating test users
+var testUserResourcePath = httpTransport.BasePath + "/users"
+
 func createTestUser() domain.User {
 	return domain.User{
 		ID:        domain.ID("019400a0-1234-7abc-8def-1234567890ab"),
@@ -86,11 +89,11 @@ func TestUserHandler_CreateUser_Success(t *testing.T) {
 			req.LastName == "Doe"
 	})).Return(user.CreateUserResponse{User: expectedUser}, nil)
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	// Create request
 	body := `{"email":"test@example.com","firstName":"John","lastName":"Doe"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, testUserResourcePath, bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
@@ -114,6 +117,11 @@ func TestUserHandler_CreateUser_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, uuid.Version(7), parsedID.Version())
 
+	// Verify Location header is set correctly (Story 4.6)
+	location := rr.Header().Get("Location")
+	assert.NotEmpty(t, location, "Location header should be set on 201 Created")
+	assert.Equal(t, testUserResourcePath+"/"+idStr, location, "Location should point to created resource")
+
 	mockCreateUC.AssertExpectations(t)
 }
 
@@ -122,11 +130,11 @@ func TestUserHandler_CreateUser_InvalidEmail(t *testing.T) {
 	mockGetUC := new(MockGetUserUseCase)
 	mockListUC := new(MockListUsersUseCase)
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	// Create request with invalid email
 	body := `{"email":"invalid-email","firstName":"John","lastName":"Doe"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, testUserResourcePath, bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
@@ -169,11 +177,11 @@ func TestUserHandler_CreateUser_DuplicateEmail(t *testing.T) {
 			Err:     domain.ErrEmailAlreadyExists,
 		})
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	// Create request
 	body := `{"email":"existing@example.com","firstName":"John","lastName":"Doe"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, testUserResourcePath, bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
@@ -199,11 +207,11 @@ func TestUserHandler_CreateUser_InvalidJSONBody(t *testing.T) {
 	mockGetUC := new(MockGetUserUseCase)
 	mockListUC := new(MockListUsersUseCase)
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	// Create request with invalid JSON
 	body := `{"email": invalid}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, testUserResourcePath, bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
@@ -219,11 +227,11 @@ func TestUserHandler_CreateUser_UnknownField(t *testing.T) {
 	mockGetUC := new(MockGetUserUseCase)
 	mockListUC := new(MockListUsersUseCase)
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	// Create request with unknown field
 	body := `{"email":"test@example.com","firstName":"John","lastName":"Doe","unknownField":"val"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, testUserResourcePath, bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
@@ -252,11 +260,11 @@ func TestUserHandler_CreateUser_TrailingData(t *testing.T) {
 	mockGetUC := new(MockGetUserUseCase)
 	mockListUC := new(MockListUsersUseCase)
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	// Create request with trailing data
 	body := `{"email":"test@example.com","firstName":"John","lastName":"Doe"}extra`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, testUserResourcePath, bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
@@ -295,10 +303,10 @@ func TestUserHandler_GetUser_Success(t *testing.T) {
 	mockGetUC.On("Execute", mock.Anything, user.GetUserRequest{ID: expectedUser.ID}).
 		Return(user.GetUserResponse{User: expectedUser}, nil)
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	// Create request with chi router context
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+userID, nil)
+	req := httptest.NewRequest(http.MethodGet, testUserResourcePath+"/"+userID, nil)
 	rr := httptest.NewRecorder()
 
 	// Set up chi router context with URL param
@@ -339,10 +347,10 @@ func TestUserHandler_GetUser_NotFound(t *testing.T) {
 			Err:     domain.ErrUserNotFound,
 		})
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	// Create request with chi router context
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+userID, nil)
+	req := httptest.NewRequest(http.MethodGet, testUserResourcePath+"/"+userID, nil)
 	rr := httptest.NewRecorder()
 
 	rctx := chi.NewRouteContext()
@@ -371,10 +379,10 @@ func TestUserHandler_GetUser_InvalidUUID(t *testing.T) {
 	mockGetUC := new(MockGetUserUseCase)
 	mockListUC := new(MockListUsersUseCase)
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	// Create request with invalid UUID
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/invalid-uuid", nil)
+	req := httptest.NewRequest(http.MethodGet, testUserResourcePath+"/invalid-uuid", nil)
 	rr := httptest.NewRecorder()
 
 	rctx := chi.NewRouteContext()
@@ -401,10 +409,10 @@ func TestUserHandler_GetUser_InvalidUUIDVersion(t *testing.T) {
 	mockGetUC := new(MockGetUserUseCase)
 	mockListUC := new(MockListUsersUseCase)
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	nonV7 := uuid.New().String() // uuid v4 by default
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+nonV7, nil)
+	req := httptest.NewRequest(http.MethodGet, testUserResourcePath+"/"+nonV7, nil)
 	rr := httptest.NewRecorder()
 
 	rctx := chi.NewRouteContext()
@@ -422,10 +430,10 @@ func TestUserHandler_GetUser_EmptyID(t *testing.T) {
 	mockGetUC := new(MockGetUserUseCase)
 	mockListUC := new(MockListUsersUseCase)
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	// Create request with empty ID
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/", nil)
+	req := httptest.NewRequest(http.MethodGet, testUserResourcePath+"/", nil)
 	rr := httptest.NewRecorder()
 
 	rctx := chi.NewRouteContext()
@@ -464,11 +472,11 @@ func TestUserHandler_GetUser_MixedCaseUUID(t *testing.T) {
 	mockGetUC.On("Execute", mock.Anything, user.GetUserRequest{ID: userID}).
 		Return(user.GetUserResponse{User: expectedUser}, nil)
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	// Create request with MIXED CASE UUID
 	mixedCaseUUID := "019400A0-1234-7ABC-8DEF-1234567890AB"
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+mixedCaseUUID, nil)
+	req := httptest.NewRequest(http.MethodGet, testUserResourcePath+"/"+mixedCaseUUID, nil)
 	rr := httptest.NewRecorder()
 
 	rctx := chi.NewRouteContext()
@@ -489,11 +497,11 @@ func TestUserHandler_GetUser_NilUUID(t *testing.T) {
 	mockGetUC := new(MockGetUserUseCase)
 	mockListUC := new(MockListUsersUseCase)
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	// Nil UUID (all zeros) - technically valid format but version 0, so should fail v7 check
 	nilUUID := "00000000-0000-0000-0000-000000000000"
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+nilUUID, nil)
+	req := httptest.NewRequest(http.MethodGet, testUserResourcePath+"/"+nilUUID, nil)
 	rr := httptest.NewRecorder()
 
 	rctx := chi.NewRouteContext()
@@ -534,10 +542,10 @@ func TestUserHandler_ListUsers_Success(t *testing.T) {
 			PageSize:   10,
 		}, nil)
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	// Create request with query params
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/users?page=1&pageSize=10", nil)
+	req := httptest.NewRequest(http.MethodGet, testUserResourcePath+"?page=1&pageSize=10", nil)
 	rr := httptest.NewRecorder()
 
 	// Execute
@@ -576,10 +584,10 @@ func TestUserHandler_ListUsers_DefaultPagination(t *testing.T) {
 			PageSize:   20,
 		}, nil)
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	// Create request without query params (uses defaults)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
+	req := httptest.NewRequest(http.MethodGet, testUserResourcePath, nil)
 	rr := httptest.NewRecorder()
 
 	// Execute
@@ -612,9 +620,9 @@ func TestUserHandler_ListUsers_MaxPageSize(t *testing.T) {
 			PageSize:   100,
 		}, nil)
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/users?page=1&pageSize=500", nil)
+	req := httptest.NewRequest(http.MethodGet, testUserResourcePath+"?page=1&pageSize=500", nil)
 	rr := httptest.NewRecorder()
 
 	// Execute
@@ -648,11 +656,11 @@ func TestUserHandler_CreateUser_PropagatesRequestIDAndActorID(t *testing.T) {
 		return true
 	})).Return(user.CreateUserResponse{User: expectedUser}, nil)
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	// Create request
 	body := `{"email":"test@example.com","firstName":"John","lastName":"Doe"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, testUserResourcePath, bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	// Setup context with RequestID (simulating middleware)
@@ -695,10 +703,10 @@ func TestUserHandler_CreateUser_EmptyActorIDWhenNoAuthContext(t *testing.T) {
 		return true
 	})).Return(user.CreateUserResponse{User: expectedUser}, nil)
 
-	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
 
 	body := `{"email":"test@example.com","firstName":"John","lastName":"Doe"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, testUserResourcePath, bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	// Setup context with RequestID but NO AuthContext (unauthenticated request)

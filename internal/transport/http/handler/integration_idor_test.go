@@ -79,7 +79,7 @@ func TestIntegration_IDORPrevention(t *testing.T) {
 	mockListUC := new(MockListUsersUseCase)    // from user_test.go
 
 	// Real Handler
-	userHandler := NewUserHandler(mockCreateUC, realUseCase, mockListUC)
+	userHandler := NewUserHandler(mockCreateUC, realUseCase, mockListUC, httpTransport.BasePath+"/users")
 	healthHandler := NewHealthHandler()
 	readyHandler := NewReadyHandler(mockDB, logger)
 
@@ -125,7 +125,7 @@ func TestIntegration_IDORPrevention(t *testing.T) {
 	assert.NoError(t, err)
 
 	// 5. Execute Request: User A requests User B
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/"+userB_ID, nil)
+	req := httptest.NewRequest(http.MethodGet, httpTransport.BasePath+"/users/"+userB_ID, nil)
 	req.Header.Set("Authorization", "Bearer "+tokenString)
 	rec := httptest.NewRecorder()
 

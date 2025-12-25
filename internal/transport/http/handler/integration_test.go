@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -10,10 +12,12 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
+	"github.com/iruldev/golang-api-hexagonal/internal/app/user"
 	sharedMetrics "github.com/iruldev/golang-api-hexagonal/internal/shared/metrics"
 	httpTransport "github.com/iruldev/golang-api-hexagonal/internal/transport/http"
-	"github.com/stretchr/testify/assert"
 )
 
 // fakeDB implements DatabaseChecker for integration-style router tests.
@@ -206,4 +210,59 @@ func TestMetricsEndpoint(t *testing.T) {
 		assert.Contains(t, body, "custom_events_total")
 		assert.Contains(t, body, "# HELP custom_events_total")
 	})
+}
+
+// TestIntegration_CreateUser_LocationHeader verifies that the Location header is correctly set
+// when creating a user, using the full router stack. (Story 4.6)
+func TestIntegration_CreateUser_LocationHeader(t *testing.T) {
+	// 1. Setup Dependencies
+	mockCreateUC := new(MockCreateUserUseCase)
+	mockGetUC := new(MockGetUserUseCase)
+	mockListUC := new(MockListUsersUseCase)
+	mockDB := &fakeDB{pingErr: nil}
+	logger := testLogger()
+	metricsReg, httpMetrics := newTestMetricsRegistry()
+
+	expectedUser := createTestUser()
+
+	// Mock the use case success
+	mockCreateUC.On("Execute", mock.Anything, mock.Anything).
+		Return(user.CreateUserResponse{User: expectedUser}, nil)
+
+	// 2. Setup Router
+	userHandler := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, httpTransport.BasePath+"/users")
+	healthHandler := NewHealthHandler()
+	readyHandler := NewReadyHandler(mockDB, logger)
+
+	r := httpTransport.NewRouter(
+		logger,
+		false,
+		metricsReg,
+		httpMetrics,
+		healthHandler,
+		readyHandler,
+		userHandler,
+		1024,
+		httpTransport.JWTConfig{}, // JWT disabled for this test
+		httpTransport.RateLimitConfig{RequestsPerSecond: 100},
+	)
+
+	// 3. Execute Request
+	body := `{"email":"test@example.com","firstName":"John","lastName":"Doe"}`
+	req := httptest.NewRequest(http.MethodPost, httpTransport.BasePath+"/users", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	// 4. Assertions
+	assert.Equal(t, http.StatusCreated, rec.Code)
+	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"), "Content-Type should be application/json")
+
+	// Verify header presence and content
+	location := rec.Header().Get("Location")
+	assert.NotEmpty(t, location, "Location header should be set")
+
+	expectedLocation := fmt.Sprintf("%s/%s", httpTransport.BasePath+"/users", expectedUser.ID)
+	assert.Equal(t, expectedLocation, location)
 }
