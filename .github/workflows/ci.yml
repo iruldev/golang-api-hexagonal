@@ -46,7 +46,7 @@ jobs:
       # Includes depguard rules to enforce hexagonal architecture boundaries
       # Boundary violations (e.g., domain importing infra) will fail this step
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.7.2
 
