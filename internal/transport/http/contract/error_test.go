@@ -14,6 +14,7 @@ import (
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
 func TestWriteProblemJSON(t *testing.T) {
@@ -25,7 +26,9 @@ func TestWriteProblemJSON(t *testing.T) {
 		wantTitle      string
 		wantType       string
 		wantValField   string
-		wantNoInternal bool // verify internal details not exposed
+		wantNoInternal bool   // verify internal details not exposed
+		requestID      string // optional request ID to inject into context
+		wantRequestID  string // expected request ID in response
 	}{
 		{
 			name: "USER_NOT_FOUND maps to 404",
@@ -114,11 +117,28 @@ func TestWriteProblemJSON(t *testing.T) {
 			wantType:       ProblemBaseURL + "internal-error",
 			wantNoInternal: true,
 		},
+		{
+			name:      "Request ID is propagated",
+			requestID: "req-123",
+			err: &app.AppError{
+				Code:    app.CodeUserNotFound,
+				Message: "User not found",
+			},
+			wantStatus:    http.StatusNotFound,
+			wantCode:      app.CodeUserNotFound,
+			wantTitle:     "User Not Found",
+			wantType:      ProblemBaseURL + "not-found",
+			wantRequestID: "req-123",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/api/v1/users/123", nil)
+			if tt.requestID != "" {
+				ctx := ctxutil.SetRequestID(req.Context(), tt.requestID)
+				req = req.WithContext(ctx)
+			}
 			rec := httptest.NewRecorder()
 
 			WriteProblemJSON(rec, req, tt.err)
@@ -135,6 +155,10 @@ func TestWriteProblemJSON(t *testing.T) {
 			assert.Equal(t, tt.wantType, problem.Type)
 			assert.Equal(t, tt.wantStatus, problem.Status)
 			assert.Equal(t, "/api/v1/users/123", problem.Instance)
+
+			if tt.wantRequestID != "" {
+				assert.Equal(t, tt.wantRequestID, problem.RequestID)
+			}
 
 			if tt.wantCode == app.CodeValidationError {
 				require.Len(t, problem.ValidationErrors, 1)
@@ -353,4 +377,62 @@ func TestProblemDetailOmitEmpty(t *testing.T) {
 
 	// validationErrors should be omitted
 	assert.NotContains(t, parsed, "validationErrors")
+}
+
+func TestWriteProblemJSON_IncludesRequestID(t *testing.T) {
+	// Create request with request ID in context
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/123", nil)
+	ctx := ctxutil.SetRequestID(req.Context(), "test-request-id-abc")
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	err := &app.AppError{
+		Op:      "GetUser",
+		Code:    app.CodeUserNotFound,
+		Message: "User not found",
+		Err:     domain.ErrUserNotFound,
+	}
+
+	WriteProblemJSON(rec, req, err)
+
+	var problem ProblemDetail
+	decodeErr := json.NewDecoder(rec.Body).Decode(&problem)
+	require.NoError(t, decodeErr)
+
+	assert.Equal(t, "test-request-id-abc", problem.RequestID, "request_id should be present in error response")
+}
+
+func TestWriteProblemJSON_NoRequestID_GracefulDegradation(t *testing.T) {
+	// Create request without request ID in context
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/123", nil)
+	rec := httptest.NewRecorder()
+
+	err := &app.AppError{
+		Op:      "GetUser",
+		Code:    app.CodeUserNotFound,
+		Message: "User not found",
+	}
+
+	WriteProblemJSON(rec, req, err)
+
+	var problem ProblemDetail
+	decodeErr := json.NewDecoder(rec.Body).Decode(&problem)
+	require.NoError(t, decodeErr)
+
+	// Empty request_id should be omitted from JSON (omitempty)
+	assert.Empty(t, problem.RequestID, "request_id should be empty when not in context")
+}
+
+func TestNewValidationProblem_IncludesRequestID(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/users", nil)
+	ctx := ctxutil.SetRequestID(req.Context(), "validation-request-123")
+	req = req.WithContext(ctx)
+
+	validationErrors := []ValidationError{
+		{Field: "email", Message: "required"},
+	}
+
+	problem := NewValidationProblem(req, validationErrors)
+
+	assert.Equal(t, "validation-request-123", problem.RequestID, "request_id should be present in validation error")
 }

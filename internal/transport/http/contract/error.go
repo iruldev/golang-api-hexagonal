@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
 // ProblemBaseURL is the default base URL for problem type URIs.
@@ -88,6 +90,7 @@ type ProblemDetail struct {
 	Detail           string            `json:"detail"`
 	Instance         string            `json:"instance"`
 	Code             string            `json:"code"`
+	RequestID        string            `json:"request_id,omitempty"`
 	ValidationErrors []ValidationError `json:"validationErrors,omitempty"`
 }
 
@@ -180,7 +183,15 @@ func writeProblemJSON(w http.ResponseWriter, status int, problem ProblemDetail) 
 		w.Header().Set("Content-Type", "application/problem+json")
 		w.WriteHeader(http.StatusInternalServerError)
 		instanceJSON, _ := json.Marshal(problem.Instance)
-		_, _ = w.Write([]byte(`{"type":"` + problemTypeURL(ProblemTypeInternalErrorSlug) + `","title":"Internal Server Error","status":500,"detail":"An internal error occurred","instance":` + string(instanceJSON) + `,"code":"INTERNAL_ERROR"}`))
+
+		reqIDPart := ""
+		if problem.RequestID != "" {
+			// Securely marshal the ID to handle quotes/special chars
+			idJSON, _ := json.Marshal(problem.RequestID)
+			reqIDPart = `,"request_id":` + string(idJSON)
+		}
+
+		_, _ = w.Write([]byte(`{"type":"` + problemTypeURL(ProblemTypeInternalErrorSlug) + `","title":"Internal Server Error","status":500,"detail":"An internal error occurred","instance":` + string(instanceJSON) + `,"code":"INTERNAL_ERROR"` + reqIDPart + `}`))
 		return
 	}
 
@@ -188,6 +199,7 @@ func writeProblemJSON(w http.ResponseWriter, status int, problem ProblemDetail) 
 	w.WriteHeader(status)
 	_, err = w.Write(payload)
 	if err != nil {
+		log.Printf("Failed to write problem JSON response: %v", err)
 		return
 	}
 }
@@ -221,6 +233,7 @@ func WriteProblemJSON(w http.ResponseWriter, r *http.Request, err error) {
 		Detail:           safeDetail(appErr),
 		Instance:         r.URL.Path,
 		Code:             appErr.Code,
+		RequestID:        ctxutil.GetRequestID(r.Context()),
 		ValidationErrors: validationErrors,
 	}
 
@@ -236,6 +249,7 @@ func NewValidationProblem(r *http.Request, validationErrors []ValidationError) *
 		Detail:           "One or more fields failed validation",
 		Instance:         r.URL.Path,
 		Code:             app.CodeValidationError,
+		RequestID:        ctxutil.GetRequestID(r.Context()),
 		ValidationErrors: validationErrors,
 	}
 }
