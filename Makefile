@@ -346,3 +346,41 @@ migrate-validate: _check-goose
 	done
 	@echo ""
 	@echo "✅ All migration files are valid"
+
+# =============================================================================
+# OpenAPI
+# =============================================================================
+
+## openapi: Validate OpenAPI spec (requires spectral or npx)
+.PHONY: openapi
+openapi:
+	@echo "🔍 Validating OpenAPI spec..."
+	@if command -v docker > /dev/null 2>&1; then \
+		echo "🐳 Running Spectral via Docker..."; \
+		docker run --rm -v $(PWD):/tmp stoplight/spectral lint /tmp/docs/openapi.yaml --ruleset /tmp/.spectral.yaml; \
+	elif command -v npx > /dev/null 2>&1; then \
+		npx --yes @stoplight/spectral-cli lint docs/openapi.yaml; \
+	elif command -v spectral > /dev/null 2>&1; then \
+		spectral lint docs/openapi.yaml; \
+	else \
+		echo "⚠️  No validator found (docker, spectral, or npx)"; \
+		echo "   Checking YAML syntax only..."; \
+		if command -v python3 > /dev/null 2>&1; then \
+			python3 -c "import yaml; yaml.safe_load(open('docs/openapi.yaml'))"; \
+			echo "✅ YAML syntax is valid"; \
+		else \
+			echo "   Install Docker, Node.js (npx), or Spectral for full validation"; \
+		fi; \
+	fi
+
+## openapi-view: View OpenAPI spec in browser (requires redoc-cli or npx)
+.PHONY: openapi-view
+openapi-view:
+	@echo "🌐 Opening OpenAPI spec in browser..."
+	@if command -v npx > /dev/null 2>&1; then \
+		npx --yes @redocly/cli preview-docs docs/openapi.yaml; \
+	else \
+		echo "❌ npx not found. Install Node.js first."; \
+		exit 1; \
+	fi
+

@@ -95,7 +95,7 @@ type ProblemDetail struct {
 	Code             string            `json:"code"`
 	RequestID        string            `json:"request_id,omitempty"`
 	TraceID          string            `json:"trace_id,omitempty"`
-	ValidationErrors []ValidationError `json:"validationErrors,omitempty"`
+	ValidationErrors []ValidationError `json:"validation_errors,omitempty"`
 }
 
 // ValidationError represents a single field validation error.

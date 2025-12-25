@@ -8,7 +8,7 @@ import (
 
 // CreateUserRequest represents the HTTP body for creating a user.
 type CreateUserRequest struct {
-	Email     string `json:"email" validate:"required,email"`
+	Email     string `json:"email" validate:"required,email,max=255"`
 	FirstName string `json:"firstName" validate:"required,min=1,max=100"`
 	LastName  string `json:"lastName" validate:"required,min=1,max=100"`
 }

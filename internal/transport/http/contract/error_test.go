@@ -349,7 +349,7 @@ func TestProblemDetailJSON(t *testing.T) {
 	assert.Contains(t, parsed, "detail")
 	assert.Contains(t, parsed, "instance")
 	assert.Contains(t, parsed, "code")
-	assert.Contains(t, parsed, "validationErrors")
+	assert.Contains(t, parsed, "validation_errors")
 
 	// Verify values
 	assert.Equal(t, ProblemBaseURL+"validation-error", parsed["type"])
@@ -376,7 +376,7 @@ func TestProblemDetailOmitEmpty(t *testing.T) {
 	require.NoError(t, err)
 
 	// validationErrors should be omitted
-	assert.NotContains(t, parsed, "validationErrors")
+	assert.NotContains(t, parsed, "validation_errors")
 }
 
 func TestWriteProblemJSON_IncludesRequestID(t *testing.T) {
