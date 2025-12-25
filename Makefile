@@ -35,7 +35,7 @@ setup:
 	@echo "📦 Installing development tools..."
 	@echo ""
 	@echo "  Installing golangci-lint..."
-	@which golangci-lint > /dev/null || go install github.com/golangci-lint/golangci-lint/cmd/golangci-lint@v2.7.2
+	@which golangci-lint > /dev/null || go install github.com/golangci-lint/golangci-lint/cmd/golangci-lint@v1.64.2
 	@version_gcl=$$(golangci-lint --version 2>/dev/null | head -1); \
 		if [ -z "$$version_gcl" ]; then \
 			echo "    ❌ golangci-lint not available on PATH after install"; \

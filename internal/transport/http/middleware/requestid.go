@@ -7,9 +7,6 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
-// contextKey is a custom type to avoid context key collisions.
-type contextKey string
-
 // headerXRequestID is the HTTP header name for request ID.
 const headerXRequestID = "X-Request-ID"
 
