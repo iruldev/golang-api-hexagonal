@@ -247,6 +247,39 @@ func TestUserHandler_CreateUser_UnknownField(t *testing.T) {
 	assert.Contains(t, problemResp.ValidationErrors[0].Message, "unknown field")
 }
 
+func TestUserHandler_CreateUser_TrailingData(t *testing.T) {
+	mockCreateUC := new(MockCreateUserUseCase)
+	mockGetUC := new(MockGetUserUseCase)
+	mockListUC := new(MockListUsersUseCase)
+
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC)
+
+	// Create request with trailing data
+	body := `{"email":"test@example.com","firstName":"John","lastName":"Doe"}extra`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	// Execute
+	h.CreateUser(rr, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Equal(t, "application/problem+json", rr.Header().Get("Content-Type"))
+
+	var problemResp contract.ProblemDetail
+	err := json.Unmarshal(rr.Body.Bytes(), &problemResp)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusBadRequest, problemResp.Status)
+	assert.Equal(t, app.CodeValidationError, problemResp.Code)
+	assert.NotEmpty(t, problemResp.ValidationErrors)
+
+	// Check for trailing data error
+	assert.Equal(t, "body", problemResp.ValidationErrors[0].Field)
+	assert.Contains(t, problemResp.ValidationErrors[0].Message, "request body contains trailing data")
+}
+
 // =============================================================================
 // GetUser Handler Tests
 // =============================================================================

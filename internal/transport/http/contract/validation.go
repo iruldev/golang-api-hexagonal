@@ -40,6 +40,11 @@ func DecodeAndValidateJSON[T any](r io.Reader, dst *T) ([]ValidationError, error
 					Field:   jsonErr.Field,
 					Message: "invalid type",
 				}}, err
+			case JSONDecodeErrorKindTrailingData:
+				return []ValidationError{{
+					Field:   "body",
+					Message: "request body contains trailing data",
+				}}, err
 			}
 		}
 		return []ValidationError{{

@@ -2,6 +2,7 @@ package contract
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -36,6 +37,8 @@ const (
 	JSONDecodeErrorKindTypeMismatch = "type_mismatch"
 	// JSONDecodeErrorKindEOF indicates unexpected end of input.
 	JSONDecodeErrorKindEOF = "eof"
+	// JSONDecodeErrorKindTrailingData indicates trailing data after JSON object.
+	JSONDecodeErrorKindTrailingData = "trailing_data"
 	// JSONDecodeErrorKindOther indicates an unclassified error.
 	JSONDecodeErrorKindOther = "other"
 )
@@ -49,6 +52,15 @@ func DecodeJSONStrict(r io.Reader, dst any) error {
 
 	if err := dec.Decode(dst); err != nil {
 		return classifyJSONError(err)
+	}
+
+	// Check for trailing data after JSON object
+	if dec.More() {
+		return &JSONDecodeError{
+			Kind:    JSONDecodeErrorKindTrailingData,
+			Message: "trailing data after JSON object",
+			Err:     errors.New("trailing data after JSON object"),
+		}
 	}
 
 	return nil

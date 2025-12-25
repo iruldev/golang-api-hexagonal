@@ -118,3 +118,55 @@ func TestDecodeJSONStrict_EmptyBody(t *testing.T) {
 	require.True(t, ok, "error should be *JSONDecodeError")
 	assert.Equal(t, contract.JSONDecodeErrorKindEOF, jsonErr.Kind)
 }
+
+func TestDecodeJSONStrict_RejectsTrailingText(t *testing.T) {
+	type payload struct {
+		Name string `json:"name"`
+	}
+
+	// Valid JSON followed by trailing text
+	input := `{"name": "John"}extra`
+	var dst payload
+
+	err := contract.DecodeJSONStrict(strings.NewReader(input), &dst)
+
+	require.Error(t, err)
+
+	jsonErr, ok := err.(*contract.JSONDecodeError)
+	require.True(t, ok, "error should be *JSONDecodeError")
+	assert.Equal(t, contract.JSONDecodeErrorKindTrailingData, jsonErr.Kind)
+	assert.Contains(t, jsonErr.Message, "trailing data")
+}
+
+func TestDecodeJSONStrict_RejectsTrailingJSON(t *testing.T) {
+	type payload struct {
+		Name string `json:"name"`
+	}
+
+	// Valid JSON followed by another JSON object
+	input := `{"name": "John"}{"other": "json"}`
+	var dst payload
+
+	err := contract.DecodeJSONStrict(strings.NewReader(input), &dst)
+
+	require.Error(t, err)
+
+	jsonErr, ok := err.(*contract.JSONDecodeError)
+	require.True(t, ok, "error should be *JSONDecodeError")
+	assert.Equal(t, contract.JSONDecodeErrorKindTrailingData, jsonErr.Kind)
+}
+
+func TestDecodeJSONStrict_AllowsTrailingWhitespace(t *testing.T) {
+	type payload struct {
+		Name string `json:"name"`
+	}
+
+	// Valid JSON with trailing whitespace (should be OK)
+	input := `{"name": "John"}   `
+	var dst payload
+
+	err := contract.DecodeJSONStrict(strings.NewReader(input), &dst)
+
+	require.NoError(t, err, "trailing whitespace should be allowed")
+	assert.Equal(t, "John", dst.Name)
+}
