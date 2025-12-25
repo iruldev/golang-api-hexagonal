@@ -144,7 +144,7 @@ func TestWriteProblemJSON(t *testing.T) {
 			WriteProblemJSON(rec, req, tt.err)
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
-			assert.Equal(t, "application/problem+json", rec.Header().Get("Content-Type"))
+			assert.Equal(t, ContentTypeProblemJSON, rec.Header().Get("Content-Type"))
 
 			var problem ProblemDetail
 			err := json.NewDecoder(rec.Body).Decode(&problem)
@@ -186,7 +186,7 @@ func TestWriteValidationError(t *testing.T) {
 	WriteValidationError(rec, req, validationErrors)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Equal(t, "application/problem+json", rec.Header().Get("Content-Type"))
+	assert.Equal(t, ContentTypeProblemJSON, rec.Header().Get("Content-Type"))
 
 	var problem ProblemDetail
 	err := json.NewDecoder(rec.Body).Decode(&problem)
@@ -435,4 +435,88 @@ func TestNewValidationProblem_IncludesRequestID(t *testing.T) {
 	problem := NewValidationProblem(req, validationErrors)
 
 	assert.Equal(t, "validation-request-123", problem.RequestID, "request_id should be present in validation error")
+}
+
+func TestWriteProblemJSON_IncludesTraceID(t *testing.T) {
+	// Create request with trace ID in context
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/123", nil)
+	ctx := ctxutil.SetTraceID(req.Context(), "abc123def456789012345678901234ab")
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	err := &app.AppError{
+		Op:      "GetUser",
+		Code:    app.CodeUserNotFound,
+		Message: "User not found",
+		Err:     domain.ErrUserNotFound,
+	}
+
+	WriteProblemJSON(rec, req, err)
+
+	var problem ProblemDetail
+	decodeErr := json.NewDecoder(rec.Body).Decode(&problem)
+	require.NoError(t, decodeErr)
+
+	assert.Equal(t, "abc123def456789012345678901234ab", problem.TraceID, "trace_id should be present in error response")
+}
+
+func TestWriteProblemJSON_ZeroTraceID_Omitted(t *testing.T) {
+	// Create request with zero trace ID (tracing disabled/not started)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/123", nil)
+	ctx := ctxutil.SetTraceID(req.Context(), ctxutil.EmptyTraceID)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	err := &app.AppError{
+		Op:      "GetUser",
+		Code:    app.CodeUserNotFound,
+		Message: "User not found",
+	}
+
+	WriteProblemJSON(rec, req, err)
+
+	var problem ProblemDetail
+	decodeErr := json.NewDecoder(rec.Body).Decode(&problem)
+	require.NoError(t, decodeErr)
+
+	// Zero trace_id should be omitted (graceful degradation)
+	assert.Empty(t, problem.TraceID, "zero trace_id should be omitted")
+}
+
+func TestWriteProblemJSON_BothRequestIDAndTraceID(t *testing.T) {
+	// Create request with both request_id and trace_id
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/123", nil)
+	ctx := ctxutil.SetRequestID(req.Context(), "req-abc-123")
+	ctx = ctxutil.SetTraceID(ctx, "trace-xyz-789012345678901234")
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	err := &app.AppError{
+		Op:      "GetUser",
+		Code:    app.CodeUserNotFound,
+		Message: "User not found",
+	}
+
+	WriteProblemJSON(rec, req, err)
+
+	var problem ProblemDetail
+	decodeErr := json.NewDecoder(rec.Body).Decode(&problem)
+	require.NoError(t, decodeErr)
+
+	assert.Equal(t, "req-abc-123", problem.RequestID, "request_id should be present")
+	assert.Equal(t, "trace-xyz-789012345678901234", problem.TraceID, "trace_id should be present")
+}
+
+func TestNewValidationProblem_IncludesTraceID(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/users", nil)
+	ctx := ctxutil.SetTraceID(req.Context(), "validation-trace-456")
+	req = req.WithContext(ctx)
+
+	validationErrors := []ValidationError{
+		{Field: "email", Message: "required"},
+	}
+
+	problem := NewValidationProblem(req, validationErrors)
+
+	assert.Equal(t, "validation-trace-456", problem.TraceID, "trace_id should be present in validation error")
 }

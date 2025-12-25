@@ -3,6 +3,7 @@
 package contract
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,6 +35,8 @@ const (
 	ProblemTypeUnauthorizedSlug    = "unauthorized"
 	ProblemTypeForbiddenSlug       = "forbidden"
 	ProblemTypeRateLimitSlug       = "rate-limit-exceeded"
+
+	ContentTypeProblemJSON = "application/problem+json"
 )
 
 type errorDef struct {
@@ -91,6 +94,7 @@ type ProblemDetail struct {
 	Instance         string            `json:"instance"`
 	Code             string            `json:"code"`
 	RequestID        string            `json:"request_id,omitempty"`
+	TraceID          string            `json:"trace_id,omitempty"`
 	ValidationErrors []ValidationError `json:"validationErrors,omitempty"`
 }
 
@@ -180,27 +184,37 @@ func safeValidationMessage(appErr *app.AppError) string {
 func writeProblemJSON(w http.ResponseWriter, status int, problem ProblemDetail) {
 	payload, err := json.Marshal(problem)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/problem+json")
+		w.Header().Set("Content-Type", ContentTypeProblemJSON)
 		w.WriteHeader(http.StatusInternalServerError)
 		instanceJSON, _ := json.Marshal(problem.Instance)
 
-		reqIDPart := ""
+		extraFields := ""
 		if problem.RequestID != "" {
-			// Securely marshal the ID to handle quotes/special chars
 			idJSON, _ := json.Marshal(problem.RequestID)
-			reqIDPart = `,"request_id":` + string(idJSON)
+			extraFields += `,"request_id":` + string(idJSON)
+		}
+		if problem.TraceID != "" {
+			idJSON, _ := json.Marshal(problem.TraceID)
+			extraFields += `,"trace_id":` + string(idJSON)
 		}
 
-		_, _ = w.Write([]byte(`{"type":"` + problemTypeURL(ProblemTypeInternalErrorSlug) + `","title":"Internal Server Error","status":500,"detail":"An internal error occurred","instance":` + string(instanceJSON) + `,"code":"INTERNAL_ERROR"` + reqIDPart + `}`))
+		_, _ = w.Write([]byte(`{"type":"` + problemTypeURL(ProblemTypeInternalErrorSlug) + `","title":"Internal Server Error","status":500,"detail":"An internal error occurred","instance":` + string(instanceJSON) + `,"code":"INTERNAL_ERROR"` + extraFields + `}`))
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/problem+json")
+	w.Header().Set("Content-Type", ContentTypeProblemJSON)
 	w.WriteHeader(status)
 	_, err = w.Write(payload)
 	if err != nil {
 		log.Printf("Failed to write problem JSON response: %v", err)
 		return
+	}
+}
+
+func populateIDs(ctx context.Context, problem *ProblemDetail) {
+	problem.RequestID = ctxutil.GetRequestID(ctx)
+	if traceID := ctxutil.GetTraceID(ctx); traceID != "" && traceID != ctxutil.EmptyTraceID {
+		problem.TraceID = traceID
 	}
 }
 
@@ -233,25 +247,29 @@ func WriteProblemJSON(w http.ResponseWriter, r *http.Request, err error) {
 		Detail:           safeDetail(appErr),
 		Instance:         r.URL.Path,
 		Code:             appErr.Code,
-		RequestID:        ctxutil.GetRequestID(r.Context()),
 		ValidationErrors: validationErrors,
 	}
+
+	populateIDs(r.Context(), &problem)
 
 	writeProblemJSON(w, status, problem)
 }
 
 // NewValidationProblem creates a ProblemDetail for validation errors.
 func NewValidationProblem(r *http.Request, validationErrors []ValidationError) *ProblemDetail {
-	return &ProblemDetail{
+	problem := &ProblemDetail{
 		Type:             problemTypeURL(ProblemTypeValidationErrorSlug),
 		Title:            "Validation Error",
 		Status:           http.StatusBadRequest,
 		Detail:           "One or more fields failed validation",
 		Instance:         r.URL.Path,
 		Code:             app.CodeValidationError,
-		RequestID:        ctxutil.GetRequestID(r.Context()),
 		ValidationErrors: validationErrors,
 	}
+
+	populateIDs(r.Context(), problem)
+
+	return problem
 }
 
 // WriteValidationError writes a validation error response.
