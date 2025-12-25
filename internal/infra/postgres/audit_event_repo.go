@@ -43,7 +43,7 @@ func (r *AuditEventRepo) Create(ctx context.Context, q domain.Querier, event *do
 			actorID = &parsed
 		} else {
 			// Log the dropped ActorID for debugging integration issues
-			observability.LoggerFromContext(ctx, slog.Default()).Warn("audit_event_repo: dropping invalid ActorID", "op", op, "actor_id", event.ActorID, "error", err)
+			observability.LoggerFromContext(ctx, slog.Default()).Warn("audit_event_repo: dropping invalid ActorID", "op", op, "actor_id", event.ActorID, "error", err, "request_id", event.RequestID)
 		}
 	}
 

@@ -46,7 +46,7 @@ func generateRequestID() string {
 	return id.String()
 }
 
-// isValidRequestID checks if the ID is safe and valid (length <= 50, printable ASCII safe chars).
+// isValidRequestID checks if the ID is safe and valid (length <= 64, printable ASCII safe chars).
 func isValidRequestID(id string) bool {
 	if id == "" || len(id) > 64 {
 		return false

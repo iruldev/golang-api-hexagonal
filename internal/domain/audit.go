@@ -149,6 +149,7 @@ type AuditEvent struct {
 // Validate checks if the AuditEvent has required fields.
 // Returns a domain error if validation fails.
 // ActorID is optional (can be empty for system/unauthenticated events).
+// RequestID max length is 64.
 // Validation order: EventType first, then EntityType, then EntityID.
 func (e AuditEvent) Validate() error {
 	if e.ID.IsEmpty() {
@@ -173,6 +174,11 @@ func (e AuditEvent) Validate() error {
 
 	if e.Timestamp.IsZero() {
 		return ErrInvalidTimestamp
+	}
+
+	// Story 2.11 / 3.4: Max length is 64 to match X-Request-ID standard
+	if len(e.RequestID) > 64 {
+		return ErrInvalidRequestID
 	}
 
 	return nil

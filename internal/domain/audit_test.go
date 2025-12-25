@@ -291,3 +291,19 @@ func TestAuditEvent_RequestID(t *testing.T) {
 	}
 	assert.NoError(t, eventNoReqID.Validate())
 }
+
+func TestAuditEvent_RequestID_Validation(t *testing.T) {
+	// RequestID max length is 64
+	longRequestID := "this-request-id-is-way-too-long-and-should-fail-validation-because-it-exceeds-64-chars-now-verifying-that-it-fails"
+	event := AuditEvent{
+		ID:         ID("test-id"),
+		EventType:  EventUserCreated,
+		EntityType: "user",
+		EntityID:   ID("user-123"),
+		Payload:    []byte(`{}`),
+		Timestamp:  time.Now(),
+		RequestID:  longRequestID,
+	}
+
+	assert.ErrorIs(t, event.Validate(), ErrInvalidRequestID)
+}

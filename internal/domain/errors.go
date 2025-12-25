@@ -43,4 +43,7 @@ var (
 
 	// ErrInvalidPayload is returned when the audit event payload is nil.
 	ErrInvalidPayload = errors.New("invalid payload")
+
+	// ErrInvalidRequestID is returned when the request ID exceeds the maximum length.
+	ErrInvalidRequestID = errors.New("invalid request ID")
 )
