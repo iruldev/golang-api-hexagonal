@@ -35,7 +35,7 @@ setup:
 	@echo "📦 Installing development tools..."
 	@echo ""
 	@echo "  Installing golangci-lint..."
-	@which golangci-lint > /dev/null || go install github.com/golangci-lint/golangci-lint/cmd/golangci-lint@latest
+	@which golangci-lint > /dev/null || go install github.com/golangci-lint/golangci-lint/cmd/golangci-lint@v1.61.0
 	@version_gcl=$$(golangci-lint --version 2>/dev/null | head -1); \
 		if [ -z "$$version_gcl" ]; then \
 			echo "    ❌ golangci-lint not available on PATH after install"; \
@@ -44,7 +44,7 @@ setup:
 		echo "    ✅ $$version_gcl"
 	@echo ""
 	@echo "  Installing goose..."
-	@which goose > /dev/null || go install github.com/pressly/goose/v3/cmd/goose@latest
+	@which goose > /dev/null || go install github.com/pressly/goose/v3/cmd/goose@v3.26.0
 	@version_goose=$$(goose --version 2>/dev/null); \
 		if [ -z "$$version_goose" ]; then \
 			echo "    ❌ goose not available on PATH after install"; \
@@ -357,7 +357,7 @@ openapi:
 	@echo "🔍 Validating OpenAPI spec..."
 	@if command -v docker > /dev/null 2>&1; then \
 		echo "🐳 Running Spectral via Docker..."; \
-		docker run --rm -v $(PWD):/tmp stoplight/spectral lint /tmp/docs/openapi.yaml --ruleset /tmp/.spectral.yaml; \
+		docker run --rm -v $(CURDIR):/tmp stoplight/spectral:6.15.0 lint /tmp/docs/openapi.yaml --ruleset /tmp/.spectral.yaml; \
 	elif command -v npx > /dev/null 2>&1; then \
 		npx --yes @stoplight/spectral-cli lint docs/openapi.yaml; \
 	elif command -v spectral > /dev/null 2>&1; then \

@@ -48,7 +48,13 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v1.61.0
+
+      # OpenAPI spec validation: ensures docs/openapi.yaml is valid OpenAPI 3.1
+      # Uses Spectral via Docker for consistent linting across environments
+      # Validates spec syntax and style rules defined in .spectral.yaml
+      - name: Validate OpenAPI spec
+        run: make openapi
 
       # Test step generates coverage.out profile for all packages
       - name: Run tests
@@ -91,7 +97,7 @@ jobs:
       # Install goose migration tool for database migration verification
       # Uses same installation method as local development (go install)
       - name: Install goose
-        run: go install github.com/pressly/goose/v3/cmd/goose@latest
+        run: go install github.com/pressly/goose/v3/cmd/goose@v3.26.0
 
       # Migration verification: validates all migrations can be applied and rolled back
       # Uses clean PostgreSQL service container - empty database state
