@@ -3,7 +3,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -52,18 +51,8 @@ func NewUserHandler(
 // CreateUser handles POST /api/v1/users.
 func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var req contract.CreateUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		contract.WriteProblemJSON(w, r, &app.AppError{
-			Op:      "CreateUser",
-			Code:    app.CodeValidationError,
-			Message: "Invalid request body",
-			Err:     err,
-		})
-		return
-	}
-
-	// Validate request
-	if errs := contract.Validate(req); len(errs) > 0 {
+	// Decode and validate request
+	if errs := contract.ValidateRequestBody(r, &req); len(errs) > 0 {
 		contract.WriteValidationError(w, r, errs)
 		return
 	}

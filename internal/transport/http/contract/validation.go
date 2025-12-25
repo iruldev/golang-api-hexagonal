@@ -1,7 +1,6 @@
 package contract
 
 import (
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -25,8 +24,24 @@ func init() {
 }
 
 // DecodeAndValidateJSON decodes a JSON body into dst and runs validation tags.
+// Uses strict decoding that rejects unknown fields.
 func DecodeAndValidateJSON[T any](r io.Reader, dst *T) ([]ValidationError, error) {
-	if err := json.NewDecoder(r).Decode(dst); err != nil {
+	if err := DecodeJSONStrict(r, dst); err != nil {
+		// Check if it's a JSONDecodeError for better error messages
+		if jsonErr, ok := err.(*JSONDecodeError); ok {
+			switch jsonErr.Kind {
+			case JSONDecodeErrorKindUnknownField:
+				return []ValidationError{{
+					Field:   jsonErr.Field,
+					Message: "unknown field",
+				}}, err
+			case JSONDecodeErrorKindTypeMismatch:
+				return []ValidationError{{
+					Field:   jsonErr.Field,
+					Message: "invalid type",
+				}}, err
+			}
+		}
 		return []ValidationError{{
 			Field:   "body",
 			Message: "invalid request body",
