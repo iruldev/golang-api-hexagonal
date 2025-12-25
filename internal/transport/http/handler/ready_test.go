@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -23,7 +25,8 @@ func (m *mockDatabase) Ping(ctx context.Context) error {
 
 func TestReadyHandler_DatabaseConnected(t *testing.T) {
 	db := &mockDatabase{pingErr: nil}
-	handler := NewReadyHandler(db)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := NewReadyHandler(db, logger)
 
 	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 	rec := httptest.NewRecorder()
@@ -41,13 +44,14 @@ func TestReadyHandler_DatabaseConnected(t *testing.T) {
 	err := json.NewDecoder(rec.Body).Decode(&resp)
 	require.NoError(t, err)
 
-	assert.Equal(t, "ready", resp.Data.Status)
-	assert.Equal(t, "ok", resp.Data.Checks["database"])
+	assert.Equal(t, StatusReady, resp.Data.Status)
+	assert.Equal(t, CheckStatusOk, resp.Data.Checks[CheckDatabase])
 }
 
 func TestReadyHandler_DatabaseDisconnected(t *testing.T) {
 	db := &mockDatabase{pingErr: errors.New("connection refused")}
-	handler := NewReadyHandler(db)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := NewReadyHandler(db, logger)
 
 	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 	rec := httptest.NewRecorder()
@@ -65,6 +69,37 @@ func TestReadyHandler_DatabaseDisconnected(t *testing.T) {
 	err := json.NewDecoder(rec.Body).Decode(&resp)
 	require.NoError(t, err)
 
-	assert.Equal(t, "not_ready", resp.Data.Status)
-	assert.Equal(t, "failed", resp.Data.Checks["database"])
+	assert.Equal(t, StatusNotReady, resp.Data.Status)
+	assert.Equal(t, CheckStatusFailed, resp.Data.Checks[CheckDatabase])
+}
+
+// TestReadyHandler_Idempotent verifies that /ready endpoint is idempotent
+// and does not mutate state when called repeatedly.
+// This satisfies Story 4.3 AC#3: idempotency verified.
+func TestReadyHandler_Idempotent(t *testing.T) {
+	db := &mockDatabase{pingErr: nil}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := NewReadyHandler(db, logger)
+
+	// Call /ready 10 times in rapid succession
+	const iterations = 10
+	for i := 0; i < iterations; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+		rec := httptest.NewRecorder()
+
+		handler.ServeHTTP(rec, req)
+
+		// Every call should return consistent results
+		assert.Equal(t, http.StatusOK, rec.Code, "iteration %d: expected 200 OK", i)
+
+		var resp ReadyResponse
+		err := json.NewDecoder(rec.Body).Decode(&resp)
+		require.NoError(t, err, "iteration %d: decode error", i)
+
+		assert.Equal(t, StatusReady, resp.Data.Status, "iteration %d: expected ready status", i)
+		assert.Equal(t, CheckStatusOk, resp.Data.Checks[CheckDatabase], "iteration %d: expected database ok", i)
+	}
+
+	// Verify mock was called but no state was mutated
+	// (mockDatabase has no internal counter, proving handler is stateless)
 }

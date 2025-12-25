@@ -74,7 +74,8 @@ func run() error {
 	db := newReconnectingDB(cfg.DatabaseURL, cfg.IgnoreDBStartupError, logger)
 	defer db.Close()
 
-	ctxPing, cancelPing := context.WithTimeout(ctx, 5*time.Second)
+	const startupPingTimeout = 5 * time.Second
+	ctxPing, cancelPing := context.WithTimeout(ctx, startupPingTimeout)
 	if err := db.Ping(ctxPing); err != nil {
 		cancelPing()
 		return fmt.Errorf("database not reachable at startup: %w", err)
@@ -84,7 +85,7 @@ func run() error {
 
 	// Create handlers
 	healthHandler := handler.NewHealthHandler()
-	readyHandler := handler.NewReadyHandler(db)
+	readyHandler := handler.NewReadyHandler(db, logger)
 
 	// Create user-related dependencies
 	userRepo := postgres.NewUserRepo()

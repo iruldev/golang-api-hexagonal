@@ -86,7 +86,7 @@ func TestIntegrationRoutes(t *testing.T) {
 
 	t.Run("ready OK", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
-		readyHandler := NewReadyHandler(db)
+		readyHandler := NewReadyHandler(db, logger)
 		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{})
 
 		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
@@ -100,7 +100,7 @@ func TestIntegrationRoutes(t *testing.T) {
 
 	t.Run("ready not ready", func(t *testing.T) {
 		db := &fakeDB{pingErr: assert.AnError}
-		readyHandler := NewReadyHandler(db)
+		readyHandler := NewReadyHandler(db, logger)
 		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{})
 
 		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
@@ -112,9 +112,26 @@ func TestIntegrationRoutes(t *testing.T) {
 		assert.JSONEq(t, `{"data":{"status":"not_ready","checks":{"database":"failed"}}}`, rec.Body.String())
 	})
 
+	// Story 4.3 AC#3: idempotency verified via integration test
+	t.Run("ready idempotent", func(t *testing.T) {
+		db := &fakeDB{pingErr: nil}
+		readyHandler := NewReadyHandler(db, logger)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{})
+
+		for i := 0; i < 5; i++ {
+			req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+			rec := httptest.NewRecorder()
+
+			r.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code, "iteration %d failed", i)
+			assert.JSONEq(t, `{"data":{"status":"ready","checks":{"database":"ok"}}}`, rec.Body.String(), "iteration %d content mismatch", i)
+		}
+	})
+
 	t.Run("health ok", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
-		readyHandler := NewReadyHandler(db)
+		readyHandler := NewReadyHandler(db, logger)
 		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{})
 
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)

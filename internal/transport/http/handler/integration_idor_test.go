@@ -81,7 +81,7 @@ func TestIntegration_IDORPrevention(t *testing.T) {
 	// Real Handler
 	userHandler := NewUserHandler(mockCreateUC, realUseCase, mockListUC)
 	healthHandler := NewHealthHandler()
-	readyHandler := NewReadyHandler(mockDB)
+	readyHandler := NewReadyHandler(mockDB, logger)
 
 	// 2. Setup Router with JWT Enabled
 	jwtSecret := []byte("test-secret-key-12345") // 32 bytes not required for HS256 but good practice

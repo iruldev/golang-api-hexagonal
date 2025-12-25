@@ -3,8 +3,23 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
+)
+
+const (
+	// StatusResponse constants
+	StatusReady    = "ready"
+	StatusNotReady = "not_ready"
+
+	// Check names and statuses
+	CheckDatabase     = "database"
+	CheckStatusOk     = "ok"
+	CheckStatusFailed = "failed"
+
+	// DefaultReadyTimeout is the timeout for the readiness check
+	DefaultReadyTimeout = 5 * time.Second
 )
 
 // DatabaseChecker provides database health check capability.
@@ -26,17 +41,21 @@ type ReadyData struct {
 // ReadyHandler handles the /ready endpoint (readiness probe).
 // It checks database connectivity to determine if the service is ready.
 type ReadyHandler struct {
-	db DatabaseChecker
+	db     DatabaseChecker
+	logger *slog.Logger
 }
 
 // NewReadyHandler creates a new ready handler.
-func NewReadyHandler(db DatabaseChecker) *ReadyHandler {
-	return &ReadyHandler{db: db}
+func NewReadyHandler(db DatabaseChecker, logger *slog.Logger) *ReadyHandler {
+	return &ReadyHandler{
+		db:     db,
+		logger: logger,
+	}
 }
 
 // ServeHTTP handles the readiness check request.
 func (h *ReadyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), DefaultReadyTimeout)
 	defer cancel()
 
 	checks := make(map[string]string)
@@ -44,16 +63,16 @@ func (h *ReadyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Check database connectivity
 	if err := h.db.Ping(ctx); err != nil {
-		checks["database"] = "failed"
+		checks[CheckDatabase] = CheckStatusFailed
 		allOK = false
 	} else {
-		checks["database"] = "ok"
+		checks[CheckDatabase] = CheckStatusOk
 	}
 
-	status := "ready"
+	status := StatusReady
 	httpStatus := http.StatusOK
 	if !allOK {
-		status = "not_ready"
+		status = StatusNotReady
 		httpStatus = http.StatusServiceUnavailable
 	}
 
@@ -66,5 +85,7 @@ func (h *ReadyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(httpStatus)
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		h.logger.Error("failed to write ready response", slog.Any("error", err))
+	}
 }
