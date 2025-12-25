@@ -51,6 +51,7 @@ import (
 type httpMetrics struct {
 	requests  *prometheus.CounterVec
 	durations *prometheus.HistogramVec
+	sizes     *prometheus.HistogramVec
 }
 
 func (m *httpMetrics) IncRequest(method, route, status string) {
@@ -61,10 +62,15 @@ func (m *httpMetrics) ObserveRequestDuration(method, route string, seconds float
 	m.durations.WithLabelValues(method, route).Observe(seconds)
 }
 
+func (m *httpMetrics) ObserveResponseSize(method, route string, sizeBytes float64) {
+	m.sizes.WithLabelValues(method, route).Observe(sizeBytes)
+}
+
 // Reset is used in tests to clear collectors.
 func (m *httpMetrics) Reset() {
 	m.requests.Reset()
 	m.durations.Reset()
+	m.sizes.Reset()
 }
 
 // NewMetricsRegistry creates a new Prometheus registry with Go runtime collectors
@@ -90,6 +96,15 @@ func NewMetricsRegistry() (*prometheus.Registry, metrics.HTTPMetrics) {
 		[]string{"method", "route"},
 	)
 
+	sizes := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "http_response_size_bytes",
+			Help:    "HTTP response size in bytes",
+			Buckets: []float64{100, 500, 1000, 5000, 10000, 50000, 100000, 500000, 1000000}, // 100B to 1MB
+		},
+		[]string{"method", "route"},
+	)
+
 	// Go runtime metrics (go_goroutines, go_memstats_*, etc.)
 	reg.MustRegister(collectors.NewGoCollector())
 	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
@@ -97,10 +112,12 @@ func NewMetricsRegistry() (*prometheus.Registry, metrics.HTTPMetrics) {
 	// HTTP metrics
 	reg.MustRegister(requests)
 	reg.MustRegister(durations)
+	reg.MustRegister(sizes)
 
 	return reg, &httpMetrics{
 		requests:  requests,
 		durations: durations,
+		sizes:     sizes,
 	}
 }
 

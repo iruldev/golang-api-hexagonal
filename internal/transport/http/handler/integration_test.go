@@ -43,6 +43,10 @@ func (m *testHTTPMetrics) ObserveRequestDuration(method, route string, seconds f
 	m.durations.WithLabelValues(method, route).Observe(seconds)
 }
 
+func (m *testHTTPMetrics) ObserveResponseSize(method, route string, sizeBytes float64) {
+	// No-op for now unless we want to track it in integration tests, but we must implement the interface
+}
+
 func newTestMetricsRegistry() (*prometheus.Registry, sharedMetrics.HTTPMetrics) {
 	reg := prometheus.NewRegistry()
 
@@ -127,10 +131,10 @@ func TestIntegrationRoutes(t *testing.T) {
 // Story 2.5b: /metrics is now on internal router only.
 func TestMetricsEndpoint(t *testing.T) {
 	logger := testLogger()
-	metricsReg, _ := newTestMetricsRegistry()
+	metricsReg, httpMetrics := newTestMetricsRegistry()
 
 	// Use internal router for /metrics tests (Story 2.5b)
-	r := httpTransport.NewInternalRouter(logger, metricsReg, new(testHTTPMetrics))
+	r := httpTransport.NewInternalRouter(logger, metricsReg, httpMetrics)
 
 	t.Run("metrics endpoint returns 200 on internal router", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)

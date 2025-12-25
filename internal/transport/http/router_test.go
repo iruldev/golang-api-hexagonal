@@ -28,6 +28,10 @@ func (m *MockHTTPMetrics) ObserveRequestDuration(method, route string, seconds f
 	m.Called(method, route, seconds)
 }
 
+func (m *MockHTTPMetrics) ObserveResponseSize(method, route string, sizeBytes float64) {
+	m.Called(method, route, sizeBytes)
+}
+
 type MockUserRoutes struct {
 	mock.Mock
 }
@@ -56,6 +60,7 @@ func TestNewRouter_JWTEnabled(t *testing.T) {
 	mockMetrics := new(MockHTTPMetrics)
 	mockMetrics.On("IncRequest", mock.Anything, mock.Anything, mock.Anything).Return()
 	mockMetrics.On("ObserveRequestDuration", mock.Anything, mock.Anything, mock.Anything).Return()
+	mockMetrics.On("ObserveResponseSize", mock.Anything, mock.Anything, mock.Anything).Return()
 
 	mockUserHandler := new(MockUserRoutes)
 	// Expect handlers NOT to be called if auth fails
@@ -107,6 +112,7 @@ func TestNewRouter_JWTDisabled(t *testing.T) {
 	mockMetrics := new(MockHTTPMetrics)
 	mockMetrics.On("IncRequest", mock.Anything, mock.Anything, mock.Anything).Return()
 	mockMetrics.On("ObserveRequestDuration", mock.Anything, mock.Anything, mock.Anything).Return()
+	mockMetrics.On("ObserveResponseSize", mock.Anything, mock.Anything, mock.Anything).Return()
 
 	mockUserHandler := new(MockUserRoutes)
 	mockUserHandler.On("ListUsers", mock.Anything, mock.Anything).Return()
@@ -152,6 +158,7 @@ func TestNewRouter_HealthCheck_NoAuth(t *testing.T) {
 	mockMetrics := new(MockHTTPMetrics)
 	mockMetrics.On("IncRequest", mock.Anything, mock.Anything, mock.Anything).Return()
 	mockMetrics.On("ObserveRequestDuration", mock.Anything, mock.Anything, mock.Anything).Return()
+	mockMetrics.On("ObserveResponseSize", mock.Anything, mock.Anything, mock.Anything).Return()
 
 	mockUserHandler := new(MockUserRoutes)
 
@@ -202,6 +209,7 @@ func TestNewRouter_MetricsNotExposed(t *testing.T) {
 	mockMetrics := new(MockHTTPMetrics)
 	mockMetrics.On("IncRequest", mock.Anything, mock.Anything, mock.Anything).Return()
 	mockMetrics.On("ObserveRequestDuration", mock.Anything, mock.Anything, mock.Anything).Return()
+	mockMetrics.On("ObserveResponseSize", mock.Anything, mock.Anything, mock.Anything).Return()
 
 	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
@@ -237,6 +245,7 @@ func TestNewInternalRouter_MetricsAvailable(t *testing.T) {
 	mockMetrics := new(MockHTTPMetrics)
 	mockMetrics.On("IncRequest", mock.Anything, mock.Anything, mock.Anything).Return()
 	mockMetrics.On("ObserveRequestDuration", mock.Anything, mock.Anything, mock.Anything).Return()
+	mockMetrics.On("ObserveResponseSize", mock.Anything, mock.Anything, mock.Anything).Return()
 
 	router := NewInternalRouter(logger, metricsReg, mockMetrics)
 
@@ -260,6 +269,7 @@ func TestNewRouter_TrustProxyFalse_IgnoresXFF(t *testing.T) {
 	mockMetrics := new(MockHTTPMetrics)
 	mockMetrics.On("IncRequest", mock.Anything, mock.Anything, mock.Anything).Return()
 	mockMetrics.On("ObserveRequestDuration", mock.Anything, mock.Anything, mock.Anything).Return()
+	mockMetrics.On("ObserveResponseSize", mock.Anything, mock.Anything, mock.Anything).Return()
 
 	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		// Write the RemoteAddr to response body to verify it wasn't modified by RealIP
@@ -307,6 +317,7 @@ func TestNewRouter_TrustProxyTrue_UsesXFF(t *testing.T) {
 	mockMetrics := new(MockHTTPMetrics)
 	mockMetrics.On("IncRequest", mock.Anything, mock.Anything, mock.Anything).Return()
 	mockMetrics.On("ObserveRequestDuration", mock.Anything, mock.Anything, mock.Anything).Return()
+	mockMetrics.On("ObserveResponseSize", mock.Anything, mock.Anything, mock.Anything).Return()
 
 	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		// Write the RemoteAddr to response body to verify it WAS modified by RealIP

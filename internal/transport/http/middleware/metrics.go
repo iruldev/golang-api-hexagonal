@@ -24,24 +24,39 @@ func Metrics(recorder metrics.HTTPMetrics) func(http.Handler) http.Handler {
 			next.ServeHTTP(ww, r)
 
 			// Get route pattern from Chi context (e.g., /api/v1/users/{id})
-			routePattern := r.URL.Path
+			routePattern := "unmatched"
 			if rctx := chi.RouteContext(r.Context()); rctx != nil {
 				if rp := rctx.RoutePattern(); rp != "" {
 					routePattern = rp
 				}
 			}
 
+			// Sanitize method to prevent cardinality explosion (e.g. from malicious arbitrary methods)
+			method := r.Method
+			switch method {
+			case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace:
+				// Allowed standard methods
+			default:
+				method = "OTHER"
+			}
+
 			// Record metrics
 			recorder.IncRequest(
-				r.Method,
+				method,
 				routePattern,
 				strconv.Itoa(ww.Status()),
 			)
 
 			recorder.ObserveRequestDuration(
-				r.Method,
+				method,
 				routePattern,
 				time.Since(start).Seconds(),
+			)
+
+			recorder.ObserveResponseSize(
+				method,
+				routePattern,
+				float64(ww.BytesWritten()),
 			)
 		})
 	}

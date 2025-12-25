@@ -26,6 +26,7 @@ func resetMetrics(m interface{}) {
 type testHTTPMetrics struct {
 	requests  *prometheus.CounterVec
 	durations *prometheus.HistogramVec
+	sizes     *prometheus.HistogramVec
 }
 
 func (m *testHTTPMetrics) IncRequest(method, route, status string) {
@@ -36,9 +37,14 @@ func (m *testHTTPMetrics) ObserveRequestDuration(method, route string, seconds f
 	m.durations.WithLabelValues(method, route).Observe(seconds)
 }
 
+func (m *testHTTPMetrics) ObserveResponseSize(method, route string, sizeBytes float64) {
+	m.sizes.WithLabelValues(method, route).Observe(sizeBytes)
+}
+
 func (m *testHTTPMetrics) Reset() {
 	m.requests.Reset()
 	m.durations.Reset()
+	m.sizes.Reset()
 }
 
 func newTestMetricsRegistry() (*prometheus.Registry, sharedMetrics.HTTPMetrics) {
@@ -61,12 +67,23 @@ func newTestMetricsRegistry() (*prometheus.Registry, sharedMetrics.HTTPMetrics) 
 		[]string{"method", "route"},
 	)
 
+	sizes := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "http_response_size_bytes",
+			Help:    "HTTP response size in bytes",
+			Buckets: []float64{100, 1000},
+		},
+		[]string{"method", "route"},
+	)
+
 	reg.MustRegister(requests)
 	reg.MustRegister(durations)
+	reg.MustRegister(sizes)
 
 	return reg, &testHTTPMetrics{
 		requests:  requests,
 		durations: durations,
+		sizes:     sizes,
 	}
 }
 
@@ -351,11 +368,52 @@ func TestMetrics_FallbackToURLPath(t *testing.T) {
 		for _, m := range f.Metric {
 			if len(m.Label) == 3 &&
 				m.Label[0].GetValue() == "GET" &&
-				m.Label[1].GetValue() == "/fallback" &&
+				m.Label[1].GetValue() == "unmatched" &&
 				m.Label[2].GetValue() == "200" {
 				found = true
 			}
 		}
 	}
-	assert.True(t, found, "should use URL path when no chi route pattern")
+	assert.True(t, found, "should use 'unmatched' label when no chi route pattern")
+}
+
+func TestMetrics_RecordsResponseSize(t *testing.T) {
+	reg, httpMetrics := newTestMetricsRegistry()
+	resetMetrics(httpMetrics)
+
+	// Handler that writes 10 bytes
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("0123456789"))
+	})
+
+	r := chi.NewRouter()
+	r.Use(Metrics(httpMetrics))
+	r.Get("/size", handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/size", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Verify histogram was observed
+	metricsFamilies, err := reg.Gather()
+	require.NoError(t, err)
+
+	foundSize := false
+	for _, f := range metricsFamilies {
+		if f.GetName() == "http_response_size_bytes" {
+			foundSize = true
+			// Check if we recorded 10 bytes
+			for _, m := range f.Metric {
+				if m.GetHistogram().GetSampleCount() == 1 {
+					// Sample sum should be 10 if only one observation
+					assert.Equal(t, 10.0, m.GetHistogram().GetSampleSum())
+				}
+			}
+		}
+	}
+	assert.True(t, foundSize, "http_response_size_bytes should be exported")
 }

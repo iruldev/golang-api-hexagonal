@@ -5,4 +5,5 @@ package metrics
 type HTTPMetrics interface {
 	IncRequest(method, route, status string)
 	ObserveRequestDuration(method, route string, seconds float64)
+	ObserveResponseSize(method, route string, sizeBytes float64)
 }
