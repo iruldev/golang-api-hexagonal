@@ -138,32 +138,27 @@ func run() error {
 	// Create Public HTTP server
 	publicAddr := fmt.Sprintf(":%d", cfg.Port)
 	publicSrv := &http.Server{
-		Addr:         publicAddr,
-		Handler:      publicRouter,
-		ReadTimeout:  cfg.HTTPReadTimeout,
-		WriteTimeout: cfg.HTTPWriteTimeout,
-		IdleTimeout:  cfg.HTTPIdleTimeout,
+		Addr:              publicAddr,
+		Handler:           publicRouter,
+		ReadTimeout:       cfg.HTTPReadTimeout,
+		WriteTimeout:      cfg.HTTPWriteTimeout,
+		IdleTimeout:       cfg.HTTPIdleTimeout,
+		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
+		MaxHeaderBytes:    cfg.HTTPMaxHeaderBytes,
 	}
 
 	// Create Internal HTTP server
-	// Use shorter timeouts for internal server default if not explicitly separate in config,
-	// but for now we share the config or use defaults.
-	// Since 2.5b used 5s for internal, let's respect that differentiation if we want,
-	// OR just use the configured values. The finding said "hardcoded", so let's use the config.
-	// Note: The previous code had 5s for internal.
-	// We'll use the same config for now for simplicity, or we could add InternalHTTPReadTimeout.
-	// Given "Fix them automatically" usually implies "best practice", sharing timeouts is acceptable,
-	// but strictly speaking, internal might want to be faster.
-	// Let's use the generic HTTP timeout config for both to avoid config bloat,
-	// but if strict validation is needed, we'd add more vars.
-	// I'll stick to using the new config variables for both to remove magic numbers.
+	// Use the same timeouts as public server for now to avoid config complexity.
+	// If stricter internal timeouts are needed, new config vars can be added later.
 	internalAddr := fmt.Sprintf("%s:%d", cfg.InternalBindAddress, cfg.InternalPort)
 	internalSrv := &http.Server{
-		Addr:         internalAddr,
-		Handler:      internalRouter,
-		ReadTimeout:  cfg.HTTPReadTimeout,  // Previously 5s
-		WriteTimeout: cfg.HTTPWriteTimeout, // Previously 5s
-		IdleTimeout:  cfg.HTTPIdleTimeout,
+		Addr:              internalAddr,
+		Handler:           internalRouter,
+		ReadTimeout:       cfg.HTTPReadTimeout,
+		WriteTimeout:      cfg.HTTPWriteTimeout,
+		IdleTimeout:       cfg.HTTPIdleTimeout,
+		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
+		MaxHeaderBytes:    cfg.HTTPMaxHeaderBytes,
 	}
 
 	// Start servers in goroutines

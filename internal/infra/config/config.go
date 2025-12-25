@@ -58,8 +58,6 @@ type Config struct {
 	InternalPort int `envconfig:"INTERNAL_PORT" default:"8081"`
 	// InternalBindAddress is the bind address for the internal server.
 	// Default: "127.0.0.1" (loopback only) for security isolation.
-	// InternalBindAddress is the bind address for the internal server.
-	// Default: "127.0.0.1" (loopback only) for security isolation.
 	InternalBindAddress string `envconfig:"INTERNAL_BIND_ADDRESS" default:"127.0.0.1"`
 
 	// Smoke Test Support (Hidden)
@@ -76,6 +74,12 @@ type Config struct {
 	HTTPIdleTimeout time.Duration `envconfig:"HTTP_IDLE_TIMEOUT" default:"60s"`
 	// ShutdownTimeout is the duration to wait for graceful shutdown. Default: 30s.
 	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"30s"`
+	// HTTPReadHeaderTimeout is the amount of time allowed to read request headers.
+	// Default: 10s. This helps mitigate slowloris attacks.
+	HTTPReadHeaderTimeout time.Duration `envconfig:"HTTP_READ_HEADER_TIMEOUT" default:"10s"`
+	// HTTPMaxHeaderBytes is the maximum size of request headers.
+	// Default: 1MB (1048576 bytes). This helps prevent header-based DoS attacks.
+	HTTPMaxHeaderBytes int `envconfig:"HTTP_MAX_HEADER_BYTES" default:"1048576"`
 
 	// Audit
 	// AuditRedactEmail controls how email addresses are redacted in audit logs.

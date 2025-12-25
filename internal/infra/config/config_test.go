@@ -2,6 +2,7 @@ package config
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -471,4 +472,34 @@ func TestLoad_InternalBindAddressEmpty(t *testing.T) {
 	assert.Nil(t, cfg)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "INTERNAL_BIND_ADDRESS cannot be empty")
+}
+
+// =============================================================================
+// Story 4.4: HTTP Timeout Configuration Tests
+// =============================================================================
+
+// TestLoad_HTTPTimeouts_Defaults tests AC #1, #2: defaults for ReadHeaderTimeout and MaxHeaderBytes
+func TestLoad_HTTPTimeouts_Defaults(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	// Default 10s
+	assert.Equal(t, 10*time.Second, cfg.HTTPReadHeaderTimeout, "HTTP_READ_HEADER_TIMEOUT should default to 10s")
+	// Default 1MB (1048576 bytes)
+	assert.Equal(t, 1048576, cfg.HTTPMaxHeaderBytes, "HTTP_MAX_HEADER_BYTES should default to 1MB")
+}
+
+// TestLoad_HTTPTimeouts_Custom tests AC #3: custom values for ReadHeaderTimeout and MaxHeaderBytes
+func TestLoad_HTTPTimeouts_Custom(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("HTTP_READ_HEADER_TIMEOUT", "5s")
+	t.Setenv("HTTP_MAX_HEADER_BYTES", "2048")
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, 5*time.Second, cfg.HTTPReadHeaderTimeout)
+	assert.Equal(t, 2048, cfg.HTTPMaxHeaderBytes)
 }
