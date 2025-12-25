@@ -70,17 +70,50 @@ func run() error {
 		logger.Info("tracing disabled; skipping tracer provider initialization")
 	}
 
+	// Ensure tracer is shut down when run() exits (LIFO: runs after db cleanup would be wrong, so place BEFORE db defer?)
+	// DB defer is at Line 75. defer executes LIFO.
+	// We want: Server Stop -> Tracer Shutdown -> DB Close.
+	// We are currently before DB Close defer.
+	// So if we defer here, it runs AFTER DB Close?
+	// No:
+	// 1. defer Tracer (runs last)
+	// 2. defer DB (runs before Tracer)
+	// Wait, LIFO:
+	// A deferred
+	// B deferred
+	// Exit: B runs, then A runs.
+	// We want to close DB *last*? Or Tracer *last*?
+	// Usually DB close last.
+	// So we should defer Tracer *after* deferring DB?
+	// Current DB defer is at line 75.
+	// Let's just define the func here, but defer it LATER or handle logic carefully.
+	// Actually, `run` exits.
+	// We want: Servers (stopped in main logic) -> Tracer -> DB.
+	// So defer Tracer logic should be added *after* defer DB.
+	// Let's modify the chunk around DB defer.
+
 	// Prepare database connection (non-fatal if unavailable at startup)
 	db := newReconnectingDB(cfg.DatabaseURL, cfg.IgnoreDBStartupError, logger)
 	defer db.Close()
 
+	// Defer tracer shutdown so it runs after servers stop but before DB closes (LIFO: defer this AFTER db.Close)
+	if tpShutdown != nil {
+		defer func() {
+			// Use a dedicated context for shutdown cleanup with timeout
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := tpShutdown(ctx); err != nil {
+				logger.Error("tracer shutdown failed", slog.Any("err", err))
+			}
+		}()
+	}
+
 	const startupPingTimeout = 5 * time.Second
 	ctxPing, cancelPing := context.WithTimeout(ctx, startupPingTimeout)
+	defer cancelPing() // Fix: use defer for cleanup
 	if err := db.Ping(ctxPing); err != nil {
-		cancelPing()
 		return fmt.Errorf("database not reachable at startup: %w", err)
 	}
-	cancelPing()
 	logger.Info("database connected")
 
 	// Create handlers
@@ -191,12 +224,7 @@ func run() error {
 		ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 		defer cancel()
 
-		// Shutdown tracer provider to flush pending spans
-		if tpShutdown != nil {
-			if err := tpShutdown(ctx); err != nil {
-				logger.Error("tracer shutdown failed", slog.Any("err", err))
-			}
-		}
+		// Tracer shutdown removed from here; handled by defer at top of run()
 
 		// Shutdown both servers concurrently
 		var wg sync.WaitGroup
