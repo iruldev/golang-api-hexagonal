@@ -8,8 +8,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres/sqlcgen"
 )
 
 const (
@@ -25,27 +27,49 @@ func NewUserRepo() *UserRepo {
 	return &UserRepo{}
 }
 
+// getDBTX extracts the underlying pgx interface from the domain.Querier.
+// This is necessary because sqlc generated code requires exact pgx types (DBTX).
+func getDBTX(q domain.Querier) (sqlcgen.DBTX, error) {
+	switch v := q.(type) {
+	case *PoolQuerier:
+		return v.pool, nil
+	case *TxQuerier:
+		return v.tx, nil
+	default:
+		return nil, fmt.Errorf("unsupported querier type: %T", q)
+	}
+}
+
 // Create stores a new user in the database.
 // It returns domain.ErrEmailAlreadyExists if the email is already taken.
 func (r *UserRepo) Create(ctx context.Context, q domain.Querier, user *domain.User) error {
 	const op = "userRepo.Create"
 
-	// Parse domain.ID to uuid.UUID at repository boundary
-	id, err := uuid.Parse(string(user.ID))
+	dbtx, err := getDBTX(q)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	queries := sqlcgen.New(dbtx)
+
+	// Parse domain.ID to uuid
+	uid, err := uuid.Parse(string(user.ID))
 	if err != nil {
 		return fmt.Errorf("%s: parse ID: %w", op, err)
 	}
 
-	_, err = q.Exec(ctx, `
-		INSERT INTO users (id, email, first_name, last_name, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, id, user.Email, user.FirstName, user.LastName, user.CreatedAt, user.UpdatedAt)
+	// Prepare params
+	params := sqlcgen.CreateUserParams{
+		ID:        pgtype.UUID{Bytes: uid, Valid: true},
+		Email:     user.Email,
+		FirstName: user.FirstName,
+		LastName:  user.LastName,
+		CreatedAt: pgtype.Timestamptz{Time: user.CreatedAt, Valid: true},
+		UpdatedAt: pgtype.Timestamptz{Time: user.UpdatedAt, Valid: true},
+	}
 
-	if err != nil {
+	if err := queries.CreateUser(ctx, params); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
-			// Only map the specific unique constraint we own for email.
-			// Other unique violations (e.g., duplicate primary key) should not be reported as email conflicts.
 			if pgErr.ConstraintName == "uniq_users_email" {
 				return fmt.Errorf("%s: %w", op, domain.ErrEmailAlreadyExists)
 			}
@@ -61,26 +85,18 @@ func (r *UserRepo) Create(ctx context.Context, q domain.Querier, user *domain.Us
 func (r *UserRepo) GetByID(ctx context.Context, q domain.Querier, id domain.ID) (*domain.User, error) {
 	const op = "userRepo.GetByID"
 
-	// Parse domain.ID to uuid.UUID
+	dbtx, err := getDBTX(q)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+	queries := sqlcgen.New(dbtx)
+
 	uid, err := uuid.Parse(string(id))
 	if err != nil {
 		return nil, fmt.Errorf("%s: parse ID: %w", op, err)
 	}
 
-	row := q.QueryRow(ctx, `
-		SELECT id, email, first_name, last_name, created_at, updated_at
-		FROM users WHERE id = $1
-	`, uid)
-
-	// Type assert to rowScanner interface
-	scanner, ok := row.(rowScanner)
-	if !ok {
-		return nil, fmt.Errorf("%s: invalid querier type", op)
-	}
-
-	var user domain.User
-	var dbID uuid.UUID
-	err = scanner.Scan(&dbID, &user.Email, &user.FirstName, &user.LastName, &user.CreatedAt, &user.UpdatedAt)
+	dbUser, err := queries.GetUserByID(ctx, pgtype.UUID{Bytes: uid, Valid: true})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("%s: %w", op, domain.ErrUserNotFound)
 	}
@@ -88,8 +104,22 @@ func (r *UserRepo) GetByID(ctx context.Context, q domain.Querier, id domain.ID) 
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	user.ID = domain.ID(dbID.String())
-	return &user, nil
+	// Map generic UUID bytes back to string
+	// sqlc with pgx/v5 pgtype.UUID uses Bytes [16]byte.
+	// We need to convert that to uuid.UUID to get String().
+	uuidVal, err := uuid.FromBytes(dbUser.ID.Bytes[:])
+	if err != nil {
+		return nil, fmt.Errorf("%s: invalid uuid from db: %w", op, err)
+	}
+
+	return &domain.User{
+		ID:        domain.ID(uuidVal.String()),
+		Email:     dbUser.Email,
+		FirstName: dbUser.FirstName,
+		LastName:  dbUser.LastName,
+		CreatedAt: dbUser.CreatedAt.Time,
+		UpdatedAt: dbUser.UpdatedAt.Time,
+	}, nil
 }
 
 // List retrieves users with pagination.
@@ -98,57 +128,50 @@ func (r *UserRepo) GetByID(ctx context.Context, q domain.Querier, id domain.ID) 
 func (r *UserRepo) List(ctx context.Context, q domain.Querier, params domain.ListParams) ([]domain.User, int, error) {
 	const op = "userRepo.List"
 
-	// Get total count
-	countRow := q.QueryRow(ctx, `SELECT COUNT(*) FROM users`)
-	countScanner, ok := countRow.(rowScanner)
-	if !ok {
-		return nil, 0, fmt.Errorf("%s: invalid querier type for count", op)
+	dbtx, err := getDBTX(q)
+	if err != nil {
+		return nil, 0, fmt.Errorf("%s: %w", op, err)
 	}
+	queries := sqlcgen.New(dbtx)
 
-	var totalCount int
-	if err := countScanner.Scan(&totalCount); err != nil {
+	// Get total count
+	count, err := queries.CountUsers(ctx)
+	if err != nil {
 		return nil, 0, fmt.Errorf("%s: count: %w", op, err)
 	}
 
-	// If no results, return early
-	if totalCount == 0 {
+	if count == 0 {
 		return []domain.User{}, 0, nil
 	}
 
 	// Get paginated results
-	rows, err := q.Query(ctx, `
-		SELECT id, email, first_name, last_name, created_at, updated_at
-		FROM users
-		ORDER BY created_at DESC, id DESC
-		LIMIT $1 OFFSET $2
-	`, params.Limit(), params.Offset())
+	listParams := sqlcgen.ListUsersParams{
+		Limit:  int32(params.Limit()),
+		Offset: int32(params.Offset()),
+	}
+
+	dbUsers, err := queries.ListUsers(ctx, listParams)
 	if err != nil {
-		return nil, 0, fmt.Errorf("%s: query: %w", op, err)
+		return nil, 0, fmt.Errorf("%s: list: %w", op, err)
 	}
 
-	// Type assert to rowsScanner interface
-	scanner, ok := rows.(rowsScanner)
-	if !ok {
-		return nil, 0, fmt.Errorf("%s: invalid querier type for rows", op)
-	}
-	defer scanner.Close()
-
-	var users []domain.User
-	for scanner.Next() {
-		var user domain.User
-		var dbID uuid.UUID
-		if err := scanner.Scan(&dbID, &user.Email, &user.FirstName, &user.LastName, &user.CreatedAt, &user.UpdatedAt); err != nil {
-			return nil, 0, fmt.Errorf("%s: scan: %w", op, err)
+	users := make([]domain.User, len(dbUsers))
+	for i, u := range dbUsers {
+		uuidVal, err := uuid.FromBytes(u.ID.Bytes[:])
+		if err != nil {
+			return nil, 0, fmt.Errorf("%s: invalid uuid from db: %w", op, err)
 		}
-		user.ID = domain.ID(dbID.String())
-		users = append(users, user)
+		users[i] = domain.User{
+			ID:        domain.ID(uuidVal.String()),
+			Email:     u.Email,
+			FirstName: u.FirstName,
+			LastName:  u.LastName,
+			CreatedAt: u.CreatedAt.Time,
+			UpdatedAt: u.UpdatedAt.Time,
+		}
 	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, 0, fmt.Errorf("%s: rows: %w", op, err)
-	}
-
-	return users, totalCount, nil
+	return users, int(count), nil
 }
 
 // Ensure UserRepo implements domain.UserRepository at compile time.

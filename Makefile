@@ -52,6 +52,15 @@ setup:
 		fi; \
 		echo "    ✅ $$version_goose"
 	@echo ""
+	@echo "  Installing sqlc..."
+	@which sqlc > /dev/null || go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.28.0
+	@version_sqlc=$$(sqlc version 2>/dev/null); \
+		if [ -z "$$version_sqlc" ]; then \
+			echo "    ❌ sqlc not available on PATH after install"; \
+			exit 1; \
+		fi; \
+		echo "    ✅ sqlc $$version_sqlc"
+	@echo ""
 	@echo "📦 Downloading Go modules..."
 	$(GOMOD) download
 	$(GOMOD) tidy
@@ -65,6 +74,14 @@ setup:
 	@echo "  3. Run the service:       make run"
 	@echo ""
 	@echo "Run 'make help' to see all available targets."
+
+## generate: Run sqlc to generate type-safe SQL code (Story 5.3)
+.PHONY: generate
+generate:
+	@echo "🔧 Generating sqlc code..."
+	@which sqlc > /dev/null || (echo "❌ sqlc not found. Run 'make setup' first." && exit 1)
+	sqlc generate
+	@echo "✅ Code generation complete"
 
 
 ## build: Build the application
