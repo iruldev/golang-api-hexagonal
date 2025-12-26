@@ -101,7 +101,7 @@ development_status:
   6-3-integration-tests-with-test-database: done
   6-4-implement-make-generate: done
   6-5-ci-generate-check: done
-  6-6-ci-gates-for-quality: backlog
+  6-6-ci-gates-for-quality: done
   6-7-wire-di-integration: backlog
   epic-6-retrospective: optional
 

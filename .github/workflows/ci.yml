@@ -32,6 +32,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Story 6.6: Secret scanning (fail-fast - first quality gate)
+      # Uses gitleaks to detect hardcoded secrets, API keys, and credentials
+      # Placed early in pipeline to fail fast before compute-intensive steps
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -95,7 +105,7 @@ jobs:
       # govulncheck is the official Go vulnerability checker from golang.org/x
       # Known CVEs will fail the workflow to prevent insecure deployments
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
       - name: Security scan
         run: govulncheck ./...
@@ -116,7 +126,7 @@ jobs:
       # Uses clean PostgreSQL service container - empty database state
       # Migration up applies ALL migrations to verify forward compatibility
       - name: Run migrations up
-        run: goose -dir migrations postgres "$DATABASE_URL" up
+        run: make migrate-up
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_db?sslmode=disable
 
@@ -124,7 +134,7 @@ jobs:
       # This ensures reversibility of all database changes
       # Full up/down cycle completes without error validates migration integrity
       - name: Run migrations down
-        run: goose -dir migrations postgres "$DATABASE_URL" down-to 0
+        run: make migrate-down
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_db?sslmode=disable
 
