@@ -6,9 +6,11 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres/sqlcgen"
 )
 
 // AuditEventRepo implements domain.AuditEventRepository for PostgreSQL.
@@ -19,9 +21,27 @@ func NewAuditEventRepo() *AuditEventRepo {
 	return &AuditEventRepo{}
 }
 
+// getDBTX extracts the underlying DBTX from domain.Querier.
+func (r *AuditEventRepo) getDBTX(q domain.Querier) (sqlcgen.DBTX, error) {
+	switch v := q.(type) {
+	case *PoolQuerier:
+		return v.pool, nil
+	case *TxQuerier:
+		return v.tx, nil
+	default:
+		return nil, fmt.Errorf("auditEventRepo: unsupported querier type: %T", q)
+	}
+}
+
 // Create stores a new audit event in the database.
 func (r *AuditEventRepo) Create(ctx context.Context, q domain.Querier, event *domain.AuditEvent) error {
 	const op = "auditEventRepo.Create"
+
+	dbtx, err := r.getDBTX(q)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	queries := sqlcgen.New(dbtx)
 
 	// Parse domain.ID to uuid.UUID at repository boundary
 	id, err := uuid.Parse(string(event.ID))
@@ -35,24 +55,32 @@ func (r *AuditEventRepo) Create(ctx context.Context, q domain.Querier, event *do
 	}
 
 	// Handle nullable ActorID
-	var actorID *uuid.UUID
+	var actorID pgtype.UUID
 	if !event.ActorID.IsEmpty() {
-		// Attempt to parse. If it's not a valid UUID (e.g. system user, legacy ID),
-		// we treat it as NULL (system/unauthenticated) rather than failing the transaction.
+		// Attempt to parse. If it's not a valid UUID, we treat it as NULL.
 		if parsed, err := uuid.Parse(string(event.ActorID)); err == nil {
-			actorID = &parsed
+			actorID = pgtype.UUID{Bytes: parsed, Valid: true}
 		} else {
 			// Log the dropped ActorID for debugging integration issues
 			observability.LoggerFromContext(ctx, slog.Default()).Warn("audit_event_repo: dropping invalid ActorID", "op", op, "actor_id", event.ActorID, "error", err, "request_id", event.RequestID)
+			actorID = pgtype.UUID{Valid: false}
 		}
+	} else {
+		actorID = pgtype.UUID{Valid: false}
 	}
 
-	_, err = q.Exec(ctx, `
-		INSERT INTO audit_events (id, event_type, actor_id, entity_type, entity_id, payload, timestamp, request_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`, id, event.EventType, actorID, event.EntityType, entityID, event.Payload, event.Timestamp, event.RequestID)
+	params := sqlcgen.CreateAuditEventParams{
+		ID:         pgtype.UUID{Bytes: id, Valid: true},
+		EventType:  event.EventType,
+		ActorID:    actorID,
+		EntityType: event.EntityType,
+		EntityID:   pgtype.UUID{Bytes: entityID, Valid: true},
+		Payload:    event.Payload,
+		Timestamp:  pgtype.Timestamptz{Time: event.Timestamp, Valid: true},
+		RequestID:  pgtype.Text{String: event.RequestID, Valid: event.RequestID != ""},
+	}
 
-	if err != nil {
+	if err := queries.CreateAuditEvent(ctx, params); err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
 
@@ -64,72 +92,72 @@ func (r *AuditEventRepo) Create(ctx context.Context, q domain.Querier, event *do
 func (r *AuditEventRepo) ListByEntityID(ctx context.Context, q domain.Querier, entityType string, entityID domain.ID, params domain.ListParams) ([]domain.AuditEvent, int, error) {
 	const op = "auditEventRepo.ListByEntityID"
 
+	dbtx, err := r.getDBTX(q)
+	if err != nil {
+		return nil, 0, fmt.Errorf("%s: %w", op, err)
+	}
+	queries := sqlcgen.New(dbtx)
+
 	// Parse entityID to uuid.UUID
 	eid, err := uuid.Parse(string(entityID))
 	if err != nil {
 		return nil, 0, fmt.Errorf("%s: parse entityID: %w", op, err)
 	}
 
-	// Get total count
-	countRow := q.QueryRow(ctx, `
-		SELECT COUNT(*) FROM audit_events 
-		WHERE entity_type = $1 AND entity_id = $2
-	`, entityType, eid)
-	countScanner, ok := countRow.(rowScanner)
-	if !ok {
-		return nil, 0, fmt.Errorf("%s: invalid querier type for count", op)
-	}
-
-	var totalCount int
-	if err := countScanner.Scan(&totalCount); err != nil {
+	// 1. Get total count
+	count, err := queries.CountAuditEventsByEntity(ctx, sqlcgen.CountAuditEventsByEntityParams{
+		EntityType: entityType,
+		EntityID:   pgtype.UUID{Bytes: eid, Valid: true},
+	})
+	if err != nil {
 		return nil, 0, fmt.Errorf("%s: count: %w", op, err)
 	}
+
+	totalCount := int(count)
 
 	// If no results, return early
 	if totalCount == 0 {
 		return []domain.AuditEvent{}, 0, nil
 	}
 
-	// Get paginated results
-	rows, err := q.Query(ctx, `
-		SELECT id, event_type, actor_id, entity_type, entity_id, payload, timestamp, request_id
-		FROM audit_events
-		WHERE entity_type = $1 AND entity_id = $2
-		ORDER BY timestamp DESC, id DESC
-		LIMIT $3 OFFSET $4
-	`, entityType, eid, params.Limit(), params.Offset())
+	// 2. Get paginated results
+	rows, err := queries.ListAuditEventsByEntity(ctx, sqlcgen.ListAuditEventsByEntityParams{
+		EntityType: entityType,
+		EntityID:   pgtype.UUID{Bytes: eid, Valid: true},
+		Limit:      int32(params.Limit()),
+		Offset:     int32(params.Offset()),
+	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("%s: query: %w", op, err)
 	}
 
-	scanner, ok := rows.(rowsScanner)
-	if !ok {
-		return nil, 0, fmt.Errorf("%s: invalid querier type for rows", op)
-	}
-	defer scanner.Close()
-
 	var events []domain.AuditEvent
-	for scanner.Next() {
-		var event domain.AuditEvent
-		var dbID, dbEntityID uuid.UUID
-		var actorIDPtr *uuid.UUID
-
-		if err := scanner.Scan(&dbID, &event.EventType, &actorIDPtr, &event.EntityType, &dbEntityID, &event.Payload, &event.Timestamp, &event.RequestID); err != nil {
-			return nil, 0, fmt.Errorf("%s: scan: %w", op, err)
+	for _, row := range rows {
+		// Convert generated struct back to domain struct
+		evt := domain.AuditEvent{
+			EventType:  row.EventType,
+			EntityType: row.EntityType,
+			Payload:    row.Payload,
+			Timestamp:  row.Timestamp.Time,
+			RequestID:  row.RequestID.String,
 		}
 
-		event.ID = domain.ID(dbID.String())
-		event.EntityID = domain.ID(dbEntityID.String())
-		if actorIDPtr != nil {
-			event.ActorID = domain.ID(actorIDPtr.String())
+		// UUID conversions
+		var idUuid uuid.UUID
+		copy(idUuid[:], row.ID.Bytes[:])
+		evt.ID = domain.ID(idUuid.String())
+
+		var eidUuid uuid.UUID
+		copy(eidUuid[:], row.EntityID.Bytes[:])
+		evt.EntityID = domain.ID(eidUuid.String())
+
+		if row.ActorID.Valid {
+			var aidUuid uuid.UUID
+			copy(aidUuid[:], row.ActorID.Bytes[:])
+			evt.ActorID = domain.ID(aidUuid.String())
 		}
-		// ActorID remains empty if NULL in DB (zero value)
 
-		events = append(events, event)
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, 0, fmt.Errorf("%s: rows: %w", op, err)
+		events = append(events, evt)
 	}
 
 	return events, totalCount, nil
