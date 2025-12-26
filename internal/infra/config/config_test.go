@@ -503,3 +503,34 @@ func TestLoad_HTTPTimeouts_Custom(t *testing.T) {
 	assert.Equal(t, 5*time.Second, cfg.HTTPReadHeaderTimeout)
 	assert.Equal(t, 2048, cfg.HTTPMaxHeaderBytes)
 }
+
+// =============================================================================
+// Story 5.1: Database Pool Configuration Tests
+// =============================================================================
+
+// TestLoad_DBPool_Defaults tests AC #2: defaults for pool configuration
+func TestLoad_DBPool_Defaults(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, int32(25), cfg.DBPoolMaxConns, "DB_POOL_MAX_CONNS should default to 25")
+	assert.Equal(t, int32(5), cfg.DBPoolMinConns, "DB_POOL_MIN_CONNS should default to 5")
+	assert.Equal(t, time.Hour, cfg.DBPoolMaxLifetime, "DB_POOL_MAX_LIFETIME should default to 1h")
+}
+
+// TestLoad_DBPool_Custom tests AC #1: custom values for pool configuration
+func TestLoad_DBPool_Custom(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
+	t.Setenv("DB_POOL_MAX_CONNS", "50")
+	t.Setenv("DB_POOL_MIN_CONNS", "10")
+	t.Setenv("DB_POOL_MAX_LIFETIME", "30m")
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, int32(50), cfg.DBPoolMaxConns)
+	assert.Equal(t, int32(10), cfg.DBPoolMinConns)
+	assert.Equal(t, 30*time.Minute, cfg.DBPoolMaxLifetime)
+}

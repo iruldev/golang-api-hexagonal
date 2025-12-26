@@ -17,6 +17,14 @@ type Config struct {
 	// Required - Database connection string
 	DatabaseURL string `envconfig:"DATABASE_URL" required:"true"`
 
+	// Database Pool Configuration (Story 5.1)
+	// DBPoolMaxConns is the maximum number of connections in the pool. Default: 25.
+	DBPoolMaxConns int32 `envconfig:"DB_POOL_MAX_CONNS" default:"25"`
+	// DBPoolMinConns is the minimum number of connections in the pool. Default: 5.
+	DBPoolMinConns int32 `envconfig:"DB_POOL_MIN_CONNS" default:"5"`
+	// DBPoolMaxLifetime is the maximum lifetime of a connection. Default: 1h.
+	DBPoolMaxLifetime time.Duration `envconfig:"DB_POOL_MAX_LIFETIME" default:"1h"`
+
 	// Optional with defaults
 	Port        int    `envconfig:"PORT" default:"8080"`
 	LogLevel    string `envconfig:"LOG_LEVEL" default:"info"`
@@ -196,6 +204,20 @@ func (c *Config) Validate() error {
 	case "full", "partial":
 	default:
 		return fmt.Errorf("invalid AUDIT_REDACT_EMAIL: must be 'full' or 'partial'")
+	}
+
+	// Story 5.1: Database Pool Validation
+	if c.DBPoolMaxConns < 1 {
+		return fmt.Errorf("invalid DB_POOL_MAX_CONNS: must be greater than 0")
+	}
+	if c.DBPoolMinConns < 0 { // 0 is technically allowed by pgx (no idle conns), but let's allow it. config default is 5.
+		return fmt.Errorf("invalid DB_POOL_MIN_CONNS: must shorten handle non-negative")
+	}
+	if c.DBPoolMinConns > c.DBPoolMaxConns {
+		return fmt.Errorf("invalid DB_POOL_MIN_CONNS: must be less than or equal to DB_POOL_MAX_CONNS")
+	}
+	if c.DBPoolMaxLifetime <= 0 {
+		return fmt.Errorf("invalid DB_POOL_MAX_LIFETIME: must be greater than 0")
 	}
 
 	return nil

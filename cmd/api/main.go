@@ -93,7 +93,12 @@ func run() error {
 	// Let's modify the chunk around DB defer.
 
 	// Prepare database connection (non-fatal if unavailable at startup)
-	db := newReconnectingDB(cfg.DatabaseURL, cfg.IgnoreDBStartupError, logger)
+	poolCfg := postgres.PoolConfig{
+		MaxConns:        cfg.DBPoolMaxConns,
+		MinConns:        cfg.DBPoolMinConns,
+		MaxConnLifetime: cfg.DBPoolMaxLifetime,
+	}
+	db := newReconnectingDB(cfg.DatabaseURL, poolCfg, cfg.IgnoreDBStartupError, logger)
 	defer db.Close()
 
 	// Defer tracer shutdown so it runs after servers stop but before DB closes (LIFO: defer this AFTER db.Close)
@@ -270,13 +275,13 @@ type reconnectingDB struct {
 	poolCreator        func(context.Context, string) (Pooler, error)
 }
 
-func newReconnectingDB(dsn string, ignoreStartupError bool, log *slog.Logger) *reconnectingDB {
+func newReconnectingDB(dsn string, poolCfg postgres.PoolConfig, ignoreStartupError bool, log *slog.Logger) *reconnectingDB {
 	return &reconnectingDB{
 		dsn:                dsn,
 		ignoreStartupError: ignoreStartupError,
 		log:                log,
 		poolCreator: func(ctx context.Context, dsn string) (Pooler, error) {
-			return postgres.NewPool(ctx, dsn)
+			return postgres.NewPool(ctx, dsn, poolCfg)
 		},
 	}
 }
