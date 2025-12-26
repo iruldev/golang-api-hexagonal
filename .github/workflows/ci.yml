@@ -56,6 +56,19 @@ jobs:
       - name: Validate OpenAPI spec
         run: make openapi
 
+      # Story 6.5: Verify generated code is up-to-date
+      # Runs sqlc generate and checks for uncommitted changes
+      # Fails CI if developer forgot to run 'make generate' before commit
+      # Install sqlc for code generation verification
+      # Version matches Makefile setup to ensure consistency
+      - name: Install sqlc
+        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.28.0
+
+      - name: Verify generated code is up-to-date
+        run: |
+          make generate
+          git diff --exit-code || (echo "❌ Generated code is stale. Run 'make generate' and commit the changes." && exit 1)
+
       # Test step generates coverage.out profile for all packages
       - name: Run tests
         run: make test
