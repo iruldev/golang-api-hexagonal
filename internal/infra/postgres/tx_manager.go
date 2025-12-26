@@ -4,18 +4,16 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
 )
 
 // TxManager implements domain.TxManager for PostgreSQL transactions.
 type TxManager struct {
-	pool *pgxpool.Pool
+	pool Pooler
 }
 
-// NewTxManager creates a new TxManager from a pgxpool.Pool.
-func NewTxManager(pool *pgxpool.Pool) domain.TxManager {
+// NewTxManager creates a new TxManager from a Pooler.
+func NewTxManager(pool Pooler) domain.TxManager {
 	return &TxManager{pool: pool}
 }
 
@@ -25,7 +23,12 @@ func NewTxManager(pool *pgxpool.Pool) domain.TxManager {
 func (m *TxManager) WithTx(ctx context.Context, fn func(tx domain.Querier) error) (err error) {
 	const op = "TxManager.WithTx"
 
-	tx, err := m.pool.Begin(ctx)
+	pool := m.pool.Pool()
+	if pool == nil {
+		return fmt.Errorf("%s: database not connected", op)
+	}
+
+	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("%s: begin: %w", op, err)
 	}

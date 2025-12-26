@@ -102,7 +102,7 @@ func TestUserRepo_Create(t *testing.T) {
 
 	ctx := context.Background()
 	repo := postgres.NewUserRepo()
-	querier := postgres.NewPoolQuerier(pool)
+	querier := postgres.NewPoolQuerier(&dbAdapter{p: pool})
 
 	// Generate a valid UUID v7
 	id, err := uuid.NewV7()
@@ -135,7 +135,7 @@ func TestUserRepo_Create_DuplicateEmail(t *testing.T) {
 
 	ctx := context.Background()
 	repo := postgres.NewUserRepo()
-	querier := postgres.NewPoolQuerier(pool)
+	querier := postgres.NewPoolQuerier(&dbAdapter{p: pool})
 
 	// Create first user
 	id1, err := uuid.NewV7()
@@ -178,7 +178,7 @@ func TestUserRepo_GetByID_Success(t *testing.T) {
 
 	ctx := context.Background()
 	repo := postgres.NewUserRepo()
-	querier := postgres.NewPoolQuerier(pool)
+	querier := postgres.NewPoolQuerier(&dbAdapter{p: pool})
 
 	// Create a user first
 	id, err := uuid.NewV7()
@@ -213,7 +213,7 @@ func TestUserRepo_GetByID_NotFound(t *testing.T) {
 
 	ctx := context.Background()
 	repo := postgres.NewUserRepo()
-	querier := postgres.NewPoolQuerier(pool)
+	querier := postgres.NewPoolQuerier(&dbAdapter{p: pool})
 
 	// Generate a random UUID that doesn't exist
 	nonExistentID, err := uuid.NewV7()
@@ -231,7 +231,7 @@ func TestUserRepo_List_WithPagination(t *testing.T) {
 
 	ctx := context.Background()
 	repo := postgres.NewUserRepo()
-	querier := postgres.NewPoolQuerier(pool)
+	querier := postgres.NewPoolQuerier(&dbAdapter{p: pool})
 
 	// Create multiple users
 	now := time.Now().UTC().Truncate(time.Microsecond)
@@ -279,7 +279,7 @@ func TestUserRepo_List_OrderByCreatedAtDesc(t *testing.T) {
 
 	ctx := context.Background()
 	repo := postgres.NewUserRepo()
-	querier := postgres.NewPoolQuerier(pool)
+	querier := postgres.NewPoolQuerier(&dbAdapter{p: pool})
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
@@ -323,7 +323,7 @@ func TestUserRepo_List_OrderByIDDescWhenCreatedAtEqual(t *testing.T) {
 
 	ctx := context.Background()
 	repo := postgres.NewUserRepo()
-	querier := postgres.NewPoolQuerier(pool)
+	querier := postgres.NewPoolQuerier(&dbAdapter{p: pool})
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
@@ -367,8 +367,8 @@ func TestTxManager_WithTx_Rollback(t *testing.T) {
 
 	ctx := context.Background()
 	repo := postgres.NewUserRepo()
-	querier := postgres.NewPoolQuerier(pool)
-	txManager := postgres.NewTxManager(pool)
+	querier := postgres.NewPoolQuerier(&dbAdapter{p: pool})
+	txManager := postgres.NewTxManager(&dbAdapter{p: pool})
 
 	// Create a user in a transaction that will fail
 	id, err := uuid.NewV7()
@@ -407,8 +407,8 @@ func TestTxManager_WithTx_Commit(t *testing.T) {
 
 	ctx := context.Background()
 	repo := postgres.NewUserRepo()
-	querier := postgres.NewPoolQuerier(pool)
-	txManager := postgres.NewTxManager(pool)
+	querier := postgres.NewPoolQuerier(&dbAdapter{p: pool})
+	txManager := postgres.NewTxManager(&dbAdapter{p: pool})
 
 	id, err := uuid.NewV7()
 	require.NoError(t, err)

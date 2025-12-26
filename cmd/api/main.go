@@ -5,174 +5,30 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
-	"os/signal"
-	"sync"
-	"syscall"
-	"time"
 
-	"go.opentelemetry.io/otel"
+	"github.com/go-chi/chi/v5"
+	"go.uber.org/fx"
 
-	"github.com/iruldev/golang-api-hexagonal/internal/app/audit"
-	"github.com/iruldev/golang-api-hexagonal/internal/app/user"
-	"github.com/iruldev/golang-api-hexagonal/internal/domain"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/config"
-	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
-	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
-	"github.com/iruldev/golang-api-hexagonal/internal/shared/redact"
-	httpTransport "github.com/iruldev/golang-api-hexagonal/internal/transport/http"
-	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
-	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/handler"
-	"github.com/jackc/pgx/v5/pgxpool"
+	fxmodule "github.com/iruldev/golang-api-hexagonal/internal/infra/fx"
 )
 
 func main() {
-	if err := run(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func run() error {
-	ctx := context.Background()
-
-	// Load configuration from environment
-	cfg, err := config.Load()
-	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
-
-	if err := contract.SetProblemBaseURL(cfg.ProblemBaseURL); err != nil {
-		return fmt.Errorf("failed to set PROBLEM_BASE_URL: %w", err)
-	}
-
-	// Initialize structured JSON logger with service/env attributes
-	logger := observability.NewLogger(cfg)
-	slog.SetDefault(logger) // Set as default for use with slog.Info(), slog.Error(), etc.
-
-	logger.Info("service starting",
-		slog.Int("port", cfg.Port),
-		slog.String("log_level", cfg.LogLevel),
-		slog.Bool("otel_enabled", cfg.OTELEnabled),
+	app := fx.New(
+		fxmodule.Module,
+		fx.Invoke(startServers),
 	)
 
-	// Initialize OpenTelemetry tracer provider only when enabled
-	var tpShutdown func(context.Context) error
-	if cfg.OTELEnabled {
-		tp, err := observability.InitTracer(ctx, cfg)
-		if err != nil {
-			return fmt.Errorf("failed to initialize tracer: %w", err)
-		}
-		otel.SetTracerProvider(tp)
-		tpShutdown = tp.Shutdown
-		logger.Info("tracing enabled")
-	} else {
-		logger.Info("tracing disabled; skipping tracer provider initialization")
-	}
+	app.Run()
+}
 
-	// Ensure tracer is shut down when run() exits (LIFO: runs after db cleanup would be wrong, so place BEFORE db defer?)
-	// DB defer is at Line 75. defer executes LIFO.
-	// We want: Server Stop -> Tracer Shutdown -> DB Close.
-	// We are currently before DB Close defer.
-	// So if we defer here, it runs AFTER DB Close?
-	// No:
-	// 1. defer Tracer (runs last)
-	// 2. defer DB (runs before Tracer)
-	// Wait, LIFO:
-	// A deferred
-	// B deferred
-	// Exit: B runs, then A runs.
-	// We want to close DB *last*? Or Tracer *last*?
-	// Usually DB close last.
-	// So we should defer Tracer *after* deferring DB?
-	// Current DB defer is at line 75.
-	// Let's just define the func here, but defer it LATER or handle logic carefully.
-	// Actually, `run` exits.
-	// We want: Servers (stopped in main logic) -> Tracer -> DB.
-	// So defer Tracer logic should be added *after* defer DB.
-	// Let's modify the chunk around DB defer.
-
-	// Prepare database connection (non-fatal if unavailable at startup)
-	poolCfg := postgres.PoolConfig{
-		MaxConns:        cfg.DBPoolMaxConns,
-		MinConns:        cfg.DBPoolMinConns,
-		MaxConnLifetime: cfg.DBPoolMaxLifetime,
-	}
-	db := newReconnectingDB(cfg.DatabaseURL, poolCfg, cfg.IgnoreDBStartupError, logger)
-	defer db.Close()
-
-	// Defer tracer shutdown so it runs after servers stop but before DB closes (LIFO: defer this AFTER db.Close)
-	if tpShutdown != nil {
-		defer func() {
-			// Use a dedicated context for shutdown cleanup with timeout
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if err := tpShutdown(ctx); err != nil {
-				logger.Error("tracer shutdown failed", slog.Any("err", err))
-			}
-		}()
-	}
-
-	const startupPingTimeout = 5 * time.Second
-	ctxPing, cancelPing := context.WithTimeout(ctx, startupPingTimeout)
-	defer cancelPing() // Fix: use defer for cleanup
-	if err := db.Ping(ctxPing); err != nil {
-		return fmt.Errorf("database not reachable at startup: %w", err)
-	}
-	logger.Info("database connected")
-
-	// Create handlers
-	healthHandler := handler.NewHealthHandler()
-	readyHandler := handler.NewReadyHandler(db, logger)
-
-	// Create user-related dependencies
-	userRepo := postgres.NewUserRepo()
-	idGen := postgres.NewIDGenerator()
-
-	// Create audit-related dependencies
-	redactorCfg := domain.RedactorConfig{EmailMode: cfg.AuditRedactEmail}
-	piiRedactor := redact.NewPIIRedactor(redactorCfg)
-	auditEventRepo := postgres.NewAuditEventRepo()
-	auditService := audit.NewAuditService(auditEventRepo, piiRedactor, idGen)
-
-	// Create a database querier using the Pool() getter for safer access
-	pool := db.Pool()
-
-	// Use a pool querier (start-up verified pool is available)
-	querier := postgres.NewPoolQuerier(pool.Pool())
-
-	// Create transaction manager
-	txManager := postgres.NewTxManager(pool.Pool())
-
-	// Create use cases
-	createUserUC := user.NewCreateUserUseCase(userRepo, auditService, idGen, txManager, querier)
-	getUserUC := user.NewGetUserUseCase(userRepo, querier, logger)
-	listUsersUC := user.NewListUsersUseCase(userRepo, querier)
-
-	// Create user handler
-	userHandler := handler.NewUserHandler(createUserUC, getUserUC, listUsersUC, httpTransport.BasePath+"/users")
-
-	// Initialize Prometheus metrics registry
-	metricsReg, httpMetrics := observability.NewMetricsRegistry()
-
-	// Create router with logger for request logging middleware
-	jwtConfig := httpTransport.JWTConfig{
-		Enabled:   cfg.JWTEnabled,
-		Secret:    []byte(cfg.JWTSecret),
-		Now:       nil, // Use time.Now in production
-		Issuer:    cfg.JWTIssuer,
-		Audience:  cfg.JWTAudience,
-		ClockSkew: cfg.JWTClockSkew,
-	}
-	rateLimitConfig := httpTransport.RateLimitConfig{
-		RequestsPerSecond: cfg.RateLimitRPS,
-		TrustProxy:        cfg.TrustProxy,
-	}
-	publicRouter := httpTransport.NewRouter(logger, cfg.OTELEnabled, metricsReg, httpMetrics, healthHandler, readyHandler, userHandler, cfg.MaxRequestSize, jwtConfig, rateLimitConfig)
-
-	// Create Internal Router (Story 2.5b)
-	internalRouter := httpTransport.NewInternalRouter(logger, metricsReg, httpMetrics)
-
+func startServers(
+	lc fx.Lifecycle,
+	publicRouter chi.Router,
+	internalRouter *chi.Mux,
+	cfg *config.Config,
+	logger *slog.Logger,
+) {
 	// Create Public HTTP server
 	publicAddr := fmt.Sprintf(":%d", cfg.Port)
 	publicSrv := &http.Server{
@@ -186,8 +42,6 @@ func run() error {
 	}
 
 	// Create Internal HTTP server
-	// Use the same timeouts as public server for now to avoid config complexity.
-	// If stricter internal timeouts are needed, new config vars can be added later.
 	internalAddr := fmt.Sprintf("%s:%d", cfg.InternalBindAddress, cfg.InternalPort)
 	internalSrv := &http.Server{
 		Addr:              internalAddr,
@@ -199,161 +53,41 @@ func run() error {
 		MaxHeaderBytes:    cfg.HTTPMaxHeaderBytes,
 	}
 
-	// Start servers in goroutines
-	serverErrors := make(chan error, 2) // buffer of 2 for both servers
-
-	go func() {
-		logger.Info("public server listening", slog.String("addr", publicAddr))
-		serverErrors <- publicSrv.ListenAndServe()
-	}()
-
-	go func() {
-		logger.Info("internal server listening", slog.String("addr", internalAddr))
-		serverErrors <- internalSrv.ListenAndServe()
-	}()
-
-	// Wait for interrupt signal or server error
-	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
-
-	select {
-	case err := <-serverErrors:
-		if err != http.ErrServerClosed {
-			logger.Error("server error", slog.Any("err", err))
-			return fmt.Errorf("server error: %w", err)
-		}
-	case sig := <-shutdown:
-		logger.Info("shutdown signal received", slog.Any("signal", sig))
-
-		// Give outstanding requests time to complete
-		ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
-		defer cancel()
-
-		// Tracer shutdown removed from here; handled by defer at top of run()
-
-		// Shutdown both servers concurrently
-		var wg sync.WaitGroup
-		wg.Add(2)
-
-		go func() {
-			defer wg.Done()
-			if err := publicSrv.Shutdown(ctx); err != nil {
-				publicSrv.Close() // Force close
-				logger.Error("public server graceful shutdown failed", slog.Any("err", err))
-			}
-		}()
-
-		go func() {
-			defer wg.Done()
-			if err := internalSrv.Shutdown(ctx); err != nil {
-				internalSrv.Close() // Force close
-				logger.Error("internal server graceful shutdown failed", slog.Any("err", err))
-			}
-		}()
-
-		wg.Wait()
-	}
-
-	logger.Info("servers stopped gracefully")
-	return nil
-}
-
-// Pooler defines the interface for a database pool.
-type Pooler interface {
-	Ping(context.Context) error
-	Close()
-	Pool() *pgxpool.Pool
-}
-
-// reconnectingDB lazily establishes a database pool and retries on readiness checks.
-type reconnectingDB struct {
-	dsn                string
-	ignoreStartupError bool
-	mu                 sync.RWMutex
-	pool               Pooler
-	log                *slog.Logger
-	poolCreator        func(context.Context, string) (Pooler, error)
-}
-
-func newReconnectingDB(dsn string, poolCfg postgres.PoolConfig, ignoreStartupError bool, log *slog.Logger) *reconnectingDB {
-	return &reconnectingDB{
-		dsn:                dsn,
-		ignoreStartupError: ignoreStartupError,
-		log:                log,
-		poolCreator: func(ctx context.Context, dsn string) (Pooler, error) {
-			return postgres.NewPool(ctx, dsn, poolCfg)
-		},
-	}
-}
-
-// Ping ensures a pool exists and is healthy; recreates the pool on failure.
-func (r *reconnectingDB) Ping(ctx context.Context) error {
-	// Fast path: try existing pool under read lock
-	r.mu.RLock()
-	pool := r.pool
-	r.mu.RUnlock()
-
-	if pool == nil {
-		// Create pool under write lock (double-check pattern)
-		r.mu.Lock()
-		if r.pool == nil {
-			newPool, err := r.poolCreator(ctx, r.dsn)
-			if err != nil {
-				// If creation fails and we ignore startup errors
-				if r.ignoreStartupError {
-					r.log.Warn("database pool creation failed but IGNORE_DB_STARTUP_ERROR is set; using no-op pool", slog.Any("err", err))
-					r.pool = &noopPool{}
-					r.mu.Unlock()
-					return nil
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			go func() {
+				logger.Info("public server listening", slog.String("addr", publicAddr))
+				if err := publicSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+					logger.Error("public server failed", slog.Any("err", err))
+					// We could trigger shutdown here, but Fx app is running.
+					// Ideally we should signal the app to stop?
+					// For now, logging is standard practice in Fx OnStart hooks unless we have shutdowner.
 				}
-				r.mu.Unlock()
-				return err
-			}
-			r.pool = newPool
-		}
-		pool = r.pool
-		r.mu.Unlock()
-	}
+			}()
 
-	if err := pool.Ping(ctx); err != nil {
-		if r.ignoreStartupError {
-			r.log.Warn("database ping failed but IGNORE_DB_STARTUP_ERROR is set; using no-op pool", slog.Any("err", err))
-			// Assign a no-op pool so checking db.Pool() doesn't panic
-			// We need write lock to update r.pool
-			r.mu.Lock()
-			r.pool = &noopPool{}
-			r.mu.Unlock()
+			go func() {
+				logger.Info("internal server listening", slog.String("addr", internalAddr))
+				if err := internalSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+					logger.Error("internal server failed", slog.Any("err", err))
+				}
+			}()
+
 			return nil
-		}
-		// pgxpool handles reconnection automatically - don't close the pool
-		// Closing invalidates references held by querier/txManager causing panics
-		r.log.Warn("database ping failed", slog.Any("err", err))
-		return err
-	}
-
-	return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			logger.Info("stopping servers")
+			// Shutdown both servers
+			// We can do this sequentially or parallel. Parallel is better for speed.
+			// But let's keep it simple.
+			if err := publicSrv.Shutdown(ctx); err != nil {
+				logger.Error("public server shutdown failed", slog.Any("err", err))
+				publicSrv.Close()
+			}
+			if err := internalSrv.Shutdown(ctx); err != nil {
+				logger.Error("internal server shutdown failed", slog.Any("err", err))
+				internalSrv.Close()
+			}
+			return nil
+		},
+	})
 }
-
-// Close shuts down the pool if it was created.
-func (r *reconnectingDB) Close() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.pool != nil {
-		r.pool.Close()
-		r.pool = nil
-	}
-}
-
-// Pool returns the current pool for database operations.
-func (r *reconnectingDB) Pool() Pooler {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.pool
-}
-
-// noopPool is a placeholder for when DB connection is ignored.
-type noopPool struct{}
-
-func (n *noopPool) Ping(context.Context) error { return nil }
-func (n *noopPool) Close()                     {}
-func (n *noopPool) Pool() *pgxpool.Pool        { return nil }

@@ -25,7 +25,11 @@ func NewAuditEventRepo() *AuditEventRepo {
 func (r *AuditEventRepo) getDBTX(q domain.Querier) (sqlcgen.DBTX, error) {
 	switch v := q.(type) {
 	case *PoolQuerier:
-		return v.pool, nil
+		pool := v.pool.Pool()
+		if pool == nil {
+			return nil, fmt.Errorf("database not connected")
+		}
+		return pool, nil
 	case *TxQuerier:
 		return v.tx, nil
 	default:

@@ -1,4 +1,4 @@
-package main
+package postgres
 
 import (
 	"context"
@@ -28,12 +28,12 @@ func (m *mockPool) Pool() *pgxpool.Pool {
 	return nil
 }
 
-// TestReconnectingDB_PingDoesNotClosePool verifies that Ping() no longer closes
+// TestResilientPool_PingDoesNotClosePool verifies that Ping() no longer closes
 // the pool on failure, solving the stale reference bug.
-func TestReconnectingDB_PingDoesNotClosePool(t *testing.T) {
+func TestResilientPool_PingDoesNotClosePool(t *testing.T) {
 	t.Run("ping failure preserves pool connection", func(t *testing.T) {
 		mock := &mockPool{pingErr: errors.New("connection lost")}
-		db := &reconnectingDB{
+		db := &ResilientPool{
 			log: slog.Default(),
 			// In this test path, we pre-set the pool, so creator isn't called
 			// unless we start with nil pool.
@@ -67,23 +67,23 @@ func TestReconnectingDB_PingDoesNotClosePool(t *testing.T) {
 	})
 }
 
-// TestReconnectingDB_PoolGetter verifies the Pool() getter logic.
-func TestReconnectingDB_PoolGetter(t *testing.T) {
+// TestResilientPool_PoolGetter verifies the Pool() getter logic.
+func TestResilientPool_PoolGetter(t *testing.T) {
 	t.Run("Pool() returns current pool safely", func(t *testing.T) {
 		mock := &mockPool{}
-		db := &reconnectingDB{
+		db := &ResilientPool{
 			log: slog.Default(),
 		}
 		db.pool = mock // Set directly
 
 		p := db.Pool()
-		if p != mock {
-			t.Errorf("expected Pool() to return the mock pool instance")
+		if p != nil {
+			t.Errorf("expected Pool() to return nil (from mock)")
 		}
 	})
 
 	t.Run("Pool() returns nil if not connected", func(t *testing.T) {
-		db := &reconnectingDB{
+		db := &ResilientPool{
 			log: slog.Default(),
 		}
 		if db.Pool() != nil {
@@ -93,7 +93,7 @@ func TestReconnectingDB_PoolGetter(t *testing.T) {
 
 	t.Run("Concurrent access is safe", func(t *testing.T) {
 		mock := &mockPool{}
-		db := &reconnectingDB{
+		db := &ResilientPool{
 			log: slog.Default(),
 		}
 		db.pool = mock
@@ -110,13 +110,13 @@ func TestReconnectingDB_PoolGetter(t *testing.T) {
 	})
 }
 
-// TestReconnectingDB_Reconnection checks the lazy connection logic
-func TestReconnectingDB_LazyConnection(t *testing.T) {
+// TestResilientPool_LazyConnection checks the lazy connection logic
+func TestResilientPool_LazyConnection(t *testing.T) {
 	t.Run("Ping creates pool if nil", func(t *testing.T) {
 		mock := &mockPool{}
 		creatorCalled := false
 
-		db := &reconnectingDB{
+		db := &ResilientPool{
 			dsn: "postgres://mock",
 			log: slog.Default(),
 			poolCreator: func(ctx context.Context, dsn string) (Pooler, error) {

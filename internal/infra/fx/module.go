@@ -1,0 +1,257 @@
+// Package fxmodule provides Uber Fx dependency injection modules for the application.
+// This replaces Google Wire which is incompatible with pgx/puddle packages.
+//
+// Usage in main.go:
+//
+//	app := fx.New(
+//	    fxmodule.Module,
+//	    fx.Invoke(run),
+//	)
+//	app.Run()
+package fxmodule
+
+import (
+	"context"
+	"log/slog"
+
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/fx"
+
+	"github.com/iruldev/golang-api-hexagonal/internal/app/audit"
+	"github.com/iruldev/golang-api-hexagonal/internal/app/user"
+	"github.com/iruldev/golang-api-hexagonal/internal/domain"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/config"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
+	"github.com/iruldev/golang-api-hexagonal/internal/shared/metrics"
+	"github.com/iruldev/golang-api-hexagonal/internal/shared/redact"
+	httpTransport "github.com/iruldev/golang-api-hexagonal/internal/transport/http"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/handler"
+)
+
+// Module provides all application dependencies via Uber Fx.
+var Module = fx.Options(
+	ConfigModule,
+	ObservabilityModule,
+	PostgresModule,
+	DomainModule,
+	AppModule,
+	TransportModule,
+)
+
+// ConfigModule provides configuration dependencies.
+var ConfigModule = fx.Options(
+	fx.Provide(config.Load),
+	fx.Invoke(func(cfg *config.Config) error {
+		return contract.SetProblemBaseURL(cfg.ProblemBaseURL)
+	}),
+)
+
+// ObservabilityModule provides logging and metrics dependencies.
+var ObservabilityModule = fx.Options(
+	fx.Provide(observability.NewLogger),
+	fx.Invoke(func(logger *slog.Logger) {
+		slog.SetDefault(logger)
+	}),
+	fx.Provide(provideMetrics),
+	fx.Provide(provideTracer),
+)
+
+func provideTracer(lc fx.Lifecycle, cfg *config.Config, logger *slog.Logger) (*sdktrace.TracerProvider, error) {
+	if !cfg.OTELEnabled {
+		logger.Info("tracing disabled")
+		return sdktrace.NewTracerProvider(), nil
+	}
+
+	tp, err := observability.InitTracer(context.Background(), cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	otel.SetTracerProvider(tp)
+	logger.Info("tracing enabled")
+
+	lc.Append(fx.Hook{
+		OnStop: func(ctx context.Context) error {
+			logger.Info("shutting down tracer")
+			return tp.Shutdown(ctx)
+		},
+	})
+
+	return tp, nil
+}
+
+// MetricsResult holds Prometheus metrics components.
+type MetricsResult struct {
+	fx.Out
+	Registry    *prometheus.Registry
+	HTTPMetrics metrics.HTTPMetrics
+}
+
+func provideMetrics() MetricsResult {
+	reg, httpMetrics := observability.NewMetricsRegistry()
+	return MetricsResult{
+		Registry:    reg,
+		HTTPMetrics: httpMetrics,
+	}
+}
+
+// PostgresModule provides database dependencies.
+var PostgresModule = fx.Options(
+	fx.Provide(providePoolConfig),
+	fx.Provide(providePool),
+	fx.Provide(provideQuerier),
+	fx.Provide(provideTxManager),
+)
+
+func providePoolConfig(cfg *config.Config) postgres.PoolConfig {
+	return postgres.PoolConfig{
+		MaxConns:        cfg.DBPoolMaxConns,
+		MinConns:        cfg.DBPoolMinConns,
+		MaxConnLifetime: cfg.DBPoolMaxLifetime,
+	}
+}
+
+func providePool(lc fx.Lifecycle, cfg *config.Config, poolCfg postgres.PoolConfig, logger *slog.Logger) (postgres.Pooler, error) {
+	ctx := context.Background()
+	pool := postgres.NewResilientPool(ctx, cfg.DatabaseURL, poolCfg, cfg.IgnoreDBStartupError, logger)
+
+	lc.Append(fx.Hook{
+		OnStop: func(ctx context.Context) error {
+			logger.Info("closing database pool")
+			pool.Close()
+			return nil
+		},
+	})
+
+	return pool, nil
+}
+
+func provideQuerier(pool postgres.Pooler) domain.Querier {
+	if pool == nil {
+		return nil
+	}
+	return postgres.NewPoolQuerier(pool)
+}
+
+func provideTxManager(pool postgres.Pooler) domain.TxManager {
+	if pool == nil {
+		return nil
+	}
+	return postgres.NewTxManager(pool)
+}
+
+// DomainModule provides domain-level dependencies.
+var DomainModule = fx.Options(
+	fx.Provide(
+		fx.Annotate(
+			postgres.NewUserRepo,
+			fx.As(new(domain.UserRepository)),
+		),
+	),
+	fx.Provide(
+		fx.Annotate(
+			postgres.NewAuditEventRepo,
+			fx.As(new(domain.AuditEventRepository)),
+		),
+	),
+	fx.Provide(postgres.NewIDGenerator),
+	fx.Provide(provideRedactorConfig),
+	fx.Provide(
+		fx.Annotate(
+			redact.NewPIIRedactor,
+			fx.As(new(domain.Redactor)),
+		),
+	),
+)
+
+func provideRedactorConfig(cfg *config.Config) domain.RedactorConfig {
+	return domain.RedactorConfig{EmailMode: cfg.AuditRedactEmail}
+}
+
+// AppModule provides application layer dependencies.
+var AppModule = fx.Options(
+	fx.Provide(audit.NewAuditService),
+	fx.Provide(user.NewCreateUserUseCase),
+	fx.Provide(user.NewGetUserUseCase),
+	fx.Provide(user.NewListUsersUseCase),
+)
+
+// TransportModule provides HTTP transport dependencies.
+var TransportModule = fx.Options(
+	fx.Provide(handler.NewHealthHandler),
+	fx.Provide(provideReadyHandler),
+	fx.Provide(provideUserHandler),
+	fx.Provide(provideJWTConfig),
+	fx.Provide(provideRateLimitConfig),
+	fx.Provide(providePublicRouter),
+	fx.Provide(provideInternalRouter),
+)
+
+func provideReadyHandler(pool postgres.Pooler, logger *slog.Logger) *handler.ReadyHandler {
+	return handler.NewReadyHandler(pool, logger)
+}
+
+func provideUserHandler(
+	createUC *user.CreateUserUseCase,
+	getUC *user.GetUserUseCase,
+	listUC *user.ListUsersUseCase,
+) *handler.UserHandler {
+	return handler.NewUserHandler(createUC, getUC, listUC, httpTransport.BasePath+"/users")
+}
+
+func provideJWTConfig(cfg *config.Config) httpTransport.JWTConfig {
+	return httpTransport.JWTConfig{
+		Enabled:   cfg.JWTEnabled,
+		Secret:    []byte(cfg.JWTSecret),
+		Now:       nil,
+		Issuer:    cfg.JWTIssuer,
+		Audience:  cfg.JWTAudience,
+		ClockSkew: cfg.JWTClockSkew,
+	}
+}
+
+func provideRateLimitConfig(cfg *config.Config) httpTransport.RateLimitConfig {
+	return httpTransport.RateLimitConfig{
+		RequestsPerSecond: cfg.RateLimitRPS,
+		TrustProxy:        cfg.TrustProxy,
+	}
+}
+
+func providePublicRouter(
+	cfg *config.Config,
+	logger *slog.Logger,
+	registry *prometheus.Registry,
+	httpMetrics metrics.HTTPMetrics,
+	healthHandler *handler.HealthHandler,
+	readyHandler *handler.ReadyHandler,
+	userHandler *handler.UserHandler,
+	jwtConfig httpTransport.JWTConfig,
+	rateLimitConfig httpTransport.RateLimitConfig,
+) chi.Router {
+	return httpTransport.NewRouter(
+		logger,
+		cfg.OTELEnabled,
+		registry,
+		httpMetrics,
+		healthHandler,
+		readyHandler,
+		userHandler,
+		cfg.MaxRequestSize,
+		jwtConfig,
+		rateLimitConfig,
+	)
+}
+
+func provideInternalRouter(
+	logger *slog.Logger,
+	registry *prometheus.Registry,
+	httpMetrics metrics.HTTPMetrics,
+) *chi.Mux {
+	return httpTransport.NewInternalRouter(logger, registry, httpMetrics)
+}

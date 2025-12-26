@@ -21,7 +21,7 @@ func TestAuditEventRepo_Create(t *testing.T) {
 
 	ctx := context.Background()
 	repo := postgres.NewAuditEventRepo()
-	querier := postgres.NewPoolQuerier(pool)
+	querier := postgres.NewPoolQuerier(&dbAdapter{p: pool})
 
 	id, err := uuid.NewV7()
 	require.NoError(t, err)
@@ -65,7 +65,7 @@ func TestAuditEventRepo_Create_WithNullActorID(t *testing.T) {
 
 	ctx := context.Background()
 	repo := postgres.NewAuditEventRepo()
-	querier := postgres.NewPoolQuerier(pool)
+	querier := postgres.NewPoolQuerier(&dbAdapter{p: pool})
 
 	id, _ := uuid.NewV7()
 	entityID, _ := uuid.NewV7()
@@ -98,7 +98,7 @@ func TestAuditEventRepo_ListByEntityID_WithPagination(t *testing.T) {
 
 	ctx := context.Background()
 	repo := postgres.NewAuditEventRepo()
-	querier := postgres.NewPoolQuerier(pool)
+	querier := postgres.NewPoolQuerier(&dbAdapter{p: pool})
 
 	entityID, _ := uuid.NewV7()
 	actorID, _ := uuid.NewV7()
@@ -149,7 +149,7 @@ func TestAuditEventRepo_ListByEntityID_OrderByTimestampDesc(t *testing.T) {
 
 	ctx := context.Background()
 	repo := postgres.NewAuditEventRepo()
-	querier := postgres.NewPoolQuerier(pool)
+	querier := postgres.NewPoolQuerier(&dbAdapter{p: pool})
 
 	entityID, _ := uuid.NewV7()
 	actorID, _ := uuid.NewV7()
@@ -198,7 +198,7 @@ func TestAuditEventRepo_ListByEntityID_FiltersByEntityTypeAndID(t *testing.T) {
 
 	ctx := context.Background()
 	repo := postgres.NewAuditEventRepo()
-	querier := postgres.NewPoolQuerier(pool)
+	querier := postgres.NewPoolQuerier(&dbAdapter{p: pool})
 
 	// Create events for different entities
 	entityID1, _ := uuid.NewV7()
@@ -276,7 +276,7 @@ func TestAuditEventRepo_ListByEntityID_OrderByIDDescWhenTimestampEqual(t *testin
 
 	ctx := context.Background()
 	repo := postgres.NewAuditEventRepo()
-	querier := postgres.NewPoolQuerier(pool)
+	querier := postgres.NewPoolQuerier(&dbAdapter{p: pool})
 
 	entityID, _ := uuid.NewV7()
 	actorID, _ := uuid.NewV7()
@@ -326,7 +326,7 @@ func TestAuditEventRepo_ListByEntityID_InvalidID(t *testing.T) {
 
 	ctx := context.Background()
 	repo := postgres.NewAuditEventRepo()
-	querier := postgres.NewPoolQuerier(pool)
+	querier := postgres.NewPoolQuerier(&dbAdapter{p: pool})
 
 	_, _, err := repo.ListByEntityID(ctx, querier, "user", "invalid-uuid", domain.ListParams{Page: 1, PageSize: 10})
 	assert.Error(t, err)

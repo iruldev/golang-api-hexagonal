@@ -3,9 +3,9 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
 )
@@ -25,31 +25,51 @@ type rowsScanner interface {
 	Scan(dest ...any) error
 }
 
-// PoolQuerier wraps pgxpool.Pool to implement domain.Querier.
+// PoolQuerier wraps Pooler to implement domain.Querier.
 // Use this for regular database operations outside transactions.
 type PoolQuerier struct {
-	pool *pgxpool.Pool
+	pool Pooler
 }
 
-// NewPoolQuerier creates a new PoolQuerier from a pgxpool.Pool.
-func NewPoolQuerier(pool *pgxpool.Pool) domain.Querier {
+// NewPoolQuerier creates a new PoolQuerier from a Pooler.
+func NewPoolQuerier(pool Pooler) domain.Querier {
 	return &PoolQuerier{pool: pool}
 }
 
 // Exec executes a query that doesn't return rows.
 func (q *PoolQuerier) Exec(ctx context.Context, sql string, args ...any) (any, error) {
-	return q.pool.Exec(ctx, sql, args...)
+	pool := q.pool.Pool()
+	if pool == nil {
+		return nil, fmt.Errorf("database not connected")
+	}
+	return pool.Exec(ctx, sql, args...)
 }
 
 // Query executes a query that returns rows.
 func (q *PoolQuerier) Query(ctx context.Context, sql string, args ...any) (any, error) {
-	return q.pool.Query(ctx, sql, args...)
+	pool := q.pool.Pool()
+	if pool == nil {
+		return nil, fmt.Errorf("database not connected")
+	}
+	return pool.Query(ctx, sql, args...)
 }
 
 // QueryRow executes a query that returns at most one row.
 func (q *PoolQuerier) QueryRow(ctx context.Context, sql string, args ...any) any {
-	return q.pool.QueryRow(ctx, sql, args...)
+	pool := q.pool.Pool()
+	if pool == nil {
+		// Used in context where we can't easily return error (QueryRow returns Row scanner).
+		// We return a dummy scanner that returns error on Scan.
+		return errRow{err: fmt.Errorf("database not connected")}
+	}
+	return pool.QueryRow(ctx, sql, args...)
 }
+
+type errRow struct {
+	err error
+}
+
+func (e errRow) Scan(dest ...any) error { return e.err }
 
 // TxQuerier wraps pgx.Tx to implement domain.Querier.
 // Use this within transactions via TxManager.WithTx.

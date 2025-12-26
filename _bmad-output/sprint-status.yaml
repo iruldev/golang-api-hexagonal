@@ -102,7 +102,7 @@ development_status:
   6-4-implement-make-generate: done
   6-5-ci-generate-check: done
   6-6-ci-gates-for-quality: done
-  6-7-wire-di-integration: backlog
+  6-7-wire-di-integration: done
   epic-6-retrospective: optional
 
   # Epic 7: Governance & Documentation (Vision/P3)
