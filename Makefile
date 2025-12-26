@@ -35,31 +35,36 @@ setup:
 	@echo "📦 Installing development tools..."
 	@echo ""
 	@echo "  Installing golangci-lint..."
-	@which golangci-lint > /dev/null || go install github.com/golangci-lint/golangci-lint/cmd/golangci-lint@v1.64.2
-	@version_gcl=$$(golangci-lint --version 2>/dev/null | head -1); \
-		if [ -z "$$version_gcl" ]; then \
-			echo "    ❌ golangci-lint not available on PATH after install"; \
-			exit 1; \
-		fi; \
-		echo "    ✅ $$version_gcl"
+	@if ! golangci-lint --version 2>/dev/null | grep -q "1.64.2"; then \
+		echo "    ⚠️  golangci-lint missing or version mismatch, installing v1.64.2..."; \
+		go install github.com/golangci-lint/golangci-lint/cmd/golangci-lint@v1.64.2; \
+	else \
+		echo "    ✅ golangci-lint v1.64.2 already installed"; \
+	fi
 	@echo ""
 	@echo "  Installing goose..."
-	@which goose > /dev/null || go install github.com/pressly/goose/v3/cmd/goose@v3.26.0
-	@version_goose=$$(goose --version 2>/dev/null); \
-		if [ -z "$$version_goose" ]; then \
-			echo "    ❌ goose not available on PATH after install"; \
-			exit 1; \
-		fi; \
-		echo "    ✅ $$version_goose"
+	@if ! goose --version 2>/dev/null | grep -q "v3.26.0"; then \
+		echo "    ⚠️  goose missing or version mismatch, installing v3.26.0..."; \
+		go install github.com/pressly/goose/v3/cmd/goose@v3.26.0; \
+	else \
+		echo "    ✅ goose v3.26.0 already installed"; \
+	fi
 	@echo ""
 	@echo "  Installing sqlc..."
-	@which sqlc > /dev/null || go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.28.0
-	@version_sqlc=$$(sqlc version 2>/dev/null); \
-		if [ -z "$$version_sqlc" ]; then \
-			echo "    ❌ sqlc not available on PATH after install"; \
-			exit 1; \
-		fi; \
-		echo "    ✅ sqlc $$version_sqlc"
+	@if ! sqlc version 2>/dev/null | grep -q "v1.28.0"; then \
+		echo "    ⚠️  sqlc missing or version mismatch, installing v1.28.0..."; \
+		go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.28.0; \
+	else \
+		echo "    ✅ sqlc v1.28.0 already installed"; \
+	fi
+	@echo ""
+	@echo "  Creating .env.local..."
+	@if [ ! -f .env.local ]; then \
+		cp .env.example .env.local; \
+		echo "    ✅ Created .env.local from .env.example"; \
+	else \
+		echo "    ✅ .env.local already exists"; \
+	fi
 	@echo ""
 	@echo "📦 Downloading Go modules..."
 	$(GOMOD) download
