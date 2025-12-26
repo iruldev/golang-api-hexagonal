@@ -103,6 +103,7 @@ linters-settings:
         files:
           - '**/internal/infra/**'
           - '!**/internal/infra/**/*_test.go'
+          - '!**/internal/infra/fx/**'
         allow:
           - $gostd
           - github.com/iruldev/golang-api-hexagonal/internal/domain
@@ -117,6 +118,23 @@ linters-settings:
           - github.com/prometheus/client_model/go
           - github.com/prometheus/client_golang/prometheus
           - github.com/prometheus/client_golang/prometheus/collectors
+          - github.com/prometheus/client_golang/prometheus/collectors
+      wiring-layer:
+        list-mode: strict
+        files:
+          - '**/internal/infra/fx/**'
+        allow:
+          - $gostd
+          - github.com/iruldev/golang-api-hexagonal/internal/app
+          - github.com/iruldev/golang-api-hexagonal/internal/domain
+          - github.com/iruldev/golang-api-hexagonal/internal/infra
+          - github.com/iruldev/golang-api-hexagonal/internal/shared
+          - github.com/iruldev/golang-api-hexagonal/internal/transport
+          - github.com/go-chi/chi/v5
+          - github.com/prometheus/client_golang/prometheus
+          - go.opentelemetry.io/otel
+          - go.uber.org/fx
+          - github.com/stretchr/testify
       transport-layer-test:
         list-mode: lax
         files:

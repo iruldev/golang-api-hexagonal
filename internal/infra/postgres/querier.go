@@ -10,21 +10,6 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
 )
 
-// rowScanner is a minimal interface for scanning a single row.
-// Used for type assertions in repository code.
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
-// rowsScanner is a minimal interface for iterating over multiple rows.
-// Used for type assertions in repository code.
-type rowsScanner interface {
-	Close()
-	Err() error
-	Next() bool
-	Scan(dest ...any) error
-}
-
 // PoolQuerier wraps Pooler to implement domain.Querier.
 // Use this for regular database operations outside transactions.
 type PoolQuerier struct {
