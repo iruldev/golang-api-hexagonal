@@ -1,0 +1,115 @@
+# generated: 2024-12-24
+# project: golang-api-hexagonal
+# tracking_system: file-system
+# story_location: _bmad-output
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Mark epic as 'in-progress' when starting work on its first story
+# - SM typically creates next story ONLY after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then Dev runs code-review (fresh context, ideally different LLM)
+
+generated: 2024-12-24
+project: golang-api-hexagonal
+tracking_system: file-system
+story_location: "_bmad-output"
+
+development_status:
+  # Epic 1: Correctness & Bug Fixes (MVP/P0)
+  epic-1: done
+  1-1-fix-audit-redact-email-config: done
+  1-2-fix-database-pool-reconnection: done
+  1-3-add-actorid-and-requestid-to-audit-events: done
+  1-4-handle-uuid-v7-parsing-gracefully: done
+  1-5-make-schema-migration-idempotent: done
+  epic-1-retrospective: done
+
+  # Epic 2: Security Baseline + Networking (MVP/P0-P1)
+  epic-2: done
+  2-1-implement-jwt-algorithm-whitelist: done
+  2-2-enforce-jwt-claims-validation: done
+  2-3-implement-no-auth-guard-for-production: done
+  2-4-enforce-minimum-jwt-secret-length: done
+  2-5-protect-metrics-endpoint: done
+  # Sub-stories for 2.5 (dependency chain: a → b → c → d)
+  2-5a-add-internal-port-configuration: done
+  2-5b-create-internal-router: done
+  2-5c-dual-server-startup: done
+  2-5d-tests-and-documentation: done
+  2-6-implement-trust-proxy-aware-ip-extraction: done
+  2-7-implement-idor-prevention: done
+  2-8-implement-application-layer-authorization: done
+  2-9-prevent-secret-logging: done
+  2-10-implement-generic-500-errors: done
+  2-11-validate-x-request-id-header: done
+  2-12-implement-constant-time-auth: done
+  epic-2-retrospective: done
+
+  # Epic 3: Observability & Correlation (MVP/P1)
+  epic-3: done
+  3-1-inject-request-id-into-all-logs: done
+  3-2-inject-trace-id-into-all-logs: done
+  3-3-add-request-id-to-rfc7807-errors: done
+  3-4-add-request-id-to-audit-events: done
+  3-5-use-route-patterns-in-metrics: done
+  3-6-add-trace-id-to-rfc7807-errors: done
+  3-7-audit-metrics-content: done
+  epic-3-retrospective: done
+
+  # Epic 4: API Contract & Reliability (MVP/P1)
+  epic-4: done
+  4-1-reject-json-with-unknown-fields: done
+  4-2-reject-json-with-trailing-data: done
+  4-3-non-mutating-health-endpoint: done
+  4-4-configure-http-timeouts: done
+  4-5-implement-graceful-shutdown: done
+  4-6-return-location-header-on-201: done
+  4-7-generate-openapi-31-spec: done
+  4-8-openapi-contract-tests-in-ci: done
+  epic-4-retrospective: done
+
+  # Epic 5: Data Layer Modernization (Growth/P2)
+  epic-5: done
+  5-1-configurable-database-pool: done
+  5-2-case-insensitive-email-with-citext: done
+  5-3-sqlc-for-users-module: done
+  5-4-sqlc-for-audit-module: done
+  epic-5-retrospective: done
+
+  # Epic 6: Developer Experience & Build System (Growth/P2)
+  epic-6: in-progress
+  6-1-implement-make-setup: done
+  6-2-implement-make-test: done
+  6-3-integration-tests-with-test-database: done
+  6-4-implement-make-generate: backlog
+  6-5-ci-generate-check: backlog
+  6-6-ci-gates-for-quality: backlog
+  6-7-wire-di-integration: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: Governance & Documentation (Vision/P3)
+  epic-7: backlog
+  7-1-create-security-md: backlog
+  7-2-create-contributing-md: backlog
+  7-3-create-operational-runbook: backlog
+  7-4-create-adrs-for-key-decisions: backlog
+  7-5-update-readme-with-quick-start: backlog
+  epic-7-retrospective: optional

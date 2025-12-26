@@ -99,10 +99,28 @@ build:
 run:
 	$(GOCMD) run ./cmd/api
 
-## test: Run all tests
+## test: Run all tests (usage: make test ARGS="-run TestName")
 .PHONY: test
 test:
-	$(GOTEST) -v -race -coverprofile=coverage.out -covermode=atomic ./...
+	$(GOTEST) -v -race -coverprofile=coverage.out -covermode=atomic ./... $(ARGS)
+
+## test-integration: Run integration tests (requires DATABASE_URL with *_test database)
+## Story 6.3: Integration tests require a test database to be running
+.PHONY: test-integration
+test-integration:
+	@echo "🧪 Running integration tests..."
+	@if [ -z "$$DATABASE_URL" ]; then \
+		echo "❌ DATABASE_URL not set. Set it to a test database (e.g., *_test):"; \
+		echo "  export DATABASE_URL=\"postgres://postgres:postgres@localhost:5432/golang_api_hexagonal_test?sslmode=disable\""; \
+		exit 1; \
+	fi
+	@if echo "$$DATABASE_URL" | grep -qv "_test"; then \
+		echo "❌ DATABASE_URL must end in '_test' to prevent accidental data loss."; \
+		echo "   Current: $$DATABASE_URL"; \
+		exit 1; \
+	fi
+	$(GOTEST) -v -race -tags=integration ./... $(ARGS)
+	@echo "✅ Integration tests complete"
 
 ## coverage: Check test coverage meets 80% threshold for domain+app
 .PHONY: coverage
@@ -209,7 +227,7 @@ check-fmt:
 ## clean: Clean build artifacts
 .PHONY: clean
 clean:
-	rm -f $(BINARY_NAME)
+	rm -f $(BINARY_NAME) coverage.out
 	$(GOCMD) clean
 
 # =============================================================================

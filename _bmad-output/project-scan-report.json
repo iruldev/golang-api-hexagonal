@@ -1,0 +1,114 @@
+{
+    "workflow_version": "1.2.0",
+    "timestamps": {
+        "started": "2024-12-24T11:46:26+07:00",
+        "last_updated": "2024-12-24T11:55:00+07:00",
+        "completed": "2024-12-24T11:55:00+07:00"
+    },
+    "mode": "initial_scan",
+    "scan_level": "deep",
+    "project_root": "/Users/khoirulsetyonugroho/Development/go-workspace/src/github.com/iruldev/golang-api-hexagonal",
+    "output_folder": "/Users/khoirulsetyonugroho/Development/go-workspace/src/github.com/iruldev/golang-api-hexagonal/docs",
+    "completed_steps": [
+        {
+            "step": "step_1",
+            "status": "completed",
+            "timestamp": "2024-12-24T11:48:34+07:00",
+            "summary": "Classified as backend monolith with 1 part"
+        },
+        {
+            "step": "step_2",
+            "status": "completed",
+            "timestamp": "2024-12-24T11:49:00+07:00",
+            "summary": "Found 6 existing docs"
+        },
+        {
+            "step": "step_3",
+            "status": "completed",
+            "timestamp": "2024-12-24T11:50:00+07:00",
+            "summary": "Tech stack: Go 1.24.11 with Chi, PostgreSQL, OTEL"
+        },
+        {
+            "step": "step_4",
+            "status": "completed",
+            "timestamp": "2024-12-24T11:51:00+07:00",
+            "summary": "Deep scan complete - API and data models analyzed"
+        },
+        {
+            "step": "step_5",
+            "status": "completed",
+            "timestamp": "2024-12-24T11:52:00+07:00",
+            "summary": "Source tree documented"
+        },
+        {
+            "step": "step_6",
+            "status": "completed",
+            "timestamp": "2024-12-24T11:52:30+07:00",
+            "summary": "Dev/deployment guides written"
+        },
+        {
+            "step": "step_8",
+            "status": "completed",
+            "timestamp": "2024-12-24T11:53:00+07:00",
+            "summary": "Architecture docs written for 1 part"
+        },
+        {
+            "step": "step_9",
+            "status": "completed",
+            "timestamp": "2024-12-24T11:54:00+07:00",
+            "summary": "All supporting docs written"
+        },
+        {
+            "step": "step_10",
+            "status": "completed",
+            "timestamp": "2024-12-24T11:54:30+07:00",
+            "summary": "Master index generated"
+        },
+        {
+            "step": "step_12",
+            "status": "completed",
+            "timestamp": "2024-12-24T11:55:00+07:00",
+            "summary": "Workflow complete"
+        }
+    ],
+    "current_step": "completed",
+    "project_types": [
+        {
+            "part_id": "main",
+            "project_type_id": "backend",
+            "display_name": "Backend API"
+        }
+    ],
+    "findings": {
+        "project_classification": {
+            "repository_type": "monolith",
+            "parts_count": 1,
+            "primary_tech": "Go 1.24.11 with Chi, PostgreSQL, OTEL"
+        },
+        "existing_docs_count": 6,
+        "technology_stack": {
+            "language": "Go 1.24.11",
+            "framework": "Chi v5.2.3",
+            "database": "PostgreSQL (pgx v5.7.6)",
+            "observability": "OpenTelemetry + Prometheus",
+            "migrations": "Goose v3.26.0"
+        },
+        "modules": [
+            "users",
+            "audit"
+        ],
+        "api_endpoints": 6,
+        "tables": 3
+    },
+    "outputs_generated": [
+        "project-scan-report.json",
+        "project-overview.md",
+        "architecture.md",
+        "source-tree-analysis.md",
+        "api-contracts.md",
+        "data-models.md",
+        "development-guide.md",
+        "index.md"
+    ],
+    "resume_instructions": "Workflow complete"
+}
