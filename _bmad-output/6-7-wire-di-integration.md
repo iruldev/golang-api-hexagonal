@@ -84,11 +84,13 @@ Gemini 2.5 Pro
 - 2025-12-26: Refactored `cmd/api/main.go` to use Fx
 - 2025-12-26: Implemented `ResilientPool` for robust DB connection handling
 - 2025-12-26: Updated Repositories to use `Pooler` interface
+- 2025-12-26: Added Fx graph validation test
 - All tests pass
 
 ### File List
 
 - `internal/infra/fx/module.go` - NEW
+- `internal/infra/fx/module_test.go` - NEW
 - `internal/infra/postgres/resilient_pool.go` - NEW
 - `internal/infra/postgres/resilient_pool_test.go` - NEW
 - `internal/infra/postgres/test_helpers_test.go` - NEW
