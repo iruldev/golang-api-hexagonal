@@ -95,7 +95,7 @@ development_status:
   epic-5-retrospective: done
 
   # Epic 6: Developer Experience & Build System (Growth/P2)
-  epic-6: in-progress
+  epic-6: done
   6-1-implement-make-setup: done
   6-2-implement-make-test: done
   6-3-integration-tests-with-test-database: done
@@ -103,11 +103,11 @@ development_status:
   6-5-ci-generate-check: done
   6-6-ci-gates-for-quality: done
   6-7-wire-di-integration: done
-  epic-6-retrospective: optional
+  epic-6-retrospective: done
 
   # Epic 7: Governance & Documentation (Vision/P3)
-  epic-7: backlog
-  7-1-create-security-md: backlog
+  epic-7: in-progress
+  7-1-create-security-md: done
   7-2-create-contributing-md: backlog
   7-3-create-operational-runbook: backlog
   7-4-create-adrs-for-key-decisions: backlog
