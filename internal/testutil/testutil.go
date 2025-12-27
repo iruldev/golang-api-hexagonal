@@ -15,6 +15,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"go.uber.org/goleak"
 )
 
 // defaultTestTimeout defines the standard execution limit for tests.
@@ -38,9 +40,23 @@ func TestContextWithTimeout(t testing.TB, timeout time.Duration) context.Context
 	return ctx
 }
 
-// RunWithGoleak is a stub for goleak integration (Story 1.3).
-// For now, just run tests normally.
-func RunWithGoleak(m *testing.M) int {
-	// TODO: Story 1.3 will add goleak.VerifyTestMain(m)
-	return m.Run()
+// RunWithGoleak runs tests with goroutine leak detection.
+// Use this in TestMain for packages with integration tests.
+//
+// Example usage in test file:
+//
+//	func TestMain(m *testing.M) {
+//	    testutil.RunWithGoleak(m)
+//	}
+func RunWithGoleak(m *testing.M) {
+	// Ignore known background goroutines
+	opts := []goleak.Option{
+		goleak.IgnoreCurrent(),
+		// pgx connection pool health check
+		goleak.IgnoreTopFunction("github.com/jackc/pgx/v5/pgxpool.(*Pool).backgroundHealthCheck"),
+		// otel telemetry exporters
+		goleak.IgnoreTopFunction("go.opentelemetry.io/otel/sdk/trace.(*batchSpanProcessor).processQueue"),
+	}
+
+	goleak.VerifyTestMain(m, opts...)
 }
