@@ -50,7 +50,7 @@ development_status:
   2-1-testcontainers-go-for-postgresql: done
   2-2-container-helpers-package: done
   2-3-pr-gates-shuffle-goleak-gencheck: done
-  2-4-race-detection-policy-nightly-selective: backlog
+  2-4-race-detection-policy-nightly-selective: done
   2-5-github-actions-workflows-pr-nightly: backlog
   2-6-graceful-shutdown-test: backlog
   2-7-context-cancellation-propagation-test: backlog

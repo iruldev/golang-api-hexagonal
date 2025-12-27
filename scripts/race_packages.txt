@@ -1,0 +1,15 @@
+# High-risk packages for race detection
+# One package path per line, relative to module root
+# Lines starting with # are comments
+# Empty lines are ignored
+
+# Infrastructure layer - database access with connection pools
+internal/infra/postgres
+
+# Application layer - use cases with concurrent operations
+internal/app/user
+internal/app/audit
+
+# Transport layer - HTTP handlers with concurrent requests
+internal/transport/http/handler
+internal/transport/http/middleware

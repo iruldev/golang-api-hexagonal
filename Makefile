@@ -172,6 +172,17 @@ gencheck:
 		exit 1; \
 	fi
 
+## test-race-selective: Run race detection on high-risk packages (Story 2.4)
+.PHONY: test-race-selective
+test-race-selective:
+	@echo "🏎️ Running race detection on high-risk packages..."
+	@cat scripts/race_packages.txt | grep -v '^#' | grep -v '^$$' | \
+		while read pkg; do \
+			echo "  Testing $$pkg..."; \
+			go test -race -v ./$$pkg || exit 1; \
+		done
+	@echo "✅ Race detection complete"
+
 ## coverage: Check test coverage meets 80% threshold for domain+app
 .PHONY: coverage
 coverage:

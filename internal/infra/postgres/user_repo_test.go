@@ -24,6 +24,7 @@ import (
 
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
+	"github.com/iruldev/golang-api-hexagonal/internal/testutil/containers"
 )
 
 func migrationsDir(t *testing.T) string {
@@ -62,14 +63,38 @@ func requireSafeTestDatabase(t *testing.T, databaseURL string) {
 
 func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
 	t.Helper()
-	ctx := context.Background()
 
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
-		t.Skip("DATABASE_URL not set (run `make infra-up` and set DATABASE_URL to a dedicated test DB)")
+		t.Log("DATABASE_URL not set, using testcontainers")
+		pool := containers.NewPostgres(t)
+		containers.MigrateWithPath(t, pool, migrationsDir(t))
+
+		// For testcontainers, we get a fresh container per test,
+		// so explicit data cleanup is less critical but good practice if subtests share it.
+		// However, since the container is destroyed after the test, we can just return a no-op cleanup
+		// or one that cleans tables if we want to be consistent.
+		cleanup := func() {
+			// Optional: Truncate tables if we were reusing the container.
+			// Since NewPostgres registers container termination on t.Cleanup,
+			// we don't strictly need to do anything here for resource cleanup.
+			// But to match the signature and behavior:
+			ctx := context.Background()
+
+			// We can use the Truncate helper if available, or just manual delete
+			_, _ = pool.Exec(ctx, "DELETE FROM audit_events")
+			_, _ = pool.Exec(ctx, "DELETE FROM users")
+
+			// Pool close is handled by NewPostgres t.Cleanup, but we can close it here too if we want explicit control.
+			// pgxpool is safe to close multiple times? Usually.
+			// But NewPostgres uses t.Cleanup, so let's leave it to that.
+		}
+		return pool, cleanup
 	}
+
 	requireSafeTestDatabase(t, databaseURL)
 
+	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, databaseURL)
 	require.NoError(t, err)
 
