@@ -137,3 +137,20 @@ _Reviewer: Antigravity on 2025-12-27_
 ### Outcome
 - **Validation:** `go test ./internal/infra/postgres/...` passed.
 - **Status:** Approved (Fixed).
+
+## Rerun (AI)
+
+_Reviewer: Antigravity on 2025-12-27 (Verification)_
+
+- **Verification:** Reran code review process.
+- **Refactoring:** Cleaned up duplicated comments in `internal/testutil/testutil.go`.
+- **Validation:** Tests passed (`ok github.com/iruldev/golang-api-hexagonal/internal/infra/postgres`).
+- **Status:** **Confirmed Done**.
+
+## Rerun 2 (AI)
+
+_Reviewer: Antigravity on 2025-12-27 (Double Check)_
+
+- **Verification:** Second re-verification pass.
+- **Validation:** Tests passed (`ok github.com/iruldev/golang-api-hexagonal/internal/infra/postgres`).
+- **Status:** **Confirmed Done**.

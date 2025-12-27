@@ -109,10 +109,10 @@ run:
 ## test: Run all tests (usage: make test ARGS="-run TestName")
 .PHONY: test
 test:
-	$(GOTEST) -v -race -coverprofile=coverage.out -covermode=atomic ./... $(ARGS)
+	$(GOTEST) -v -race -coverprofile=coverage.out -covermode=atomic -shuffle=on ./... $(ARGS)
 
 ## test-integration: Run integration tests (requires DATABASE_URL with *_test database)
-## Story 6.3: Integration tests require a test database to be running
+# Story 6.3: Integration tests require a test database to be running
 .PHONY: test-integration
 test-integration:
 	@echo "🧪 Running integration tests..."
@@ -128,6 +128,33 @@ test-integration:
 	fi
 	$(GOTEST) -v -race -tags=integration ./... $(ARGS)
 	@echo "✅ Integration tests complete"
+
+## test-unit: Run unit tests with coverage (Story 1.4)
+.PHONY: test-unit
+test-unit:
+	@echo "🧪 Running unit tests..."
+	$(GOTEST) -v -race -coverprofile=coverage.out -covermode=atomic ./...
+	@echo "✅ Unit tests complete. Coverage: coverage.out"
+
+## test-shuffle: Run tests with shuffle enabled (Story 1.4)
+.PHONY: test-shuffle
+test-shuffle:
+	@echo "🔀 Running tests with shuffle..."
+	$(GOTEST) -v -race -shuffle=on ./...
+	@echo "✅ Shuffle tests complete"
+
+## gencheck: Verify generated files are up-to-date (Story 1.4)
+.PHONY: gencheck
+gencheck:
+	@echo "🔍 Checking generated files..."
+	@go generate ./...
+	@if git diff --exit-code --quiet; then \
+		echo "✅ Generated files are up-to-date"; \
+	else \
+		echo "❌ Generated files are out of sync. Run 'go generate ./...' and commit changes."; \
+		git diff --stat; \
+		exit 1; \
+	fi
 
 ## coverage: Check test coverage meets 80% threshold for domain+app
 .PHONY: coverage

@@ -40,7 +40,7 @@ development_status:
   1-1-create-testutil-structure: done
   1-2-mock-generation-uber-go-mock: done
   1-3-shared-testmain-helper-goleak: done
-  1-4-makefile-test-targets: backlog
+  1-4-makefile-test-targets: done
   1-5-tools-go-reproducible-toolchain: backlog
   1-6-testing-quickstart-guide: backlog
   epic-1-retrospective: optional
