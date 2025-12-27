@@ -187,6 +187,8 @@ func (e AuditEvent) Validate() error {
 // AuditEventRepository defines the interface for audit event persistence operations.
 // This interface is defined in the domain layer and implemented by the infrastructure layer.
 // All methods accept a Querier to support both connection pool and transaction usage.
+//
+//go:generate mockgen -destination=../testutil/mocks/audit_event_repository_mock.go -package=mocks github.com/iruldev/golang-api-hexagonal/internal/domain AuditEventRepository
 type AuditEventRepository interface {
 	// Create stores a new audit event.
 	// Returns an error if the event cannot be persisted.

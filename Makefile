@@ -88,6 +88,13 @@ generate:
 	sqlc generate
 	@echo "✅ Code generation complete"
 
+## mocks: Generate all mocks using mockgen (Story 1.2)
+.PHONY: mocks
+mocks:
+	@echo "🔧 Generating mocks..."
+	@which mockgen > /dev/null || (echo "❌ mockgen not found. Run 'go install go.uber.org/mock/mockgen@latest'" && exit 1)
+	go generate ./internal/domain/...
+	@echo "✅ Mocks generated in internal/testutil/mocks/"
 
 ## build: Build the application
 .PHONY: build

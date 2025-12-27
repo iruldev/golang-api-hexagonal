@@ -39,6 +39,8 @@ func (u User) Validate() error {
 // UserRepository defines the interface for user persistence operations.
 // This interface is defined in the domain layer and implemented by the infrastructure layer.
 // All methods accept a Querier to support both connection pool and transaction usage.
+//
+//go:generate mockgen -destination=../testutil/mocks/user_repository_mock.go -package=mocks github.com/iruldev/golang-api-hexagonal/internal/domain UserRepository
 type UserRepository interface {
 	// Create stores a new user.
 	Create(ctx context.Context, q Querier, user *User) error
