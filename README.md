@@ -7,10 +7,11 @@ A production-ready Go API built with hexagonal architecture, featuring comprehen
 ⏱️ **Estimated time: ~15 minutes**
 
 ```bash
-# 1. Clone and setup
+# 1. Clone and bootstrap
 git clone https://github.com/iruldev/golang-api-hexagonal.git
 cd golang-api-hexagonal
-make setup
+make bootstrap  # Install dev tools (first time only)
+make setup      # Setup project dependencies
 
 # 2. Start infrastructure (PostgreSQL)
 make infra-up
@@ -65,6 +66,7 @@ Run `make help` to see all available targets:
 ### Development
 | Target | Description |
 |--------|-------------|
+| `make bootstrap` | Install dev tools with pinned versions (first time) |
 | `make setup` | Install development tools and dependencies |
 | `make build` | Build the application binary |
 | `make run` | Run the application |

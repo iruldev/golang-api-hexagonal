@@ -29,6 +29,22 @@ help:
 # Development
 # =============================================================================
 
+## bootstrap: Install all development tools with pinned versions (run once after clone)
+.PHONY: bootstrap
+bootstrap:
+	@echo "🔧 Installing development tools from go.mod..."
+	go install go.uber.org/mock/mockgen@$(shell go list -m -f '{{.Version}}' go.uber.org/mock)
+	go install github.com/sqlc-dev/sqlc/cmd/sqlc@$(shell go list -m -f '{{.Version}}' github.com/sqlc-dev/sqlc)
+	go install github.com/pressly/goose/v3/cmd/goose@$(shell go list -m -f '{{.Version}}' github.com/pressly/goose/v3)
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(shell go list -m -f '{{.Version}}' github.com/golangci/golangci-lint)
+	@echo "✅ All tools installed"
+	@echo ""
+	@echo "Installed versions:"
+	@mockgen --version 2>/dev/null || echo "  mockgen: installed"
+	@sqlc version 2>/dev/null || echo "  sqlc: installed"
+	@goose --version 2>/dev/null || echo "  goose: installed"
+	@golangci-lint --version 2>/dev/null || echo "  golangci-lint: installed"
+
 ## setup: Install development tools and dependencies
 .PHONY: setup
 setup:
