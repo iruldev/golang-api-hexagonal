@@ -52,7 +52,7 @@ development_status:
   2-3-pr-gates-shuffle-goleak-gencheck: done
   2-4-race-detection-policy-nightly-selective: done
   2-5-github-actions-workflows-pr-nightly: done
-  2-6-graceful-shutdown-test: backlog
+  2-6-graceful-shutdown-test: done
   2-7-context-cancellation-propagation-test: backlog
   2-8-timeout-configs-verification-test: backlog
   epic-2-retrospective: optional
