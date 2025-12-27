@@ -38,7 +38,7 @@ development_status:
   # Epic 1: Testing Infrastructure Foundation + Onboarding (6 stories)
   epic-1: in-progress
   1-1-create-testutil-structure: done
-  1-2-mock-generation-uber-go-mock: backlog
+  1-2-mock-generation-uber-go-mock: done
   1-3-shared-testmain-helper-goleak: backlog
   1-4-makefile-test-targets: backlog
   1-5-tools-go-reproducible-toolchain: backlog
