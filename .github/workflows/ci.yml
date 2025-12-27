@@ -83,6 +83,11 @@ jobs:
       - name: Run tests
         run: make test
 
+      # Story 2.3: Run tests with shuffle to detect order-dependent tests
+      # Shuffle randomizes test execution order to catch hidden coupling
+      - name: Run tests with shuffle
+        run: make test-shuffle
+
       # Upload coverage report as artifact for debugging and visibility
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -95,6 +100,11 @@ jobs:
       # Uses Makefile target which implements threshold check
       - name: Check coverage threshold
         run: make coverage
+
+      # Story 2.3: Verify all generated code (mocks) is up-to-date
+      # Runs 'go generate' and checks for uncommitted changes
+      - name: Verify generated code (mocks)
+        run: make gencheck
 
       # Build verification: ensures Go binary compiles successfully
       # Build failure will cause workflow to fail (fail-fast behavior)

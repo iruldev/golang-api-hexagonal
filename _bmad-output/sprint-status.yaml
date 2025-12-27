@@ -49,7 +49,7 @@ development_status:
   epic-2: in-progress
   2-1-testcontainers-go-for-postgresql: done
   2-2-container-helpers-package: done
-  2-3-pr-gates-shuffle-goleak-gencheck: backlog
+  2-3-pr-gates-shuffle-goleak-gencheck: done
   2-4-race-detection-policy-nightly-selective: backlog
   2-5-github-actions-workflows-pr-nightly: backlog
   2-6-graceful-shutdown-test: backlog
