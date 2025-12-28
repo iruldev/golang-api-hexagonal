@@ -382,3 +382,99 @@ Template tersedia di folder `docs/templates/`:
 - **Leak Detection:** `TestMain` sudah terkonfigurasi dengan `goleak.VerifyTestMain`.
 - **Table-Driven:** Struktur test menggunakan table-driven tests yang konsisten.
 - **Container Support:** Integration template sudah termasuk setup `testcontainers`.
+
+---
+
+## 10. Synctest: Deterministic Time Testing (Go 1.25+)
+
+> **Status:** ✅ Active - Go 1.25 Upgrade Completed
+> **Current Go Version:** 1.25.5
+
+Go 1.25 (released August 2025) memperkenalkan package `testing/synctest` untuk testing concurrent code dengan waktu deterministik. Project ini telah di-upgrade untuk menggunakan fitur ini.
+
+Go 1.25 (released August 2025) memperkenalkan package `testing/synctest` untuk testing concurrent code dengan waktu deterministik.
+
+### 10.1 Mengapa Synctest?
+
+| Masalah | Solusi Synctest |
+|---------|------------------|
+| Flaky tests karena `time.Sleep` | Waktu virtual, instant advancement |
+| Non-deterministic goroutine scheduling | Isolated "bubble" execution |
+| Slow tests waiting for timeouts | Clock advances instantly |
+
+### 10.2 Kapan Menggunakan Synctest
+
+✅ **Gunakan untuk:**
+- Timeout tests
+- Timer/ticker behavior
+- Context deadline tests
+- Retry logic dengan backoff
+
+❌ **Jangan gunakan untuk:**
+- Database integration tests
+- HTTP client/server tests
+- Tests yang memerlukan real time
+
+### 10.3 Contoh Penggunaan
+
+```go
+//go:build go1.25
+
+package example
+
+import (
+    "context"
+    "testing"
+    "testing/synctest"
+    "time"
+)
+
+func TestTimeoutBehavior(t *testing.T) {
+    synctest.Test(t, func(t *testing.T) {
+        // Dalam bubble ini, time.Sleep tidak benar-benar menunggu
+        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+        defer cancel()
+
+        // Start operation
+        done := make(chan struct{})
+        go func() {
+            time.Sleep(3 * time.Second) // Instant!
+            close(done)
+        }()
+
+        // Wait for completion
+        synctest.Wait() // Waits until all goroutines blocked
+
+        select {
+        case <-done:
+            // Success - operation completed before timeout
+        case <-ctx.Done():
+            t.Fatal("unexpected timeout")
+        }
+    })
+}
+```
+
+### 10.4 Kandidat Refactoring
+
+Setelah upgrade ke Go 1.25, file berikut dapat direfactor:
+
+| File | Reason |
+|------|--------|
+| `internal/transport/http/timeout_test.go` | HTTP timeout tests |
+| `internal/transport/http/context_cancel_test.go` | Context cancellation |
+
+### 10.5 Adoption Status
+
+Project telah di-upgrade ke Go 1.25.5.
+- `go.mod` updated.
+- `internal/transport/http/synctest_example_test.go` added as reference.
+- `internal/transport/http/timeout_refactored_test.go` implements deterministic timeout tests.
+
+Developers encouraged to use `synctest` for new time-sensitive tests.
+
+### 10.6 Referensi
+
+- [Go 1.25 Release Notes](https://go.dev/doc/go1.25)
+- [testing/synctest Documentation](https://pkg.go.dev/testing/synctest)
+
