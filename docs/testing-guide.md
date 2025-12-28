@@ -349,3 +349,36 @@ Untuk setiap fitur baru, pastikan:
 ---
 
 *Dokumentasi ini dihasilkan oleh BMad Method - Document Project Workflow*
+
+---
+
+## 9. Test Templates
+
+Gunakan template berikut untuk menjaga konsistensi penulisan test baru.
+
+### 9.1 Lokasi Template
+
+Template tersedia di folder `docs/templates/`:
+- **Unit Test:** `docs/templates/unit_test.go.tmpl`
+- **Integration Test:** `docs/templates/integration_test.go.tmpl`
+
+### 9.2 Cara Penggunaan
+
+1. **Unit Test:**
+   ```bash
+   cp docs/templates/unit_test.go.tmpl internal/mypackage/mypackage_test.go
+   # Edit package name dan function test
+   ```
+
+2. **Integration Test:**
+   ```bash
+   cp docs/templates/integration_test.go.tmpl internal/mypackage/mypackage_integration_test.go
+   # File ini otomatis menggunakan build tag //go:build integration
+   ```
+
+### 9.3 Fitur Template
+
+- **Standard Imports:** Termasuk `testify` dan `goleak`.
+- **Leak Detection:** `TestMain` sudah terkonfigurasi dengan `goleak.VerifyTestMain`.
+- **Table-Driven:** Struktur test menggunakan table-driven tests yang konsisten.
+- **Container Support:** Integration template sudah termasuk setup `testcontainers`.

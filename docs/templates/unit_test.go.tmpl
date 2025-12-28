@@ -1,0 +1,95 @@
+// Unit Test Template
+// Usage: Copy this template and replace {{Package}} and {{FunctionName}} placeholders
+//
+// File naming: <source_file>_test.go (e.g., user_service_test.go)
+// Function naming: Test<FunctionName> (e.g., TestCreateUser)
+
+//go:build !integration
+
+package {{Package}}
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
+)
+
+// TestMain runs all tests with goroutine leak detection.
+// This ensures no goroutines are leaked between tests.
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
+
+// Test{{FunctionName}} tests the {{FunctionName}} function.
+// Replace {{FunctionName}} with your actual function name.
+func Test{{FunctionName}}(t *testing.T) {
+	// Use table-driven tests for multiple scenarios
+	tests := []struct {
+		name    string
+		input   any    // Replace with actual input type
+		want    any    // Replace with actual expected type
+		wantErr bool
+	}{
+		{
+			name:  "success case - descriptive name",
+			input: nil, // Replace with actual input
+			want:  nil, // Replace with expected output
+		},
+		{
+			name:    "error case - descriptive name",
+			input:   nil, // Replace with input that causes error
+			wantErr: true,
+		},
+		// Add more test cases as needed
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			// Set up any test fixtures, mocks, or dependencies here
+
+			// Act
+			// Call the function under test
+			// got, err := FunctionUnderTest(tt.input)
+
+			// Assert
+			// if tt.wantErr {
+			//     require.Error(t, err)
+			//     return
+			// }
+			// require.NoError(t, err)
+			// assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// Example: Testing a specific error condition
+func Test{{FunctionName}}_ErrorCondition(t *testing.T) {
+	// Arrange
+	// Set up conditions that should cause an error
+
+	// Act
+	// _, err := FunctionUnderTest(invalidInput)
+
+	// Assert
+	// require.Error(t, err)
+	// assert.ErrorIs(t, err, expectedError)
+}
+
+// Example: Testing with mock dependencies
+func Test{{FunctionName}}_WithMock(t *testing.T) {
+	// Arrange
+	// mockDep := &MockDependency{}
+	// mockDep.On("Method").Return(expectedValue)
+	// sut := NewServiceUnderTest(mockDep)
+
+	// Act
+	// got, err := sut.FunctionUnderTest()
+
+	// Assert
+	// require.NoError(t, err)
+	// assert.Equal(t, expected, got)
+	// mockDep.AssertExpectations(t)
+}

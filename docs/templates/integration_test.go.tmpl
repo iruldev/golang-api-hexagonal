@@ -1,0 +1,170 @@
+// Integration Test Template
+// Usage: Copy this template and replace {{Package}} and {{FunctionName}} placeholders
+//
+// File naming: <source_file>_test.go with //go:build integration tag
+// Function naming: Test<FunctionName>_Integration (e.g., TestCreateUser_Integration)
+// Run with: go test -tags=integration ./...
+
+//go:build integration
+
+package {{Package}}
+
+import (
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
+
+	// Update import path to match your module
+	"github.com/iruldev/golang-api-hexagonal/internal/testutil/containers"
+)
+
+// TestMain runs all integration tests with goroutine leak detection.
+// Containers are managed per-test using t.Cleanup().
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
+
+// Test{{FunctionName}}_Integration tests {{FunctionName}} with a real database.
+// Replace {{FunctionName}} with your actual function name.
+func Test{{FunctionName}}_Integration(t *testing.T) {
+	// Setup: Create PostgreSQL container (automatically cleaned up)
+	pool := containers.NewPostgres(t)
+
+	// Run migrations
+	// Update path relative to this test file
+	containers.Migrate(t, pool, "../../migrations")
+
+	// Use table-driven tests for multiple scenarios
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) // Optional: seed test data
+		cleanup func(t *testing.T) // Optional: additional cleanup
+		wantErr bool
+	}{
+		{
+			name: "success - create and retrieve",
+			setup: func(t *testing.T) {
+				// Seed any required test data
+				// _, err := pool.Exec(context.Background(), "INSERT INTO ...")
+			},
+		},
+		{
+			name: "error - duplicate entry",
+			setup: func(t *testing.T) {
+				// Seed data that will cause conflict
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Truncate tables between tests for isolation
+			containers.Truncate(t, pool, "users") // Add your table names
+
+			// Run setup if provided
+			if tt.setup != nil {
+				tt.setup(t)
+			}
+
+			// Run cleanup if provided
+			if tt.cleanup != nil {
+				t.Cleanup(func() { tt.cleanup(t) })
+			}
+
+			// Arrange
+			ctx := context.Background()
+			// repo := NewRepository(pool)
+
+			// Act
+			// got, err := repo.FunctionUnderTest(ctx, ...)
+
+			// Assert
+			// if tt.wantErr {
+			//     require.Error(t, err)
+			//     return
+			// }
+			// require.NoError(t, err)
+			// assert.NotNil(t, got)
+			_ = ctx // Remove when using ctx
+		})
+	}
+}
+
+// Example: Testing transaction rollback
+func Test{{FunctionName}}_TransactionRollback(t *testing.T) {
+	pool := containers.NewPostgres(t)
+	containers.Migrate(t, pool, "../../migrations")
+
+	// Use WithTx to execute test in a transaction that rolls back
+	containers.WithTx(t, pool, func(tx pgx.Tx) {
+		// All operations here will be rolled back after the test
+		// This provides complete isolation without truncation
+
+		// Arrange
+		// repo := NewRepositoryWithTx(tx)
+
+		// Act
+		// _, err := repo.Create(context.Background(), entity)
+
+		// Assert
+		// require.NoError(t, err)
+	})
+}
+
+// Example: Testing with context cancellation
+func Test{{FunctionName}}_ContextCancellation(t *testing.T) {
+	pool := containers.NewPostgres(t)
+	containers.Migrate(t, pool, "../../migrations")
+
+	// Create cancellable context
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Cancel immediately to test cancellation handling
+	cancel()
+
+	// Act
+	// _, err := repo.LongRunningOperation(ctx)
+
+	// Assert
+	// require.Error(t, err)
+	// assert.ErrorIs(t, err, context.Canceled)
+}
+
+// Example: Testing concurrent access
+func Test{{FunctionName}}_ConcurrentAccess(t *testing.T) {
+	pool := containers.NewPostgres(t)
+	containers.Migrate(t, pool, "../../migrations")
+	containers.Truncate(t, pool, "users")
+
+	// Use channels for synchronization (no time.Sleep!)
+	done := make(chan struct{})
+	errCh := make(chan error, 10)
+
+	// Launch concurrent goroutines
+	for i := 0; i < 10; i++ {
+		go func(id int) {
+			defer func() { done <- struct{}{} }()
+
+			// Perform concurrent operation
+			// err := repo.ConcurrentOperation(context.Background(), id)
+			// if err != nil {
+			//     errCh <- err
+			// }
+		}(i)
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+	close(errCh)
+
+	// Check for errors
+	for err := range errCh {
+		t.Errorf("concurrent operation failed: %v", err)
+	}
+}
