@@ -46,7 +46,7 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 2: Integration Testing & CI Determinism + Reliability Tests (8 stories)
-  epic-2: in-progress
+  epic-2: done
   2-1-testcontainers-go-for-postgresql: done
   2-2-container-helpers-package: done
   2-3-pr-gates-shuffle-goleak-gencheck: done
@@ -55,11 +55,11 @@ development_status:
   2-6-graceful-shutdown-test: done
   2-7-context-cancellation-propagation-test: done
   2-8-timeout-configs-verification-test: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   # Epic 3: Error Model Hardening + Adoption Kit (6 stories)
-  epic-3: backlog
-  3-1-domain-error-types-stable-codes: backlog
+  epic-3: in-progress
+  3-1-domain-error-types-stable-codes: done
   3-2-app-transport-error-mapping: backlog
   3-3-rfc-7807-response-with-trace-id: backlog
   3-4-adoption-guide-copy-paste-kit: backlog
