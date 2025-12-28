@@ -82,6 +82,8 @@ type Config struct {
 	HTTPIdleTimeout time.Duration `envconfig:"HTTP_IDLE_TIMEOUT" default:"60s"`
 	// ShutdownTimeout is the duration to wait for graceful shutdown. Default: 30s.
 	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"30s"`
+	// DBQueryTimeout is the default timeout for database queries. Default: 5s.
+	DBQueryTimeout time.Duration `envconfig:"DB_QUERY_TIMEOUT" default:"5s"`
 	// HTTPReadHeaderTimeout is the amount of time allowed to read request headers.
 	// Default: 10s. This helps mitigate slowloris attacks.
 	HTTPReadHeaderTimeout time.Duration `envconfig:"HTTP_READ_HEADER_TIMEOUT" default:"10s"`
@@ -218,6 +220,14 @@ func (c *Config) Validate() error {
 	}
 	if c.DBPoolMaxLifetime <= 0 {
 		return fmt.Errorf("invalid DB_POOL_MAX_LIFETIME: must be greater than 0")
+	}
+
+	// Server Timeouts Validation
+	if c.DBQueryTimeout <= 0 {
+		return fmt.Errorf("invalid DB_QUERY_TIMEOUT: must be greater than 0")
+	}
+	if c.ShutdownTimeout <= 0 {
+		return fmt.Errorf("invalid SHUTDOWN_TIMEOUT: must be greater than 0")
 	}
 
 	return nil

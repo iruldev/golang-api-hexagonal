@@ -54,7 +54,7 @@ development_status:
   2-5-github-actions-workflows-pr-nightly: done
   2-6-graceful-shutdown-test: done
   2-7-context-cancellation-propagation-test: done
-  2-8-timeout-configs-verification-test: backlog
+  2-8-timeout-configs-verification-test: done
   epic-2-retrospective: optional
 
   # Epic 3: Error Model Hardening + Adoption Kit (6 stories)
