@@ -61,8 +61,8 @@ development_status:
   epic-3: in-progress
   3-1-domain-error-types-stable-codes: done
   3-2-app-transport-error-mapping: done
-  3-3-rfc-7807-response-with-trace-id: backlog
-  3-4-adoption-guide-copy-paste-kit: backlog
+  3-3-rfc-7807-response-with-trace-id: done
+  3-4-adoption-guide-copy-paste-kit: done
   3-5-doc-template-for-new-test-files: backlog
   3-6-go-125-upgrade-targeted-synctest: backlog
   epic-3-retrospective: optional
