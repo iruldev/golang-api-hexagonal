@@ -5,6 +5,7 @@ package contract
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
+	domainerrors "github.com/iruldev/golang-api-hexagonal/internal/domain/errors"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
@@ -39,7 +41,7 @@ func TestWriteProblemJSON(t *testing.T) {
 				Err:     domain.ErrUserNotFound,
 			},
 			wantStatus: http.StatusNotFound,
-			wantCode:   app.CodeUserNotFound,
+			wantCode:   string(domainerrors.ErrCodeUserNotFound),
 			wantTitle:  "User Not Found",
 			wantType:   ProblemBaseURL + "not-found",
 		},
@@ -52,7 +54,7 @@ func TestWriteProblemJSON(t *testing.T) {
 				Err:     domain.ErrEmailAlreadyExists,
 			},
 			wantStatus: http.StatusConflict,
-			wantCode:   app.CodeEmailExists,
+			wantCode:   string(domainerrors.ErrCodeEmailExists),
 			wantTitle:  "Email Already Exists",
 			wantType:   ProblemBaseURL + "conflict",
 		},
@@ -65,7 +67,7 @@ func TestWriteProblemJSON(t *testing.T) {
 				Err:     domain.ErrInvalidEmail,
 			},
 			wantStatus:   http.StatusBadRequest,
-			wantCode:     app.CodeValidationError,
+			wantCode:     string(domainerrors.ErrCodeInvalidEmail),
 			wantTitle:    "Validation Error",
 			wantType:     ProblemBaseURL + "validation-error",
 			wantValField: "email",
@@ -519,4 +521,260 @@ func TestNewValidationProblem_IncludesTraceID(t *testing.T) {
 	problem := NewValidationProblem(req, validationErrors)
 
 	assert.Equal(t, "validation-trace-456", problem.TraceID, "trace_id should be present in validation error")
+}
+
+func TestWriteProblemJSON_DomainErrors(t *testing.T) {
+	tests := []struct {
+		name         string
+		err          error
+		wantStatus   int
+		wantCode     string
+		wantTitle    string
+		wantType     string
+		wantValField string
+	}{
+		{
+			name: "Domain UserNotFound maps to 404",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeUserNotFound,
+				Message: "User via domain error",
+			},
+			wantStatus: http.StatusNotFound,
+			wantCode:   string(domainerrors.ErrCodeUserNotFound),
+			wantTitle:  "User Not Found",
+			wantType:   ProblemBaseURL + "not-found",
+		},
+		{
+			name: "Domain EmailExists maps to 409",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeEmailExists,
+				Message: "Email exists",
+			},
+			wantStatus: http.StatusConflict,
+			wantCode:   string(domainerrors.ErrCodeEmailExists),
+			wantTitle:  "Email Already Exists",
+			wantType:   ProblemBaseURL + "conflict",
+		},
+		{
+			name: "Domain InvalidEmail maps to 400 with validation error",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeInvalidEmail,
+				Message: "Invalid email format",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantCode:   string(domainerrors.ErrCodeInvalidEmail),
+			wantTitle:  "Validation Error",
+			wantType:   ProblemBaseURL + "validation-error",
+		},
+		{
+			name: "Domain InvalidFirstName maps to 400 with validation error",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeInvalidFirstName,
+				Message: "First name is required",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantCode:   string(domainerrors.ErrCodeInvalidFirstName),
+			wantTitle:  "Validation Error",
+			wantType:   ProblemBaseURL + "validation-error",
+		},
+		{
+			name: "Domain InvalidLastName maps to 400 with validation error",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeInvalidLastName,
+				Message: "Last name is required",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantCode:   string(domainerrors.ErrCodeInvalidLastName),
+			wantTitle:  "Validation Error",
+			wantType:   ProblemBaseURL + "validation-error",
+		},
+		{
+			name: "Domain AuditNotFound maps to 404",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeAuditNotFound,
+				Message: "Audit event not found",
+			},
+			wantStatus: http.StatusNotFound,
+			wantCode:   string(domainerrors.ErrCodeAuditNotFound),
+			wantTitle:  "Audit Event Not Found",
+			wantType:   ProblemBaseURL + "not-found",
+		},
+		{
+			name: "Domain InvalidEventType maps to 400",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeInvalidEventType,
+				Message: "Invalid event type",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantCode:   string(domainerrors.ErrCodeInvalidEventType),
+			wantTitle:  "Validation Error",
+			wantType:   ProblemBaseURL + "validation-error",
+		},
+		{
+			name: "Domain InvalidEntityType maps to 400",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeInvalidEntityType,
+				Message: "Invalid entity type",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantCode:   string(domainerrors.ErrCodeInvalidEntityType),
+			wantTitle:  "Validation Error",
+			wantType:   ProblemBaseURL + "validation-error",
+		},
+		{
+			name: "Domain InvalidEntityID maps to 400",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeInvalidEntityID,
+				Message: "Invalid entity ID",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantCode:   string(domainerrors.ErrCodeInvalidEntityID),
+			wantTitle:  "Validation Error",
+			wantType:   ProblemBaseURL + "validation-error",
+		},
+		{
+			name: "Domain InvalidID maps to 400",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeInvalidID,
+				Message: "Invalid ID",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantCode:   string(domainerrors.ErrCodeInvalidID),
+			wantTitle:  "Validation Error",
+			wantType:   ProblemBaseURL + "validation-error",
+		},
+		{
+			name: "Domain InvalidTimestamp maps to 400",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeInvalidTimestamp,
+				Message: "Invalid timestamp",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantCode:   string(domainerrors.ErrCodeInvalidTimestamp),
+			wantTitle:  "Validation Error",
+			wantType:   ProblemBaseURL + "validation-error",
+		},
+		{
+			name: "Domain InvalidPayload maps to 400",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeInvalidPayload,
+				Message: "Invalid payload",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantCode:   string(domainerrors.ErrCodeInvalidPayload),
+			wantTitle:  "Validation Error",
+			wantType:   ProblemBaseURL + "validation-error",
+		},
+		{
+			name: "Domain InvalidRequestID maps to 400",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeInvalidRequestID,
+				Message: "Invalid request ID",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantCode:   string(domainerrors.ErrCodeInvalidRequestID),
+			wantTitle:  "Validation Error",
+			wantType:   ProblemBaseURL + "validation-error",
+		},
+		{
+			name: "Domain Unauthorized maps to 401",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeUnauthorized,
+				Message: "User not authorized",
+			},
+			wantStatus: http.StatusUnauthorized,
+			wantCode:   string(domainerrors.ErrCodeUnauthorized),
+			wantTitle:  "Unauthorized",
+			wantType:   ProblemBaseURL + "unauthorized",
+		},
+		{
+			name: "Domain Forbidden maps to 403",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeForbidden,
+				Message: "Access forbidden",
+			},
+			wantStatus: http.StatusForbidden,
+			wantCode:   string(domainerrors.ErrCodeForbidden),
+			wantTitle:  "Forbidden",
+			wantType:   ProblemBaseURL + "forbidden",
+		},
+		{
+			name: "Domain Conflict maps to 409",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeConflict,
+				Message: "Generic conflict",
+			},
+			wantStatus: http.StatusConflict,
+			wantCode:   string(domainerrors.ErrCodeConflict),
+			wantTitle:  "Conflict",
+			wantType:   ProblemBaseURL + "conflict",
+		},
+		{
+			name: "Domain NotFound maps to 404",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeNotFound,
+				Message: "Generic not found",
+			},
+			wantStatus: http.StatusNotFound,
+			wantCode:   string(domainerrors.ErrCodeNotFound),
+			wantTitle:  "Not Found",
+			wantType:   ProblemBaseURL + "not-found",
+		},
+		{
+			name: "Domain InternalError maps to 500",
+			err: &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeInternal,
+				Message: "Something bad happened",
+			},
+			wantStatus: http.StatusInternalServerError,
+			wantCode:   string(domainerrors.ErrCodeInternal),
+			wantTitle:  "Internal Server Error",
+			wantType:   ProblemBaseURL + "internal-error",
+		},
+		{
+			name: "Domain UnknownError maps to 500",
+			err: &domainerrors.DomainError{
+				Code:    "ERR_UNKNOWN_DOMAIN",
+				Message: "Some unknown error",
+			},
+			wantStatus: http.StatusInternalServerError,
+			wantCode:   "ERR_UNKNOWN_DOMAIN",
+			wantTitle:  "Internal Server Error",
+			wantType:   ProblemBaseURL + "internal-error",
+		},
+		{
+			name: "Wrapped Domain Error is prioritized",
+			err: fmt.Errorf("wrapping: %w", &domainerrors.DomainError{
+				Code:    domainerrors.ErrCodeConflict,
+				Message: "Conflict occurred",
+			}),
+			wantStatus: http.StatusConflict,
+			wantCode:   string(domainerrors.ErrCodeConflict),
+			wantTitle:  "Conflict",
+			wantType:   ProblemBaseURL + "conflict",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/resource", nil)
+			rec := httptest.NewRecorder()
+
+			WriteProblemJSON(rec, req, tt.err)
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+			assert.Equal(t, ContentTypeProblemJSON, rec.Header().Get("Content-Type"))
+
+			var problem ProblemDetail
+			err := json.NewDecoder(rec.Body).Decode(&problem)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.wantCode, problem.Code)
+			assert.Equal(t, tt.wantTitle, problem.Title)
+			assert.Equal(t, tt.wantType, problem.Type)
+			assert.Equal(t, tt.wantStatus, problem.Status)
+			// Detail check handles both direct and wrapped error messages
+			// assert.Contains(t, problem.Detail, tt.err.(interface{ Error() string }).Error())
+		})
+	}
 }

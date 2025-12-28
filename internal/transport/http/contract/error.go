@@ -15,6 +15,7 @@ import (
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
+	domainerrors "github.com/iruldev/golang-api-hexagonal/internal/domain/errors"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
@@ -64,6 +65,44 @@ var defaultErrorDef = errorDef{
 
 func getErrorDef(code string) errorDef {
 	if def, ok := errorRegistry[code]; ok {
+		return def
+	}
+	return defaultErrorDef
+}
+
+// domainErrorRegistry maps domain error codes (from domain/errors package) to HTTP definitions.
+// Story 3.2: App→Transport Error Mapping
+var domainErrorRegistry = map[domainerrors.ErrorCode]errorDef{
+	// User domain errors
+	domainerrors.ErrCodeUserNotFound:     {http.StatusNotFound, "User Not Found", ProblemTypeNotFoundSlug},
+	domainerrors.ErrCodeEmailExists:      {http.StatusConflict, "Email Already Exists", ProblemTypeConflictSlug},
+	domainerrors.ErrCodeInvalidEmail:     {http.StatusBadRequest, "Validation Error", ProblemTypeValidationErrorSlug},
+	domainerrors.ErrCodeInvalidFirstName: {http.StatusBadRequest, "Validation Error", ProblemTypeValidationErrorSlug},
+	domainerrors.ErrCodeInvalidLastName:  {http.StatusBadRequest, "Validation Error", ProblemTypeValidationErrorSlug},
+
+	// Audit domain errors
+	domainerrors.ErrCodeAuditNotFound:     {http.StatusNotFound, "Audit Event Not Found", ProblemTypeNotFoundSlug},
+	domainerrors.ErrCodeInvalidEventType:  {http.StatusBadRequest, "Validation Error", ProblemTypeValidationErrorSlug},
+	domainerrors.ErrCodeInvalidEntityType: {http.StatusBadRequest, "Validation Error", ProblemTypeValidationErrorSlug},
+	domainerrors.ErrCodeInvalidEntityID:   {http.StatusBadRequest, "Validation Error", ProblemTypeValidationErrorSlug},
+	domainerrors.ErrCodeInvalidID:         {http.StatusBadRequest, "Validation Error", ProblemTypeValidationErrorSlug},
+	domainerrors.ErrCodeInvalidTimestamp:  {http.StatusBadRequest, "Validation Error", ProblemTypeValidationErrorSlug},
+	domainerrors.ErrCodeInvalidPayload:    {http.StatusBadRequest, "Validation Error", ProblemTypeValidationErrorSlug},
+	domainerrors.ErrCodeInvalidRequestID:  {http.StatusBadRequest, "Validation Error", ProblemTypeValidationErrorSlug},
+
+	// General errors
+	domainerrors.ErrCodeInternal:     {http.StatusInternalServerError, "Internal Server Error", ProblemTypeInternalErrorSlug},
+	domainerrors.ErrCodeValidation:   {http.StatusBadRequest, "Validation Error", ProblemTypeValidationErrorSlug},
+	domainerrors.ErrCodeNotFound:     {http.StatusNotFound, "Not Found", ProblemTypeNotFoundSlug},
+	domainerrors.ErrCodeConflict:     {http.StatusConflict, "Conflict", ProblemTypeConflictSlug},
+	domainerrors.ErrCodeUnauthorized: {http.StatusUnauthorized, "Unauthorized", ProblemTypeUnauthorizedSlug},
+	domainerrors.ErrCodeForbidden:    {http.StatusForbidden, "Forbidden", ProblemTypeForbiddenSlug},
+}
+
+// getDomainErrorDef returns the error definition for a domain error code.
+// Unknown codes return defaultErrorDef (500 Internal Server Error) - AC3.
+func getDomainErrorDef(code domainerrors.ErrorCode) errorDef {
+	if def, ok := domainErrorRegistry[code]; ok {
 		return def
 	}
 	return defaultErrorDef
@@ -220,6 +259,39 @@ func populateIDs(ctx context.Context, problem *ProblemDetail) {
 
 // WriteProblemJSON writes an RFC 7807 error response.
 func WriteProblemJSON(w http.ResponseWriter, r *http.Request, err error) {
+	// Priority 1: Check for DomainError (Story 3.2)
+	var domainErr *domainerrors.DomainError
+	if errors.As(err, &domainErr) {
+		def := getDomainErrorDef(domainErr.Code)
+
+		var validationErrors []ValidationError
+		if def.Slug == ProblemTypeValidationErrorSlug {
+			switch domainErr.Code {
+			case domainerrors.ErrCodeInvalidEmail:
+				validationErrors = []ValidationError{{Field: "email", Message: "must be a valid email address"}}
+			case domainerrors.ErrCodeInvalidFirstName:
+				validationErrors = []ValidationError{{Field: "firstName", Message: "must not be empty"}}
+			case domainerrors.ErrCodeInvalidLastName:
+				validationErrors = []ValidationError{{Field: "lastName", Message: "must not be empty"}}
+			default:
+				validationErrors = []ValidationError{{Field: "validation", Message: domainErr.Message}}
+			}
+		}
+
+		problem := ProblemDetail{
+			Type:             problemTypeURL(def.Slug),
+			Title:            def.Title,
+			Status:           def.Status,
+			Detail:           domainErr.Message,
+			Instance:         r.URL.Path,
+			Code:             string(domainErr.Code),
+			ValidationErrors: validationErrors,
+		}
+		populateIDs(r.Context(), &problem)
+		writeProblemJSON(w, def.Status, problem)
+		return
+	}
+
 	var appErr *app.AppError
 	if !errors.As(err, &appErr) {
 		// Unknown error → internal error (don't expose details)

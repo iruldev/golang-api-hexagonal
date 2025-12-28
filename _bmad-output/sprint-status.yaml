@@ -60,7 +60,7 @@ development_status:
   # Epic 3: Error Model Hardening + Adoption Kit (6 stories)
   epic-3: in-progress
   3-1-domain-error-types-stable-codes: done
-  3-2-app-transport-error-mapping: backlog
+  3-2-app-transport-error-mapping: done
   3-3-rfc-7807-response-with-trace-id: backlog
   3-4-adoption-guide-copy-paste-kit: backlog
   3-5-doc-template-for-new-test-files: backlog
