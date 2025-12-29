@@ -1,7 +1,8 @@
 # Source Tree Analysis: golang-api-hexagonal
 
-> **Deep Scan** - Annotated Directory Structure  
-> **Tanggal:** 2025-12-27
+> **Exhaustive Scan** - Annotated Directory Structure
+> **Tanggal:** 2025-12-29
+> **Total Files:** 140 Go files
 
 ---
 
@@ -10,17 +11,20 @@
 ```
 golang-api-hexagonal/
 │
-├── cmd/                                # 🚀 Entry Points
+├── cmd/                                # Entry Points
 │   └── api/
-│       └── main.go                     # Application bootstrap dengan Uber Fx
-│                                       # - Loads config
-│                                       # - Initializes DI container
-│                                       # - Starts HTTP servers (public + internal)
+│       ├── main.go                     # Application bootstrap dengan Uber Fx
+│       │                               # - Loads config
+│       │                               # - Initializes DI container
+│       │                               # - Starts HTTP servers (public + internal)
+│       ├── wiring_test.go              # DI wiring validation tests
+│       ├── migration_test.go           # Migration integration tests
+│       └── smoke_test.go               # Smoke tests for application startup
 │
-├── internal/                           # 📦 Private Application Code
+├── internal/                           # Private Application Code
 │   │
-│   ├── domain/                         # 🔴 DOMAIN LAYER (Business Core)
-│   │   │                               # ⚠️ RULE: Hanya boleh import stdlib!
+│   ├── domain/                         # DOMAIN LAYER (Business Core)
+│   │   │                               # RULE: Hanya boleh import stdlib!
 │   │   │
 │   │   ├── user.go                     # User entity + UserRepository interface
 │   │   ├── user_test.go                # Unit tests untuk User validation
@@ -39,8 +43,8 @@ golang-api-hexagonal/
 │   │   ├── redactor.go                 # Redactor interface
 │   │   └── errors.go                   # Domain errors (ErrNotFound, etc.)
 │   │
-│   ├── app/                            # 🟡 APPLICATION LAYER (Use Cases)
-│   │   │                               # ⚠️ RULE: Hanya boleh import domain!
+│   ├── app/                            # APPLICATION LAYER (Use Cases)
+│   │   │                               # RULE: Hanya boleh import domain!
 │   │   │
 │   │   ├── user/                       # User use cases
 │   │   │   ├── create_user.go          # CreateUserUseCase
@@ -59,7 +63,7 @@ golang-api-hexagonal/
 │   │   ├── errors.go                   # AppError type
 │   │   └── errors_test.go              # Unit tests
 │   │
-│   ├── transport/                      # 🔵 TRANSPORT LAYER (Inbound Adapters)
+│   ├── transport/                      # TRANSPORT LAYER (Inbound Adapters)
 │   │   │
 │   │   └── http/                       # HTTP transport
 │   │       │
@@ -78,7 +82,7 @@ golang-api-hexagonal/
 │   │       │   ├── integration_idor_test.go  # IDOR security tests
 │   │       │   └── metrics_audit_test.go     # Metrics + audit tests
 │   │       │
-│   │       ├── middleware/             # HTTP middleware (21 files!)
+│   │       ├── middleware/             # HTTP middleware (22 files)
 │   │       │   ├── auth.go             # JWT authentication
 │   │       │   ├── auth_test.go        # Comprehensive auth tests (23KB)
 │   │       │   ├── auth_bridge.go      # Auth adapter
@@ -90,7 +94,7 @@ golang-api-hexagonal/
 │   │       │   ├── metrics_test.go
 │   │       │   ├── tracing.go          # OpenTelemetry tracing
 │   │       │   ├── tracing_test.go
-│   │       │   ├── security.go         # Security headers
+│   │       │   ├── security.go         # Security headers (OWASP)
 │   │       │   ├── security_test.go
 │   │       │   ├── ratelimit.go        # Rate limiting
 │   │       │   ├── ratelimit_test.go
@@ -107,15 +111,18 @@ golang-api-hexagonal/
 │   │       │   ├── error.go            # Error response (RFC 7807)
 │   │       │   ├── error_test.go
 │   │       │   ├── user.go             # User DTOs
-│   │       │   └── user_test.go
+│   │       │   ├── user_test.go
+│   │       │   ├── response.go         # Generic response wrapper
+│   │       │   └── validation.go       # Request validation utilities
 │   │       │
 │   │       └── ctxutil/                # Context utilities
 │   │           ├── claims.go           # JWT claims context
 │   │           ├── claims_test.go
 │   │           ├── trace.go            # Trace context
-│   │           └── trace_test.go
+│   │           ├── trace_test.go
+│   │           └── request_id.go       # Request ID context
 │   │
-│   ├── infra/                          # 🟢 INFRASTRUCTURE LAYER (Outbound Adapters)
+│   ├── infra/                          # INFRASTRUCTURE LAYER (Outbound Adapters)
 │   │   │
 │   │   ├── postgres/                   # PostgreSQL implementation
 │   │   │   ├── pool.go                 # Connection pool config
@@ -128,15 +135,15 @@ golang-api-hexagonal/
 │   │   │   ├── user_repo_test.go
 │   │   │   ├── audit_event_repo.go     # AuditEventRepository implementation
 │   │   │   ├── audit_event_repo_test.go
-│   │   │   ├── id_generator.go         # ID generation
+│   │   │   ├── id_generator.go         # ID generation (UUID v7)
 │   │   │   ├── citext_integration_test.go  # CITEXT integration test
-│   │   │   ├── test_helpers_test.go    # ⚠️ Empty file (22 bytes)
 │   │   │   │
-│   │   │   └── sqlcgen/                # ⚠️ Generated code (NO TESTS)
+│   │   │   └── sqlcgen/                # Generated code (sqlc)
 │   │   │       ├── db.go
 │   │   │       ├── models.go
 │   │   │       ├── querier.go
-│   │   │       └── users.sql.go
+│   │   │       ├── users.sql.go
+│   │   │       └── audit.sql.go
 │   │   │
 │   │   ├── config/                     # Configuration
 │   │   │   ├── config.go               # Config struct + loading
@@ -155,36 +162,60 @@ golang-api-hexagonal/
 │   │       ├── module.go               # All DI wiring
 │   │       └── module_test.go          # DI graph tests
 │   │
-│   └── shared/                         # 🟣 SHARED (Cross-cutting)
+│   ├── shared/                         # SHARED (Cross-cutting)
+│   │   │
+│   │   ├── metrics/                    # Metrics interfaces
+│   │   │   └── http_metrics.go         # HTTPMetrics interface
+│   │   │
+│   │   └── redact/                     # PII redaction
+│   │       ├── redactor.go
+│   │       ├── redactor_test.go
+│   │       ├── benchmark_test.go       # Performance tests
+│   │       └── robustness_test.go      # Edge case tests
+│   │
+│   └── testutil/                       # TEST UTILITIES (Shared)
 │       │
-│       ├── metrics/                    # ⚠️ NO TESTS
-│       │   └── http_metrics.go         # HTTPMetrics interface
+│       ├── testutil.go                 # Common test utilities
 │       │
-│       └── redact/                     # PII redaction
-│           ├── redactor.go
-│           ├── redactor_test.go
-│           ├── benchmark_test.go       # Performance tests
-│           └── robustness_test.go      # Edge case tests
+│       ├── assert/                     # Custom assertions
+│       │   └── assert.go               # Domain-aware assertions
+│       │
+│       ├── fixtures/                   # Test fixtures
+│       │   └── fixtures.go             # Standard test data
+│       │
+│       ├── mocks/                      # Generated mocks (mockgen)
+│       │   ├── doc.go                  # Package documentation
+│       │   ├── user_repository_mock.go # Mock for UserRepository
+│       │   └── audit_event_repository_mock.go  # Mock for AuditEventRepository
+│       │
+│       └── containers/                 # Testcontainers integration
+│           ├── README.md               # Container usage guide
+│           ├── containers.go           # Container orchestration
+│           ├── postgres.go             # PostgreSQL testcontainer
+│           ├── postgres_test.go        # Container tests
+│           ├── migrate.go              # Migration runner
+│           ├── truncate.go             # Table truncation
+│           └── tx.go                   # Transaction helpers
 │
-├── migrations/                         # 📊 Database Migrations (goose)
+├── migrations/                         # Database Migrations (goose)
 │   ├── 20251216000000_init.sql         # Initial schema
 │   ├── 20251217000000_create_users.sql # Users table
 │   ├── 20251219000000_create_audit_events.sql  # Audit events
 │   └── 20251226084756_add_citext_email.sql     # CITEXT for email
 │
-├── queries/                            # 📝 sqlc Query Definitions
+├── queries/                            # sqlc Query Definitions
 │   ├── users.sql                       # User queries
 │   └── audit_events.sql                # Audit queries
 │
-├── docs/                               # 📚 Documentation
-│   ├── index.md                        # Master index (this scan)
+├── docs/                               # Documentation
+│   ├── index.md                        # Master index
 │   ├── architecture.md                 # Architecture docs
 │   ├── openapi.yaml                    # OpenAPI 3.1 spec
 │   ├── observability.md                # Observability guide
 │   ├── local-development.md            # Dev setup guide
 │   └── guides/                         # Additional guides
 │
-├── .github/workflows/                  # 🔄 CI/CD
+├── .github/workflows/                  # CI/CD
 │   └── ci.yml                          # GitHub Actions workflow
 │
 └── Configuration Files
@@ -202,6 +233,22 @@ golang-api-hexagonal/
 
 ---
 
+## Statistik Kode
+
+| Metrik | Jumlah |
+|--------|--------|
+| **Total Go Files** | 140 |
+| **Production Files** | ~70 |
+| **Test Files** | ~70 |
+| **Domain Layer** | 12 files |
+| **Application Layer** | 11 files |
+| **Transport Layer** | 36 files |
+| **Infrastructure Layer** | 24 files |
+| **Test Utilities** | 13 files |
+| **Migrations** | 4 files |
+
+---
+
 ## Critical Entry Points
 
 | Entry Point | Path | Purpose |
@@ -210,6 +257,39 @@ golang-api-hexagonal/
 | **DI Wiring** | `internal/infra/fx/module.go` | All dependency injection |
 | **Router** | `internal/transport/http/router.go` | HTTP routing + middleware |
 | **Config** | `internal/infra/config/config.go` | Configuration loading |
+
+---
+
+## Layer Dependencies (Enforced by depguard)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         DOMAIN LAYER                            │
+│   (stdlib only - no external dependencies)                      │
+│   user.go, audit.go, id.go, pagination.go, errors.go            │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │ implements
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      APPLICATION LAYER                          │
+│   (domain only - no infra, transport, slog, otel, uuid, http)   │
+│   user/create_user.go, user/get_user.go, audit/service.go       │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │ orchestrates
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                       TRANSPORT LAYER                           │
+│   (domain + app - no infra packages)                            │
+│   http/router.go, http/handler/*.go, http/middleware/*.go       │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │ uses
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    INFRASTRUCTURE LAYER                         │
+│   (domain + external packages)                                  │
+│   postgres/*.go, config/*.go, observability/*.go, fx/*.go       │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -229,20 +309,43 @@ External Systems
 
 ---
 
-## ⚠️ Area yang Perlu Perhatian
+## Test Infrastructure Analysis
+
+### Unit Testing
+- **Framework**: Go standard `testing` package
+- **Mocks**: mockgen-generated mocks in `testutil/mocks/`
+- **Assertions**: Custom assertions in `testutil/assert/`
+- **Fixtures**: Standard test data in `testutil/fixtures/`
+
+### Integration Testing
+- **Container**: Testcontainers-go for PostgreSQL
+- **Migration**: Automatic migration via `testutil/containers/migrate.go`
+- **Cleanup**: Table truncation via `testutil/containers/truncate.go`
+- **Transactions**: Per-test transactions via `testutil/containers/tx.go`
+
+### Security Testing
+- **IDOR Tests**: `integration_idor_test.go` - Insecure Direct Object Reference tests
+- **Auth Tests**: Comprehensive JWT validation in `middleware/auth_test.go`
+
+---
+
+## Area yang Perlu Perhatian
 
 ### 1. Files/Packages Tanpa Tests
-- `internal/infra/postgres/sqlcgen/` - Generated code, expected
-- `internal/shared/metrics/` - Interface only, tapi sebaiknya ada tests
-- `internal/infra/postgres/test_helpers_test.go` - File kosong (22 bytes)
+- `internal/shared/metrics/http_metrics.go` - Interface only, sebaiknya ada tests
+- `internal/infra/postgres/sqlcgen/` - Generated code, expected tanpa tests
 
 ### 2. Large Test Files (mungkin perlu split)
 - `internal/transport/http/middleware/auth_test.go` - 23KB
 - `internal/transport/http/handler/user_test.go` - 22KB
 
-### 3. Temporary/Review Files
-- `internal/transport/internal_review_tmp/` - Folder review sementara
+### 3. Positive Findings
+- Comprehensive test coverage (~50% files are tests)
+- Dedicated test utilities package
+- Testcontainers for realistic integration tests
+- Security-focused tests (IDOR, auth)
+- Benchmark tests for performance-critical code
 
 ---
 
-*Dokumentasi ini dihasilkan oleh BMad Method - Document Project Workflow*
+*Dokumentasi ini dihasilkan oleh BMad Method - Document Project Workflow (Exhaustive Scan)*

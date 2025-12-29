@@ -1,7 +1,8 @@
 # Arsitektur: golang-api-hexagonal
 
-> **Dokumentasi Brownfield** - Deep Scan Analysis  
-> **Tanggal:** 2025-12-27
+> **Dokumentasi Brownfield** - Exhaustive Scan Analysis
+> **Tanggal:** 2025-12-29
+> **Total Files:** 140 Go files (70 production + 70 tests)
 
 ---
 
@@ -14,7 +15,9 @@
 - ✅ Dependency injection dengan Uber Fx
 - ✅ Comprehensive observability (OTEL + Prometheus + slog)
 - ✅ Security middleware (JWT, rate limiting, body limiter)
-- ✅ 49 test files dengan 80% coverage threshold
+- ✅ 70 test files dengan 80% coverage threshold
+- ✅ Testcontainers untuk integration testing
+- ✅ Security-focused tests (IDOR, auth edge cases)
 
 ---
 
@@ -273,16 +276,28 @@ config.Config
 | **Database** | ✅ | sqlc type-safe queries, migrations |
 | **Linting** | ✅ | golangci-lint dengan depguard |
 
-### 6.2 ⚠️ Area untuk Improvement
+### 6.2 ⚠️ Area untuk Improvement (International Grade Gap Analysis)
 
 | Area | Priority | Issue | Recommendation |
 |------|----------|-------|----------------|
-| **Testing Structure** | HIGH | Tests tersebar di berbagai tempat | Consolidate ke pattern yang konsisten |
-| **Integration Tests** | HIGH | Butuh real DB | Add dockertest atau testcontainers |
-| **Missing Tests** | MEDIUM | `sqlcgen/`, `metrics/` tanpa tests | Add test coverage |
-| **Error Handling** | MEDIUM | Domain errors bisa lebih granular | Add error codes untuk API responses |
-| **API Versioning** | LOW | Hanya v1 | Document versioning strategy |
-| **Graceful Shutdown** | LOW | Sudah ada via Fx | Verify timeout configurations |
+| **API Documentation** | HIGH | OpenAPI spec belum complete (missing examples, descriptions) | Enhance OpenAPI with examples, error codes, proper descriptions |
+| **Error Standardization** | HIGH | Domain errors bisa lebih granular | Implement RFC 7807 fully dengan error codes taxonomy |
+| **Missing Tests** | MEDIUM | `shared/metrics/` tanpa tests (interface only) | Add interface compliance tests |
+| **Large Test Files** | MEDIUM | `auth_test.go` (23KB), `user_test.go` (22KB) | Split into smaller, focused test files |
+| **Retry/Circuit Breaker** | MEDIUM | ResilientPool exists, tapi no application-level resilience | Add retry patterns untuk external calls |
+| **API Rate Limit Headers** | LOW | Rate limiting ada, tapi no X-RateLimit-* headers | Add standard rate limit response headers |
+| **Versioning Strategy** | LOW | Hanya v1, no deprecation strategy | Document API lifecycle dan deprecation policy |
+| **Health Check Details** | LOW | /health basic | Add /health dengan dependency status details |
+
+### 6.3 ✅ Recently Resolved (Found in Exhaustive Scan)
+
+| Area | Status | Detail |
+|------|--------|--------|
+| **Integration Tests** | ✅ RESOLVED | Testcontainers implemented di `testutil/containers/` |
+| **Test Fixtures** | ✅ RESOLVED | Standard fixtures di `testutil/fixtures/` |
+| **Mock Generation** | ✅ RESOLVED | Centralized mocks di `testutil/mocks/` |
+| **Security Tests** | ✅ RESOLVED | IDOR tests, comprehensive auth edge cases |
+| **Benchmark Tests** | ✅ RESOLVED | Performance tests di `shared/redact/` |
 
 ---
 
@@ -373,16 +388,51 @@ Client Request
 
 ---
 
-## 10. Next Steps untuk BMad PRD
+## 10. International Grade Improvement Roadmap
 
-Untuk brownfield PRD, fokus pada:
+### 10.1 Priority 1: API Excellence
+- [ ] Enhance OpenAPI spec dengan examples, descriptions, dan error responses
+- [ ] Implement complete RFC 7807 problem details dengan error codes taxonomy
+- [ ] Add X-RateLimit-Remaining, X-RateLimit-Limit, X-RateLimit-Reset headers
+- [ ] Document API versioning dan deprecation policy
 
-1. **Existing Context**: Gunakan `docs/index.md` sebagai entry point
-2. **Architecture Constraints**: Patuhi layer rules di `.golangci.yml`
-3. **Testing Standards**: Min 80% coverage untuk domain+app
-4. **API Patterns**: Ikuti existing contract patterns di `internal/transport/http/contract/`
-5. **DI Wiring**: Extend `internal/infra/fx/module.go` untuk dependencies baru
+### 10.2 Priority 2: Resilience Patterns
+- [ ] Add application-level retry dengan exponential backoff
+- [ ] Implement circuit breaker pattern untuk external dependencies
+- [ ] Add timeout configuration per-endpoint
+- [ ] Enhance health check dengan dependency status details
+
+### 10.3 Priority 3: Code Quality
+- [ ] Split large test files (auth_test.go, user_test.go) into focused modules
+- [ ] Add tests untuk `shared/metrics/` interface
+- [ ] Add contract tests untuk API backward compatibility
+- [ ] Implement mutation testing untuk test quality assessment
+
+### 10.4 Existing Best Practices to Maintain
+1. **Architecture Constraints**: Patuhi layer rules di `.golangci.yml`
+2. **Testing Standards**: Min 80% coverage untuk domain+app
+3. **API Patterns**: Ikuti existing contract patterns di `internal/transport/http/contract/`
+4. **DI Wiring**: Extend `internal/infra/fx/module.go` untuk dependencies baru
+5. **Security**: Maintain JWT validation, rate limiting, security headers
 
 ---
 
-*Dokumentasi ini dihasilkan oleh BMad Method - Document Project Workflow*
+## 11. Statistics Summary
+
+| Metric | Count |
+|--------|-------|
+| Total Go Files | 140 |
+| Production Files | ~70 |
+| Test Files | ~70 |
+| Domain Layer | 12 files |
+| Application Layer | 11 files |
+| Transport Layer | 36 files |
+| Infrastructure Layer | 24 files |
+| Test Utilities | 13 files |
+| API Endpoints | 6 |
+| Database Tables | 2 |
+| Migrations | 4 |
+
+---
+
+*Dokumentasi ini dihasilkan oleh BMad Method - Document Project Workflow (Exhaustive Scan)*

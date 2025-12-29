@@ -95,6 +95,40 @@ type Config struct {
 	// AuditRedactEmail controls how email addresses are redacted in audit logs.
 	// Options: "full" (default, replaces with [REDACTED]) or "partial" (shows first 2 chars + domain).
 	AuditRedactEmail string `envconfig:"AUDIT_REDACT_EMAIL" default:"full"`
+
+	// Resilience - Circuit Breaker
+	// CBMaxRequests is the number of requests allowed in the half-open state. Default: 3.
+	CBMaxRequests int `envconfig:"CB_MAX_REQUESTS" default:"3"`
+	// CBInterval is the cyclic period for clearing internal counts. Default: 10s.
+	CBInterval time.Duration `envconfig:"CB_INTERVAL" default:"10s"`
+	// CBTimeout is the period to wait before transitioning from open to half-open. Default: 30s.
+	CBTimeout time.Duration `envconfig:"CB_TIMEOUT" default:"30s"`
+	// CBFailureThreshold is the number of failures to trip the circuit. Default: 5.
+	CBFailureThreshold int `envconfig:"CB_FAILURE_THRESHOLD" default:"5"`
+
+	// Resilience - Retry
+	// RetryMaxAttempts is the maximum number of retry attempts. Default: 3.
+	RetryMaxAttempts int `envconfig:"RETRY_MAX_ATTEMPTS" default:"3"`
+	// RetryInitialDelay is the initial delay before the first retry. Default: 100ms.
+	RetryInitialDelay time.Duration `envconfig:"RETRY_INITIAL_DELAY" default:"100ms"`
+	// RetryMaxDelay is the maximum delay between retries. Default: 5s.
+	RetryMaxDelay time.Duration `envconfig:"RETRY_MAX_DELAY" default:"5s"`
+	// RetryMultiplier is the factor by which the delay increases after each retry. Default: 2.0.
+	RetryMultiplier float64 `envconfig:"RETRY_MULTIPLIER" default:"2.0"`
+
+	// Resilience - Timeout
+	// TimeoutDefault is the default timeout for operations. Default: 30s.
+	TimeoutDefault time.Duration `envconfig:"TIMEOUT_DEFAULT" default:"30s"`
+	// TimeoutDatabase is the timeout for database operations. Default: 5s.
+	TimeoutDatabase time.Duration `envconfig:"TIMEOUT_DATABASE" default:"5s"`
+	// TimeoutExternalAPI is the timeout for external API calls. Default: 10s.
+	TimeoutExternalAPI time.Duration `envconfig:"TIMEOUT_EXTERNAL_API" default:"10s"`
+
+	// Resilience - Bulkhead (Story 1.5)
+	// BulkheadMaxConcurrent is the maximum number of concurrent executions. Default: 10.
+	BulkheadMaxConcurrent int `envconfig:"BULKHEAD_MAX_CONCURRENT" default:"10"`
+	// BulkheadMaxWaiting is the maximum number of operations waiting for execution. Default: 100.
+	BulkheadMaxWaiting int `envconfig:"BULKHEAD_MAX_WAITING" default:"100"`
 }
 
 // Redacted returns a safe string representation of the Config for logging.
@@ -213,7 +247,7 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid DB_POOL_MAX_CONNS: must be greater than 0")
 	}
 	if c.DBPoolMinConns < 0 { // 0 is technically allowed by pgx (no idle conns), but let's allow it. config default is 5.
-		return fmt.Errorf("invalid DB_POOL_MIN_CONNS: must shorten handle non-negative")
+		return fmt.Errorf("invalid DB_POOL_MIN_CONNS: must be non-negative")
 	}
 	if c.DBPoolMinConns > c.DBPoolMaxConns {
 		return fmt.Errorf("invalid DB_POOL_MIN_CONNS: must be less than or equal to DB_POOL_MAX_CONNS")

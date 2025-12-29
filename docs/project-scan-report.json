@@ -1,94 +1,112 @@
 {
   "workflow_version": "1.2.0",
   "timestamps": {
-    "started": "2025-12-27T14:12:22+07:00",
-    "last_updated": "2025-12-27T14:15:00+07:00"
+    "started": "2025-12-29T10:00:00+07:00",
+    "last_updated": "2025-12-29T12:00:00+07:00"
   },
-  "mode": "initial_scan",
-  "scan_level": "deep",
+  "mode": "full_rescan",
+  "scan_level": "exhaustive",
   "project_root": "/Users/khoirulsetyonugroho/Development/go-workspace/src/github.com/iruldev/golang-api-hexagonal",
   "output_folder": "/Users/khoirulsetyonugroho/Development/go-workspace/src/github.com/iruldev/golang-api-hexagonal/docs",
   "completed_steps": [
-    {"step": "step_0.5", "status": "completed", "timestamp": "2025-12-27T14:12:30+07:00", "summary": "Documentation requirements loaded for backend project type"},
-    {"step": "step_0.6", "status": "completed", "timestamp": "2025-12-27T14:12:40+07:00", "summary": "Scan level set to deep"},
-    {"step": "step_1", "status": "completed", "timestamp": "2025-12-27T14:13:00+07:00", "summary": "Classified as monolith backend with hexagonal architecture"},
-    {"step": "step_2", "status": "completed", "timestamp": "2025-12-27T14:13:30+07:00", "summary": "Found 7 existing docs in docs/"},
-    {"step": "step_3", "status": "completed", "timestamp": "2025-12-27T14:14:00+07:00", "summary": "Tech stack: Go 1.24, Chi, pgx, Uber Fx, OpenTelemetry, Prometheus"},
-    {"step": "step_4", "status": "completed", "timestamp": "2025-12-27T14:14:30+07:00", "summary": "API scan: Users CRUD, Health, Ready, Metrics endpoints. Data models: users, audit_events"}
+    {"step": "step_1", "status": "completed", "summary": "Classified as monolith backend with hexagonal architecture"},
+    {"step": "step_2", "status": "completed", "summary": "Discovered 16 existing documentation files"},
+    {"step": "step_3", "status": "completed", "summary": "Analyzed tech stack: Go 1.25.5, Chi, pgx, Fx, OTEL, slog"},
+    {"step": "step_4", "status": "completed", "summary": "API contracts (6 endpoints), data models (2 tables), security analysis"},
+    {"step": "step_5", "status": "completed", "summary": "Generated source-tree-analysis.md with 140 Go files"},
+    {"step": "step_6", "status": "completed", "summary": "Extracted dev/ops info from Makefile, CI, docker-compose"},
+    {"step": "step_8", "status": "completed", "summary": "Updated architecture.md with gap analysis and improvement roadmap"},
+    {"step": "step_9_10", "status": "completed", "summary": "Updated index.md with complete documentation catalog"}
   ],
-  "current_step": "step_5",
+  "current_step": "step_11_12",
   "project_classification": {
     "repository_type": "monolith",
     "parts_count": 1,
-    "primary_tech": "Go 1.24 with Chi + PostgreSQL"
+    "primary_tech": "Go 1.25.5 with Chi + PostgreSQL",
+    "architecture": "Hexagonal (Ports & Adapters)"
   },
   "project_types": [
     {"part_id": "main", "project_type_id": "backend", "display_name": "Go API Backend"}
   ],
-  "findings": {
-    "technology_stack": {
-      "language": "Go 1.24.11",
+  "technology_stack": {
+    "core": {
+      "language": "Go 1.25.5",
       "framework": "Chi v5.2.3",
-      "database": "PostgreSQL (pgx v5.7.6)",
-      "di_framework": "Uber Fx v1.24.0",
-      "observability": {
-        "tracing": "OpenTelemetry",
-        "metrics": "Prometheus",
-        "logging": "slog"
-      },
-      "tools": {
-        "linter": "golangci-lint v1.64.2",
-        "migrations": "goose v3.26.0",
-        "codegen": "sqlc v1.28.0"
-      }
+      "database": "PostgreSQL 15 + pgx v5.7.6",
+      "di": "Uber Fx v1.24.0"
     },
-    "architecture": {
-      "pattern": "Hexagonal (Ports & Adapters)",
-      "layers": ["domain", "app", "transport", "infra", "shared"],
-      "di_wiring": "internal/infra/fx",
-      "layer_rules_enforced": true
+    "observability": {
+      "logging": "slog (structured, JSON)",
+      "metrics": "Prometheus",
+      "tracing": "OpenTelemetry (OTLP)"
     },
-    "api_endpoints": {
-      "public_port": 8080,
-      "internal_port": 8081,
-      "routes": [
-        "GET /health",
-        "GET /ready",
-        "GET /api/v1/users",
-        "GET /api/v1/users/{id}",
-        "POST /api/v1/users",
-        "GET /metrics (internal)"
-      ]
-    },
-    "data_models": {
-      "tables": ["users", "audit_events"],
-      "migrations_count": 4
+    "security": {
+      "auth": "JWT HS256 (exp required, iss/aud validated)",
+      "headers": "OWASP security headers",
+      "rate_limiting": "token bucket per IP"
     },
     "testing": {
-      "test_files_count": 49,
-      "coverage_threshold": "80% (domain+app)",
-      "test_status": "all_passing",
-      "packages_without_tests": ["sqlcgen", "metrics"]
+      "mocks": "mockgen (uber/mock)",
+      "integration": "testcontainers-go",
+      "coverage": "80% threshold for domain+app"
     },
     "ci_cd": {
       "platform": "GitHub Actions",
-      "gates": [
-        "gitleaks (secret scanning)",
-        "golangci-lint",
-        "OpenAPI validation",
-        "sqlc generation check",
-        "tests with coverage",
-        "govulncheck",
-        "migration up/down verification"
-      ]
-    },
-    "security": {
-      "auth": "JWT (optional)",
-      "rate_limiting": "yes",
-      "body_limiter": "yes",
-      "security_headers": "yes"
+      "scans": ["gitleaks", "govulncheck", "spectral"],
+      "coverage": "80% threshold enforced"
     }
   },
-  "outputs_generated": ["project-scan-report.json"],
-  "resume_instructions": "Continue from step 5 (source tree analysis)"
+  "api_catalog": {
+    "total_endpoints": 6,
+    "endpoints": [
+      {"method": "GET", "path": "/health", "auth": "none"},
+      {"method": "GET", "path": "/ready", "auth": "none"},
+      {"method": "POST", "path": "/api/v1/users", "auth": "JWT"},
+      {"method": "GET", "path": "/api/v1/users", "auth": "JWT"},
+      {"method": "GET", "path": "/api/v1/users/{id}", "auth": "JWT"},
+      {"method": "GET", "path": "/metrics", "auth": "internal only (port 8081)"}
+    ]
+  },
+  "data_models": {
+    "tables": ["users", "audit_events"],
+    "migrations_count": 4
+  },
+  "development_info": {
+    "setup_command": "make setup",
+    "run_command": "make run",
+    "test_command": "make test",
+    "ci_command": "make ci",
+    "code_generation": ["sqlc generate", "go generate (mockgen)"]
+  },
+  "statistics": {
+    "total_go_files": 140,
+    "production_files": 70,
+    "test_files": 70,
+    "domain_layer_files": 12,
+    "app_layer_files": 11,
+    "transport_layer_files": 36,
+    "infra_layer_files": 24,
+    "test_util_files": 13
+  },
+  "international_grade_gaps": {
+    "priority_1_high": [
+      "Enhance OpenAPI spec with examples and descriptions",
+      "Implement full RFC 7807 error codes taxonomy"
+    ],
+    "priority_2_medium": [
+      "Add application-level retry/circuit breaker",
+      "Split large test files (auth_test.go, user_test.go)"
+    ],
+    "priority_3_low": [
+      "Add X-RateLimit-* headers",
+      "Enhanced health check with dependency details"
+    ]
+  },
+  "outputs_generated": [
+    "project-scan-report.json",
+    "source-tree-analysis.md",
+    "architecture.md (updated)",
+    "index.md (updated)"
+  ],
+  "resume_instructions": "Workflow complete. All steps finished successfully."
 }
