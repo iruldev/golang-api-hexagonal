@@ -264,3 +264,110 @@ func (m *TimeoutMetrics) Reset() {
 func NoopTimeoutMetrics() *TimeoutMetrics {
 	return NewTimeoutMetrics(prometheus.NewRegistry())
 }
+
+// BulkheadMetrics provides Prometheus metrics for bulkhead monitoring.
+type BulkheadMetrics struct {
+	// active tracks the current number of active executions per bulkhead.
+	active *prometheus.GaugeVec
+
+	// waiting tracks the current number of waiting operations per bulkhead.
+	waiting *prometheus.GaugeVec
+
+	// operationTotal counts bulkhead operations by name and result.
+	operationTotal *prometheus.CounterVec
+
+	// waitDurationSeconds measures time spent waiting for a slot.
+	waitDurationSeconds *prometheus.HistogramVec
+}
+
+// NewBulkheadMetrics creates and registers bulkhead metrics with the given registry.
+// If registry is nil, a new registry is created.
+func NewBulkheadMetrics(registry *prometheus.Registry) *BulkheadMetrics {
+	if registry == nil {
+		registry = prometheus.NewRegistry()
+	}
+
+	active := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "bulkhead_active",
+			Help: "Current number of active executions in the bulkhead",
+		},
+		[]string{"name"},
+	)
+
+	waiting := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "bulkhead_waiting",
+			Help: "Current number of operations waiting for a slot in the bulkhead",
+		},
+		[]string{"name"},
+	)
+
+	operationTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "bulkhead_total",
+			Help: "Total number of bulkhead operations by result. Labels: name=bulkhead name, result=success|error|rejected|cancelled.",
+		},
+		[]string{"name", "result"},
+	)
+
+	waitDurationSeconds := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "bulkhead_wait_duration_seconds",
+			Help: "Time spent waiting for a slot in the bulkhead",
+			Buckets: []float64{
+				0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+			},
+		},
+		[]string{"name"},
+	)
+
+	// Register metrics with registry.
+	// Errors are intentionally ignored as they indicate metrics are already registered,
+	// which is expected when creating multiple bulkheads in the same process.
+	_ = registry.Register(active)
+	_ = registry.Register(waiting)
+	_ = registry.Register(operationTotal)
+	_ = registry.Register(waitDurationSeconds)
+
+	return &BulkheadMetrics{
+		active:              active,
+		waiting:             waiting,
+		operationTotal:      operationTotal,
+		waitDurationSeconds: waitDurationSeconds,
+	}
+}
+
+// SetActive updates the active execution count for a bulkhead.
+func (m *BulkheadMetrics) SetActive(name string, count int) {
+	m.active.WithLabelValues(name).Set(float64(count))
+}
+
+// SetWaiting updates the waiting operation count for a bulkhead.
+func (m *BulkheadMetrics) SetWaiting(name string, count int) {
+	m.waiting.WithLabelValues(name).Set(float64(count))
+}
+
+// RecordOperation records a bulkhead operation completion.
+// result should be one of: "success", "error", "rejected", "cancelled"
+func (m *BulkheadMetrics) RecordOperation(name, result string) {
+	m.operationTotal.WithLabelValues(name, result).Inc()
+}
+
+// RecordWaitDuration records time spent waiting for a slot.
+func (m *BulkheadMetrics) RecordWaitDuration(name string, durationSeconds float64) {
+	m.waitDurationSeconds.WithLabelValues(name).Observe(durationSeconds)
+}
+
+// Reset resets all metrics. Useful for testing.
+func (m *BulkheadMetrics) Reset() {
+	m.active.Reset()
+	m.waiting.Reset()
+	m.operationTotal.Reset()
+	m.waitDurationSeconds.Reset()
+}
+
+// NoopBulkheadMetrics returns a no-op metrics implementation for testing.
+func NoopBulkheadMetrics() *BulkheadMetrics {
+	return NewBulkheadMetrics(prometheus.NewRegistry())
+}
