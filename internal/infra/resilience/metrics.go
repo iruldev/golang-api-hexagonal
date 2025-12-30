@@ -107,3 +107,95 @@ func (m *CircuitBreakerMetrics) Reset() {
 func NoopCircuitBreakerMetrics() *CircuitBreakerMetrics {
 	return NewCircuitBreakerMetrics(prometheus.NewRegistry())
 }
+
+// RetryMetrics provides Prometheus metrics for retry monitoring.
+type RetryMetrics struct {
+	// operationTotal counts retry operations by name, result, and attempt count.
+	operationTotal *prometheus.CounterVec
+
+	// attemptTotal counts individual retry attempts by name and result.
+	attemptTotal *prometheus.CounterVec
+
+	// durationSeconds measures total duration of retry operations.
+	durationSeconds *prometheus.HistogramVec
+}
+
+// NewRetryMetrics creates and registers retry metrics with the given registry.
+// If registry is nil, a new registry is created.
+func NewRetryMetrics(registry *prometheus.Registry) *RetryMetrics {
+	if registry == nil {
+		registry = prometheus.NewRegistry()
+	}
+
+	operationTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "retry_operation_total",
+			Help: "Total number of retry operations by attempt count",
+		},
+		[]string{"name", "attempts"},
+	)
+
+	attemptTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "retry_attempts_total",
+			Help: "Total number of completed retry operations by result. Labels: name=retrier name, result=success|failure|exhausted. Incremented once per operation completion, not per individual retry attempt.",
+		},
+		[]string{"name", "result"},
+	)
+
+	durationSeconds := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "retry_duration_seconds",
+			Help: "Duration of retry operations including all attempts",
+			Buckets: []float64{
+				0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0,
+			},
+		},
+		[]string{"name", "result"},
+	)
+
+	// Register metrics with registry.
+	// Errors are intentionally ignored as they indicate metrics are already registered,
+	// which is expected when creating multiple retriers in the same process.
+	_ = registry.Register(operationTotal)
+	_ = registry.Register(attemptTotal)
+	_ = registry.Register(durationSeconds)
+
+	return &RetryMetrics{
+		operationTotal:  operationTotal,
+		attemptTotal:    attemptTotal,
+		durationSeconds: durationSeconds,
+	}
+}
+
+// RecordOperation records a retry operation completion.
+// result should be one of: "success", "failure", "exhausted"
+func (m *RetryMetrics) RecordOperation(name, result string, attempts int, durationSeconds float64) {
+	m.attemptTotal.WithLabelValues(name, result).Inc()
+	m.operationTotal.WithLabelValues(name, itoa(attempts)).Inc()
+	m.durationSeconds.WithLabelValues(name, result).Observe(durationSeconds)
+}
+
+// Reset resets all metrics. Useful for testing.
+func (m *RetryMetrics) Reset() {
+	m.operationTotal.Reset()
+	m.attemptTotal.Reset()
+	m.durationSeconds.Reset()
+}
+
+// NoopRetryMetrics returns a no-op metrics implementation for testing.
+func NoopRetryMetrics() *RetryMetrics {
+	return NewRetryMetrics(prometheus.NewRegistry())
+}
+
+// itoa converts an integer to a string for metric labels.
+func itoa(i int) string {
+	// Simple implementation for small numbers used in retry counts
+	if i < 0 {
+		return "-" + itoa(-i)
+	}
+	if i < 10 {
+		return string(rune('0' + i))
+	}
+	return itoa(i/10) + string(rune('0'+i%10))
+}
