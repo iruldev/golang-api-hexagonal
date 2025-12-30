@@ -94,6 +94,7 @@ func TestNewRouter_JWTEnabled(t *testing.T) {
 		1024,
 		jwtConfig,
 		rateLimitConfig,
+		nil, // shutdownCoord - not tested here
 	)
 
 	// Case 1: JWT Enabled, No Token provided -> Should be 401
@@ -140,6 +141,7 @@ func TestNewRouter_JWTDisabled(t *testing.T) {
 		1024,
 		jwtConfig,
 		rateLimitConfig,
+		nil, // shutdownCoord - not tested here
 	)
 
 	// Case 2: JWT Disabled, No Token provided -> Should be 200 (Mock returns 200)
@@ -188,6 +190,7 @@ func TestNewRouter_HealthCheck_NoAuth(t *testing.T) {
 		1024,
 		jwtConfig,
 		rateLimitConfig,
+		nil, // shutdownCoord - not tested here
 	)
 
 	req := httptest.NewRequest("GET", "/health", nil)
@@ -228,6 +231,7 @@ func TestNewRouter_MetricsNotExposed(t *testing.T) {
 		1024,
 		jwtConfig,
 		rateLimitConfig,
+		nil, // shutdownCoord - not tested here
 	)
 
 	// /metrics should return 404 on public router
@@ -295,6 +299,7 @@ func TestNewRouter_TrustProxyFalse_IgnoresXFF(t *testing.T) {
 		1024,
 		jwtConfig,
 		rateLimitConfig,
+		nil, // shutdownCoord - not tested here
 	)
 
 	// Request with X-Forwarded-For header - should be IGNORED
@@ -343,6 +348,7 @@ func TestNewRouter_TrustProxyTrue_UsesXFF(t *testing.T) {
 		1024,
 		jwtConfig,
 		rateLimitConfig,
+		nil, // shutdownCoord - not tested here
 	)
 
 	// Request with X-Forwarded-For header - should be USED

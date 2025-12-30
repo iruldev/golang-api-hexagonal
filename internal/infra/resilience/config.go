@@ -29,6 +29,10 @@ const (
 	// Bulkhead defaults
 	DefaultBulkheadMaxConcurrent = 10
 	DefaultBulkheadMaxWaiting    = 100
+
+	// Shutdown defaults (Story 1.6)
+	DefaultShutdownDrainPeriod = 30 * time.Second
+	DefaultShutdownGracePeriod = 5 * time.Second
 )
 
 // ResilienceConfig holds all resilience-related configuration.
@@ -37,6 +41,7 @@ type ResilienceConfig struct {
 	Retry          RetryConfig
 	Timeout        TimeoutConfig
 	Bulkhead       BulkheadConfig
+	Shutdown       ShutdownConfig
 }
 
 // CircuitBreakerConfig holds configuration for circuit breaker pattern.
@@ -81,6 +86,15 @@ type BulkheadConfig struct {
 	MaxWaiting int
 }
 
+// ShutdownConfig holds configuration for graceful shutdown (Story 1.6).
+type ShutdownConfig struct {
+	// DrainPeriod is the maximum time to wait for in-flight requests to complete.
+	// After this period, remaining requests will be forcefully terminated.
+	DrainPeriod time.Duration
+	// GracePeriod is additional time after drain for cleanup operations.
+	GracePeriod time.Duration
+}
+
 // DefaultResilienceConfig returns a new ResilienceConfig with sensible defaults.
 func DefaultResilienceConfig() ResilienceConfig {
 	return ResilienceConfig{
@@ -104,6 +118,10 @@ func DefaultResilienceConfig() ResilienceConfig {
 		Bulkhead: BulkheadConfig{
 			MaxConcurrent: DefaultBulkheadMaxConcurrent,
 			MaxWaiting:    DefaultBulkheadMaxWaiting,
+		},
+		Shutdown: ShutdownConfig{
+			DrainPeriod: DefaultShutdownDrainPeriod,
+			GracePeriod: DefaultShutdownGracePeriod,
 		},
 	}
 }
@@ -132,6 +150,10 @@ func NewResilienceConfig(cfg *config.Config) ResilienceConfig {
 			MaxConcurrent: cfg.BulkheadMaxConcurrent,
 			MaxWaiting:    cfg.BulkheadMaxWaiting,
 		},
+		Shutdown: ShutdownConfig{
+			DrainPeriod: cfg.ShutdownDrainPeriod,
+			GracePeriod: cfg.ShutdownGracePeriod,
+		},
 	}
 }
 
@@ -149,6 +171,9 @@ func (c *ResilienceConfig) Validate() error {
 	}
 	if err := c.Bulkhead.validate(); err != nil {
 		return fmt.Errorf("bulkhead config: %w", err)
+	}
+	if err := c.Shutdown.validate(); err != nil {
+		return fmt.Errorf("shutdown config: %w", err)
 	}
 	return nil
 }
@@ -207,6 +232,16 @@ func (c *BulkheadConfig) validate() error {
 	}
 	if c.MaxWaiting < 0 {
 		return fmt.Errorf("max_waiting must be non-negative, got %d", c.MaxWaiting)
+	}
+	return nil
+}
+
+func (c *ShutdownConfig) validate() error {
+	if c.DrainPeriod <= 0 {
+		return fmt.Errorf("drain_period must be greater than 0, got %s", c.DrainPeriod)
+	}
+	if c.GracePeriod < 0 {
+		return fmt.Errorf("grace_period must be non-negative, got %s", c.GracePeriod)
 	}
 	return nil
 }

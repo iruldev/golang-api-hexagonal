@@ -129,6 +129,12 @@ type Config struct {
 	BulkheadMaxConcurrent int `envconfig:"BULKHEAD_MAX_CONCURRENT" default:"10"`
 	// BulkheadMaxWaiting is the maximum number of operations waiting for execution. Default: 100.
 	BulkheadMaxWaiting int `envconfig:"BULKHEAD_MAX_WAITING" default:"100"`
+
+	// Resilience - Graceful Shutdown (Story 1.6)
+	// ShutdownDrainPeriod is the maximum time to wait for in-flight requests to complete. Default: 30s.
+	ShutdownDrainPeriod time.Duration `envconfig:"SHUTDOWN_DRAIN_PERIOD" default:"30s"`
+	// ShutdownGracePeriod is additional time after drain for cleanup operations. Default: 5s.
+	ShutdownGracePeriod time.Duration `envconfig:"SHUTDOWN_GRACE_PERIOD" default:"5s"`
 }
 
 // Redacted returns a safe string representation of the Config for logging.
@@ -262,6 +268,14 @@ func (c *Config) Validate() error {
 	}
 	if c.ShutdownTimeout <= 0 {
 		return fmt.Errorf("invalid SHUTDOWN_TIMEOUT: must be greater than 0")
+	}
+
+	// Story 1.6: Graceful Shutdown validation
+	if c.ShutdownDrainPeriod <= 0 {
+		return fmt.Errorf("invalid SHUTDOWN_DRAIN_PERIOD: must be greater than 0")
+	}
+	if c.ShutdownGracePeriod < 0 {
+		return fmt.Errorf("invalid SHUTDOWN_GRACE_PERIOD: must be non-negative")
 	}
 
 	return nil

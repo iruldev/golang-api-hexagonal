@@ -33,6 +33,10 @@ func TestDefaultResilienceConfig(t *testing.T) {
 	// Bulkhead defaults
 	assert.Equal(t, DefaultBulkheadMaxConcurrent, cfg.Bulkhead.MaxConcurrent)
 	assert.Equal(t, DefaultBulkheadMaxWaiting, cfg.Bulkhead.MaxWaiting)
+
+	// Shutdown defaults
+	assert.Equal(t, DefaultShutdownDrainPeriod, cfg.Shutdown.DrainPeriod)
+	assert.Equal(t, DefaultShutdownGracePeriod, cfg.Shutdown.GracePeriod)
 }
 
 func TestResilienceConfig_Validate(t *testing.T) {
@@ -69,6 +73,10 @@ func TestResilienceConfig_Validate(t *testing.T) {
 				Bulkhead: BulkheadConfig{
 					MaxConcurrent: 20,
 					MaxWaiting:    200,
+				},
+				Shutdown: ShutdownConfig{
+					DrainPeriod: 45 * time.Second,
+					GracePeriod: 10 * time.Second,
 				},
 			},
 			wantErr: "",
@@ -223,6 +231,44 @@ func TestResilienceConfig_Validate(t *testing.T) {
 			}(),
 			wantErr: "",
 		},
+		// Shutdown validation (Story 1.6)
+		{
+			name: "invalid shutdown drain_period zero",
+			config: func() ResilienceConfig {
+				cfg := DefaultResilienceConfig()
+				cfg.Shutdown.DrainPeriod = 0
+				return cfg
+			}(),
+			wantErr: "drain_period must be greater than 0",
+		},
+		{
+			name: "invalid shutdown drain_period negative",
+			config: func() ResilienceConfig {
+				cfg := DefaultResilienceConfig()
+				cfg.Shutdown.DrainPeriod = -1 * time.Second
+				return cfg
+			}(),
+			wantErr: "drain_period must be greater than 0",
+		},
+		{
+			name: "invalid shutdown grace_period negative",
+			config: func() ResilienceConfig {
+				cfg := DefaultResilienceConfig()
+				cfg.Shutdown.GracePeriod = -1 * time.Second
+				return cfg
+			}(),
+			wantErr: "grace_period must be non-negative",
+		},
+		// Edge case: shutdown grace_period zero is valid (no extra grace time)
+		{
+			name: "valid shutdown grace_period zero",
+			config: func() ResilienceConfig {
+				cfg := DefaultResilienceConfig()
+				cfg.Shutdown.GracePeriod = 0
+				return cfg
+			}(),
+			wantErr: "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -299,6 +345,9 @@ func TestNewResilienceConfig(t *testing.T) {
 		// Bulkhead
 		BulkheadMaxConcurrent: 20,
 		BulkheadMaxWaiting:    200,
+		// Shutdown
+		ShutdownDrainPeriod: 45 * time.Second,
+		ShutdownGracePeriod: 10 * time.Second,
 	}
 
 	resCfg := NewResilienceConfig(cfg)
@@ -323,6 +372,10 @@ func TestNewResilienceConfig(t *testing.T) {
 	// Verify Bulkhead mapping
 	assert.Equal(t, cfg.BulkheadMaxConcurrent, resCfg.Bulkhead.MaxConcurrent)
 	assert.Equal(t, cfg.BulkheadMaxWaiting, resCfg.Bulkhead.MaxWaiting)
+
+	// Verify Shutdown mapping
+	assert.Equal(t, cfg.ShutdownDrainPeriod, resCfg.Shutdown.DrainPeriod)
+	assert.Equal(t, cfg.ShutdownGracePeriod, resCfg.Shutdown.GracePeriod)
 }
 
 func TestResilienceConfig_Validate_NegativeDurations(t *testing.T) {

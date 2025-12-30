@@ -102,6 +102,7 @@ func TestIntegration_IDORPrevention(t *testing.T) {
 		1024,
 		jwtConfig,
 		httpTransport.RateLimitConfig{RequestsPerSecond: 100},
+		nil, // shutdownCoord - not tested here
 	)
 
 	// 3. Define Test Data

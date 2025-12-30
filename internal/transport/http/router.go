@@ -59,13 +59,15 @@ const BasePath = "/api/v1"
 // NewRouter creates a new chi router with the provided handlers and logger.
 //
 // Middleware ordering:
-//  1. RequestID: Generate/passthrough request ID FIRST
-//  2. Tracing: Create spans and propagate trace context
-//  3. Metrics: Record request counts and durations
-//  4. Logging: Needs requestId and traceId in context
-//  5. RealIP: Extract real IP from headers
-//  6. BodyLimiter: Enforce request body size limits
-//  7. Recoverer: Panic recovery
+//  1. SecureHeaders: Security headers on ALL responses
+//  2. RequestID: Generate/passthrough request ID FIRST
+//  3. RealIP: Extract real IP from headers (if TrustProxy enabled)
+//  4. Tracing: Create spans and propagate trace context
+//  5. Metrics: Record request counts and durations
+//  6. Logging: Needs requestId and traceId in context
+//  7. BodyLimiter: Enforce request body size limits
+//  8. Recoverer: Panic recovery
+//  9. Shutdown: Reject requests during shutdown (Story 1.6)
 //
 // JWT middleware is applied per-route group (protected endpoints only).
 func NewRouter(
@@ -78,6 +80,7 @@ func NewRouter(
 	maxRequestSize int64,
 	jwtConfig JWTConfig,
 	rateLimitConfig RateLimitConfig,
+	shutdownCoord middleware.ShutdownCoordinator,
 ) chi.Router {
 	r := chi.NewRouter()
 
@@ -100,6 +103,12 @@ func NewRouter(
 	r.Use(middleware.RequestLogger(logger))
 	r.Use(middleware.BodyLimiter(maxRequestSize))
 	r.Use(chiMiddleware.Recoverer)
+
+	// Story 1.6: Graceful Shutdown - reject new requests during shutdown
+	// and track in-flight requests for drain period coordination.
+	if shutdownCoord != nil {
+		r.Use(middleware.Shutdown(shutdownCoord))
+	}
 
 	// NOTE: /metrics endpoint moved to internal router (Story 2.5b)
 

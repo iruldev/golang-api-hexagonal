@@ -27,6 +27,7 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/config"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/resilience"
 	"github.com/iruldev/golang-api-hexagonal/internal/shared/metrics"
 	"github.com/iruldev/golang-api-hexagonal/internal/shared/redact"
 	httpTransport "github.com/iruldev/golang-api-hexagonal/internal/transport/http"
@@ -38,6 +39,7 @@ import (
 var Module = fx.Options(
 	ConfigModule,
 	ObservabilityModule,
+	ResilienceModule,
 	PostgresModule,
 	DomainModule,
 	AppModule,
@@ -99,6 +101,33 @@ func provideMetrics() MetricsResult {
 		Registry:    reg,
 		HTTPMetrics: httpMetrics,
 	}
+}
+
+// ResilienceModule provides resilience dependencies (Story 1.6).
+var ResilienceModule = fx.Options(
+	fx.Provide(provideResilienceConfig),
+	fx.Provide(provideShutdownMetrics),
+	fx.Provide(provideShutdownCoordinator),
+)
+
+func provideResilienceConfig(cfg *config.Config) resilience.ResilienceConfig {
+	return resilience.NewResilienceConfig(cfg)
+}
+
+func provideShutdownMetrics(registry *prometheus.Registry) *resilience.ShutdownMetrics {
+	return resilience.NewShutdownMetrics(registry)
+}
+
+func provideShutdownCoordinator(
+	resCfg resilience.ResilienceConfig,
+	metrics *resilience.ShutdownMetrics,
+	logger *slog.Logger,
+) resilience.ShutdownCoordinator {
+	return resilience.NewShutdownCoordinator(
+		resCfg.Shutdown,
+		resilience.WithShutdownMetrics(metrics),
+		resilience.WithShutdownLogger(logger),
+	)
 }
 
 // PostgresModule provides database dependencies.
@@ -233,6 +262,7 @@ func providePublicRouter(
 	userHandler *handler.UserHandler,
 	jwtConfig httpTransport.JWTConfig,
 	rateLimitConfig httpTransport.RateLimitConfig,
+	shutdownCoord resilience.ShutdownCoordinator,
 ) chi.Router {
 	return httpTransport.NewRouter(
 		logger,
@@ -245,6 +275,7 @@ func providePublicRouter(
 		cfg.MaxRequestSize,
 		jwtConfig,
 		rateLimitConfig,
+		shutdownCoord,
 	)
 }
 

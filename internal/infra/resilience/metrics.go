@@ -1,6 +1,8 @@
 package resilience
 
 import (
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -370,4 +372,111 @@ func (m *BulkheadMetrics) Reset() {
 // NoopBulkheadMetrics returns a no-op metrics implementation for testing.
 func NoopBulkheadMetrics() *BulkheadMetrics {
 	return NewBulkheadMetrics(prometheus.NewRegistry())
+}
+
+// ShutdownMetrics provides Prometheus metrics for graceful shutdown monitoring (Story 1.6).
+type ShutdownMetrics struct {
+	// shutdownInProgress tracks whether shutdown is in progress (1=yes, 0=no).
+	shutdownInProgress prometheus.Gauge
+
+	// activeRequests tracks the current number of active requests during shutdown.
+	activeRequests prometheus.Gauge
+
+	// rejectedTotal counts requests rejected during shutdown.
+	rejectedTotal prometheus.Counter
+
+	// durationSeconds measures the total duration of the shutdown process.
+	durationSeconds *prometheus.HistogramVec
+}
+
+// NewShutdownMetrics creates and registers shutdown metrics with the given registry.
+// If registry is nil, a new registry is created.
+func NewShutdownMetrics(registry *prometheus.Registry) *ShutdownMetrics {
+	if registry == nil {
+		registry = prometheus.NewRegistry()
+	}
+
+	shutdownInProgress := prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "shutdown_in_progress",
+			Help: "Whether graceful shutdown is currently in progress (1=yes, 0=no)",
+		},
+	)
+
+	activeRequests := prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "shutdown_active_requests",
+			Help: "Current number of active requests during shutdown drain",
+		},
+	)
+
+	rejectedTotal := prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "shutdown_requests_rejected_total",
+			Help: "Total number of requests rejected during shutdown",
+		},
+	)
+
+	durationSeconds := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "shutdown_duration_seconds",
+			Help: "Duration of the shutdown process",
+			Buckets: []float64{
+				0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 15.0, 30.0, 45.0, 60.0,
+			},
+		},
+		[]string{"status"},
+	)
+
+	// Register metrics with registry.
+	// Errors are intentionally ignored as they indicate metrics are already registered.
+	_ = registry.Register(shutdownInProgress)
+	_ = registry.Register(activeRequests)
+	_ = registry.Register(rejectedTotal)
+	_ = registry.Register(durationSeconds)
+
+	return &ShutdownMetrics{
+		shutdownInProgress: shutdownInProgress,
+		activeRequests:     activeRequests,
+		rejectedTotal:      rejectedTotal,
+		durationSeconds:    durationSeconds,
+	}
+}
+
+// SetShutdownInProgress sets the shutdown in progress gauge.
+func (m *ShutdownMetrics) SetShutdownInProgress(inProgress bool) {
+	if inProgress {
+		m.shutdownInProgress.Set(1)
+	} else {
+		m.shutdownInProgress.Set(0)
+	}
+}
+
+// SetActiveRequests sets the current active request count.
+func (m *ShutdownMetrics) SetActiveRequests(count int64) {
+	m.activeRequests.Set(float64(count))
+}
+
+// RecordRejection increments the rejected requests counter.
+func (m *ShutdownMetrics) RecordRejection() {
+	m.rejectedTotal.Inc()
+}
+
+// RecordShutdownDuration records the total shutdown duration.
+// status should be one of: "success", "timeout"
+func (m *ShutdownMetrics) RecordShutdownDuration(duration time.Duration, status string) {
+	m.durationSeconds.WithLabelValues(status).Observe(duration.Seconds())
+}
+
+// Reset resets all metrics. Useful for testing.
+func (m *ShutdownMetrics) Reset() {
+	m.shutdownInProgress.Set(0)
+	m.activeRequests.Set(0)
+	// Counters cannot be reset, only observed.
+	m.durationSeconds.Reset()
+}
+
+// NoopShutdownMetrics returns a no-op metrics implementation for testing.
+func NoopShutdownMetrics() *ShutdownMetrics {
+	return NewShutdownMetrics(prometheus.NewRegistry())
 }

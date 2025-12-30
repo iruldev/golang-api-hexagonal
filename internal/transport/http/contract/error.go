@@ -29,15 +29,19 @@ func init() {
 }
 
 const (
-	ProblemTypeValidationErrorSlug = "validation-error"
-	ProblemTypeNotFoundSlug        = "not-found"
-	ProblemTypeConflictSlug        = "conflict"
-	ProblemTypeInternalErrorSlug   = "internal-error"
-	ProblemTypeUnauthorizedSlug    = "unauthorized"
-	ProblemTypeForbiddenSlug       = "forbidden"
-	ProblemTypeRateLimitSlug       = "rate-limit-exceeded"
+	ProblemTypeValidationErrorSlug    = "validation-error"
+	ProblemTypeNotFoundSlug           = "not-found"
+	ProblemTypeConflictSlug           = "conflict"
+	ProblemTypeInternalErrorSlug      = "internal-error"
+	ProblemTypeUnauthorizedSlug       = "unauthorized"
+	ProblemTypeForbiddenSlug          = "forbidden"
+	ProblemTypeRateLimitSlug          = "rate-limit-exceeded"
+	ProblemTypeServiceUnavailableSlug = "service-unavailable"
 
 	ContentTypeProblemJSON = "application/problem+json"
+
+	// System error codes
+	CodeServiceUnavailable = "SYS-002"
 )
 
 type errorDef struct {
@@ -62,6 +66,9 @@ var errorRegistry = map[string]errorDef{
 	// App-specific codes (no domain equivalent)
 	app.CodeRequestTooLarge:   {http.StatusRequestEntityTooLarge, "Request Entity Too Large", ProblemTypeValidationErrorSlug},
 	app.CodeRateLimitExceeded: {http.StatusTooManyRequests, "Too Many Requests", ProblemTypeRateLimitSlug},
+
+	// System codes
+	CodeServiceUnavailable: {http.StatusServiceUnavailable, "Service Unavailable", ProblemTypeServiceUnavailableSlug},
 }
 
 var defaultErrorDef = errorDef{
@@ -171,6 +178,12 @@ func problemTypeURL(slug string) string {
 		baseURL = ProblemBaseURL
 	}
 	return baseURL + slug
+}
+
+// ProblemTypeURL returns the RFC 7807 type URL for the given slug.
+// Exported for use by middleware packages that need to construct problem details.
+func ProblemTypeURL(slug string) string {
+	return problemTypeURL(slug)
 }
 
 // safeDetail returns a safe error message (no internal details for 5xx).

@@ -91,7 +91,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("ready OK", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db, logger)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{})
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 		rec := httptest.NewRecorder()
@@ -105,7 +105,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("ready not ready", func(t *testing.T) {
 		db := &fakeDB{pingErr: assert.AnError}
 		readyHandler := NewReadyHandler(db, logger)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{})
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 		rec := httptest.NewRecorder()
@@ -120,7 +120,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("ready idempotent", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db, logger)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{})
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil)
 
 		for i := 0; i < 5; i++ {
 			req := httptest.NewRequest(http.MethodGet, "/ready", nil)
@@ -136,7 +136,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("health ok", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db, logger)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{})
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rec := httptest.NewRecorder()
@@ -245,6 +245,7 @@ func TestIntegration_CreateUser_LocationHeader(t *testing.T) {
 		1024,
 		httpTransport.JWTConfig{}, // JWT disabled for this test
 		httpTransport.RateLimitConfig{RequestsPerSecond: 100},
+		nil, // shutdownCoord - not tested here
 	)
 
 	// 3. Execute Request
