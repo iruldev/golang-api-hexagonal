@@ -1,5 +1,7 @@
 package resilience
 
+import "errors"
+
 // Error codes for resilience operations.
 // These codes are STABLE and should not be changed once published.
 const (
@@ -112,4 +114,24 @@ func NewMaxRetriesExceededError(err error) error {
 		Message: "maximum retry attempts exceeded",
 		Err:     err,
 	}
+}
+
+// IsCircuitOpen returns true if the error is a circuit open error.
+func IsCircuitOpen(err error) bool {
+	return errors.Is(err, ErrCircuitOpen)
+}
+
+// IsBulkheadFull returns true if the error is a bulkhead full error.
+func IsBulkheadFull(err error) bool {
+	return errors.Is(err, ErrBulkheadFull)
+}
+
+// IsTimeoutExceeded returns true if the error is a timeout exceeded error.
+func IsTimeoutExceeded(err error) bool {
+	return errors.Is(err, ErrTimeoutExceeded)
+}
+
+// IsMaxRetriesExceeded returns true if the error is a max retries exceeded error.
+func IsMaxRetriesExceeded(err error) bool {
+	return errors.Is(err, ErrMaxRetriesExceeded)
 }

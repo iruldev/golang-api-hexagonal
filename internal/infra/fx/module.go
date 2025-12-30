@@ -103,15 +103,95 @@ func provideMetrics() MetricsResult {
 	}
 }
 
-// ResilienceModule provides resilience dependencies (Story 1.6).
+// ResilienceModule provides resilience dependencies (Story 1.6 + 1.7).
 var ResilienceModule = fx.Options(
 	fx.Provide(provideResilienceConfig),
+	// Circuit Breaker components
+	fx.Provide(provideCircuitBreakerMetrics),
+	fx.Provide(provideCircuitBreakerPresets),
+	// Retry components
+	fx.Provide(provideRetryMetrics),
+	fx.Provide(provideRetrier),
+	// Timeout components
+	fx.Provide(provideTimeoutMetrics),
+	fx.Provide(provideTimeoutPresets),
+	// Bulkhead components
+	fx.Provide(provideBulkheadMetrics),
+	fx.Provide(provideBulkheadPresets),
+	// Shutdown components
 	fx.Provide(provideShutdownMetrics),
 	fx.Provide(provideShutdownCoordinator),
+	// ResilienceWrapper (composes all patterns)
+	fx.Provide(provideResilienceWrapper),
 )
 
 func provideResilienceConfig(cfg *config.Config) resilience.ResilienceConfig {
 	return resilience.NewResilienceConfig(cfg)
+}
+
+func provideCircuitBreakerMetrics(registry *prometheus.Registry) *resilience.CircuitBreakerMetrics {
+	return resilience.NewCircuitBreakerMetrics(registry)
+}
+
+func provideCircuitBreakerPresets(
+	resCfg resilience.ResilienceConfig,
+	metrics *resilience.CircuitBreakerMetrics,
+	logger *slog.Logger,
+) *resilience.CircuitBreakerPresets {
+	return resilience.NewCircuitBreakerPresets(
+		resCfg.CircuitBreaker,
+		resilience.WithMetrics(metrics),
+		resilience.WithLogger(logger),
+	)
+}
+
+func provideRetryMetrics(registry *prometheus.Registry) *resilience.RetryMetrics {
+	return resilience.NewRetryMetrics(registry)
+}
+
+func provideRetrier(
+	resCfg resilience.ResilienceConfig,
+	metrics *resilience.RetryMetrics,
+	logger *slog.Logger,
+) resilience.Retrier {
+	return resilience.NewRetrier(
+		"default",
+		resCfg.Retry,
+		resilience.WithRetryMetrics(metrics),
+		resilience.WithRetryLogger(logger),
+	)
+}
+
+func provideTimeoutMetrics(registry *prometheus.Registry) *resilience.TimeoutMetrics {
+	return resilience.NewTimeoutMetrics(registry)
+}
+
+func provideTimeoutPresets(
+	resCfg resilience.ResilienceConfig,
+	metrics *resilience.TimeoutMetrics,
+	logger *slog.Logger,
+) *resilience.TimeoutPresets {
+	return resilience.NewTimeoutPresets(
+		resCfg.Timeout,
+		resilience.WithTimeoutMetrics(metrics),
+		resilience.WithTimeoutLogger(logger),
+	)
+}
+
+func provideBulkheadMetrics(registry *prometheus.Registry) *resilience.BulkheadMetrics {
+	return resilience.NewBulkheadMetrics(registry)
+}
+
+func provideBulkheadPresets(
+	resCfg resilience.ResilienceConfig,
+	metrics *resilience.BulkheadMetrics,
+	logger *slog.Logger,
+) *resilience.BulkheadPresets {
+	return resilience.NewBulkheadPresets(
+		resCfg.Bulkhead,
+		resilience.WithBulkheadMetrics(metrics),
+		resilience.WithBulkheadLogger(logger),
+	)
 }
 
 func provideShutdownMetrics(registry *prometheus.Registry) *resilience.ShutdownMetrics {
@@ -127,6 +207,22 @@ func provideShutdownCoordinator(
 		resCfg.Shutdown,
 		resilience.WithShutdownMetrics(metrics),
 		resilience.WithShutdownLogger(logger),
+	)
+}
+
+func provideResilienceWrapper(
+	cbPresets *resilience.CircuitBreakerPresets,
+	retrier resilience.Retrier,
+	timeoutPresets *resilience.TimeoutPresets,
+	bulkheadPresets *resilience.BulkheadPresets,
+	logger *slog.Logger,
+) resilience.ResilienceWrapper {
+	return resilience.NewResilienceWrapper(
+		resilience.WithCircuitBreakerFactory(cbPresets.Factory()),
+		resilience.WithWrapperRetrier(retrier),
+		resilience.WithWrapperTimeout(timeoutPresets.Default()),
+		resilience.WithWrapperBulkhead(bulkheadPresets.Default()),
+		resilience.WithWrapperLogger(logger),
 	)
 }
 

@@ -46,4 +46,19 @@
 //	if err := resilienceCfg.Validate(); err != nil {
 //	    log.Fatal(err)
 //	}
+//
+// # Composition and Usage
+//
+// The package provides a composable ResilienceWrapper that applies patterns in the correct order:
+// Timeout → Retry → CircuitBreaker (innermost to innermost).
+//
+//	wrapper := resilience.NewResilienceWrapper(
+//	    resilience.WithCircuitBreakerFactory(cbPresets.Factory()),
+//	    resilience.WithWrapperRetrier(retrier),
+//	    resilience.WithWrapperTimeout(timeoutPresets.Default()),
+//	)
+//
+//	err := wrapper.Execute(ctx, "operation-name", func(ctx context.Context) error {
+//	    return repo.DoSomething(ctx)
+//	})
 package resilience
