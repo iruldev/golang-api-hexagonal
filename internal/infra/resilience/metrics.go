@@ -199,3 +199,68 @@ func itoa(i int) string {
 	}
 	return itoa(i/10) + string(rune('0'+i%10))
 }
+
+// TimeoutMetrics provides Prometheus metrics for timeout monitoring.
+type TimeoutMetrics struct {
+	// operationTotal counts timeout operations by name and result.
+	operationTotal *prometheus.CounterVec
+
+	// durationSeconds measures duration of operations with timeout.
+	durationSeconds *prometheus.HistogramVec
+}
+
+// NewTimeoutMetrics creates and registers timeout metrics with the given registry.
+// If registry is nil, a new registry is created.
+func NewTimeoutMetrics(registry *prometheus.Registry) *TimeoutMetrics {
+	if registry == nil {
+		registry = prometheus.NewRegistry()
+	}
+
+	operationTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "timeout_total",
+			Help: "Total number of timeout operations by result. Labels: name=timeout name, result=success|timeout|error.",
+		},
+		[]string{"name", "result"},
+	)
+
+	durationSeconds := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "timeout_duration_seconds",
+			Help: "Duration of operations executed with timeout wrapper",
+			Buckets: []float64{
+				0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0,
+			},
+		},
+		[]string{"name", "result"},
+	)
+
+	// Register metrics with registry.
+	// Errors are intentionally ignored as they indicate metrics are already registered,
+	// which is expected when creating multiple timeouts in the same process.
+	_ = registry.Register(operationTotal)
+	_ = registry.Register(durationSeconds)
+
+	return &TimeoutMetrics{
+		operationTotal:  operationTotal,
+		durationSeconds: durationSeconds,
+	}
+}
+
+// RecordOperation records a timeout operation completion.
+// result should be one of: "success", "timeout", "error"
+func (m *TimeoutMetrics) RecordOperation(name, result string, durationSeconds float64) {
+	m.operationTotal.WithLabelValues(name, result).Inc()
+	m.durationSeconds.WithLabelValues(name, result).Observe(durationSeconds)
+}
+
+// Reset resets all metrics. Useful for testing.
+func (m *TimeoutMetrics) Reset() {
+	m.operationTotal.Reset()
+	m.durationSeconds.Reset()
+}
+
+// NoopTimeoutMetrics returns a no-op metrics implementation for testing.
+func NoopTimeoutMetrics() *TimeoutMetrics {
+	return NewTimeoutMetrics(prometheus.NewRegistry())
+}
