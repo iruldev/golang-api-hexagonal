@@ -1,4 +1,5 @@
-// internal/domain/errors/codes.go
+// Package errors provides domain-level error codes and error types.
+// This is a copy-paste kit example of how to structure domain errors.
 package errors
 
 const (

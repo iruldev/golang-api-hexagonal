@@ -1,4 +1,4 @@
-// internal/testutil/testutil.go
+// Package testutil provides testing utilities for the copy-paste kit examples.
 package testutil
 
 import (

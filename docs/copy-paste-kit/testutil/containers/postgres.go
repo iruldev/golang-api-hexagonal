@@ -1,4 +1,5 @@
-// internal/testutil/containers/postgres.go
+// Package containers provides test container utilities for integration testing.
+// This is a copy-paste kit example of how to structure test containers.
 package containers
 
 import (

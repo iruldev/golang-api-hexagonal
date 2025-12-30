@@ -1,4 +1,3 @@
-// internal/testutil/containers/truncate.go
 package containers
 
 import (

@@ -27,7 +27,7 @@ func TestSecureHeaders_BasicHeaders(t *testing.T) {
 
 	// Assert
 	resp := rec.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -54,7 +54,7 @@ func TestSecureHeaders_NoHSTSWithoutHTTPS(t *testing.T) {
 
 	// Assert - HSTS should NOT be present when not over HTTPS
 	resp := rec.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Empty(t, resp.Header.Get(headerHSTS), "HSTS should not be set without HTTPS")
 }
@@ -76,7 +76,7 @@ func TestSecureHeaders_HSTSWithTLS(t *testing.T) {
 
 	// Assert - HSTS should be present when over TLS
 	resp := rec.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, hstsMaxAgeWithSubdoms, resp.Header.Get(headerHSTS), "HSTS should be set when TLS is active")
 }
@@ -97,7 +97,7 @@ func TestSecureHeaders_HSTSWithXForwardedProto(t *testing.T) {
 
 	// Assert - HSTS should be present when behind HTTPS proxy
 	resp := rec.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, hstsMaxAgeWithSubdoms, resp.Header.Get(headerHSTS), "HSTS should be set when X-Forwarded-Proto is https")
 }
@@ -115,7 +115,7 @@ func TestSecureHeaders_HSTSWithUppercaseXForwardedProto(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	resp := rec.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, hstsMaxAgeWithSubdoms, resp.Header.Get(headerHSTS), "HSTS should be set when X-Forwarded-Proto is HTTPS (case-insensitive)")
 }
@@ -133,7 +133,7 @@ func TestSecureHeaders_HSTSWithURLScheme(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	resp := rec.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, hstsMaxAgeWithSubdoms, resp.Header.Get(headerHSTS), "HSTS should be set when URL scheme is https")
 }
@@ -173,7 +173,7 @@ func TestSecureHeaders_ErrorResponses(t *testing.T) {
 
 			// Assert - All security headers should be present even on errors
 			resp := rec.Result()
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			require.Equal(t, tt.statusCode, resp.StatusCode)
 			assert.Equal(t, nosniff, resp.Header.Get(headerXContentTypeOptions))
@@ -237,7 +237,7 @@ func TestSecureHeaders_HTTPMethodsSupported(t *testing.T) {
 			handler.ServeHTTP(rec, req)
 
 			resp := rec.Result()
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 			assert.Equal(t, nosniff, resp.Header.Get(headerXContentTypeOptions))
@@ -259,7 +259,7 @@ func TestSecureHeaders_HSTSForcedEnabled(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	resp := rec.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, hstsMaxAgeWithSubdoms, resp.Header.Get(headerHSTS), "HSTS should be set when explicitly enabled via env")
 }
@@ -280,7 +280,7 @@ func TestSecureHeaders_HSTSForcedDisabled(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	resp := rec.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, hstsMaxAgeWithSubdoms, resp.Header.Get(headerHSTS), "HSTS should still be set on HTTPS even if env disables it")
 }
@@ -299,7 +299,7 @@ func TestSecureHeaders_HSTSForcedDisabledOnPlainHTTP(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	resp := rec.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Empty(t, resp.Header.Get(headerHSTS), "HSTS should not be set when explicitly disabled and request is plain HTTP")
 }

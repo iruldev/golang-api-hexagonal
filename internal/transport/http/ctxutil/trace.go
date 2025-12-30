@@ -1,44 +1,37 @@
 package ctxutil
 
-import "context"
+import (
+	"context"
 
-// traceIDKey is the unexported type for the context key to prevent collisions.
-type traceIDKey struct{}
+	sharedctx "github.com/iruldev/golang-api-hexagonal/internal/shared/context"
+)
 
-// spanIDKey is the unexported type for the span ID context key.
-type spanIDKey struct{}
-
+// Empty ID constants - re-exported from shared/context for backward compatibility.
 const (
 	// EmptyTraceID is a 32-character string of zeros.
-	EmptyTraceID = "00000000000000000000000000000000"
+	EmptyTraceID = sharedctx.EmptyTraceID
 	// EmptySpanID is a 16-character string of zeros.
-	EmptySpanID = "0000000000000000"
+	EmptySpanID = sharedctx.EmptySpanID
 )
 
 // GetTraceID retrieves the trace ID from the context.
 // Returns an empty string if no trace ID is present or if tracing is disabled.
 func GetTraceID(ctx context.Context) string {
-	if id, ok := ctx.Value(traceIDKey{}).(string); ok {
-		return id
-	}
-	return ""
+	return sharedctx.GetTraceID(ctx)
 }
 
 // SetTraceID returns a new context with the given trace ID.
 func SetTraceID(ctx context.Context, traceID string) context.Context {
-	return context.WithValue(ctx, traceIDKey{}, traceID)
+	return sharedctx.SetTraceID(ctx, traceID)
 }
 
 // GetSpanID retrieves the span ID from the context.
 // Returns an empty string if no span ID is present or if tracing is disabled.
 func GetSpanID(ctx context.Context) string {
-	if id, ok := ctx.Value(spanIDKey{}).(string); ok {
-		return id
-	}
-	return ""
+	return sharedctx.GetSpanID(ctx)
 }
 
 // SetSpanID returns a new context with the given span ID.
 func SetSpanID(ctx context.Context, spanID string) context.Context {
-	return context.WithValue(ctx, spanIDKey{}, spanID)
+	return sharedctx.SetSpanID(ctx, spanID)
 }

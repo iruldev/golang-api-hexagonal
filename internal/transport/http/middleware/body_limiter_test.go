@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
 )
 
@@ -65,7 +66,7 @@ func TestBodyLimiter_RejectsWhenContentLengthExceedsLimit(t *testing.T) {
 
 	var problem contract.ProblemDetail
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &problem))
-	assert.Equal(t, "REQUEST_TOO_LARGE", problem.Code)
+	assert.Equal(t, app.CodeRequestTooLarge, problem.Code)
 }
 
 func TestBodyLimiter_RejectsWhenStreamingExceedsLimit(t *testing.T) {
@@ -92,7 +93,7 @@ func TestBodyLimiter_RejectsWhenStreamingExceedsLimit(t *testing.T) {
 
 	var problem contract.ProblemDetail
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &problem))
-	assert.Equal(t, "REQUEST_TOO_LARGE", problem.Code)
+	assert.Equal(t, app.CodeRequestTooLarge, problem.Code)
 }
 
 func TestBodyLimiter_SkipsWhenLimitDisabled(t *testing.T) {

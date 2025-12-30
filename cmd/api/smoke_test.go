@@ -116,7 +116,7 @@ func TestMain_Smoke(t *testing.T) {
 	// Public /health
 	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/health", port))
 	if assert.NoError(t, err) {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		body, _ := io.ReadAll(resp.Body)
 		assert.Contains(t, string(body), "ok")
@@ -125,7 +125,7 @@ func TestMain_Smoke(t *testing.T) {
 	// Internal /metrics
 	resp, err = http.Get(fmt.Sprintf("http://localhost:%d/metrics", internalPort))
 	if assert.NoError(t, err) {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		// Should contain some prometheus output
 		body, _ := io.ReadAll(resp.Body)
@@ -135,7 +135,7 @@ func TestMain_Smoke(t *testing.T) {
 	// Verify Internal endpoint NOT on Public port
 	resp, err = http.Get(fmt.Sprintf("http://localhost:%d/metrics", port))
 	if assert.NoError(t, err) {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode, "/metrics should NOT be on public port")
 	}
 }

@@ -6,12 +6,11 @@ package user
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"strings"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
-	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
+	"github.com/iruldev/golang-api-hexagonal/internal/shared/logger"
 )
 
 // GetUserRequest represents the input data for getting a user by ID.
@@ -24,25 +23,28 @@ type GetUserResponse struct {
 	User domain.User
 }
 
+// OpGetUser is the operation name for GetUser use case.
+// It is used for error wrapping and logging in the GetUser use case.
+const OpGetUser = "GetUser"
+
 // GetUserUseCase handles the business logic for retrieving a user by ID.
 // It demonstrates the app-layer authorization pattern per architecture.md:
 // - Authorization checks happen at START of use case, before any DB calls.
 // - Admins can get any user, regular users can only get their own profile.
 // Story 2.8: Includes audit logging for authorization decisions.
-const OpGetUser = "GetUser"
 
 type GetUserUseCase struct {
 	userRepo domain.UserRepository
 	db       domain.Querier
-	logger   *slog.Logger
+	log      *logger.Logger
 }
 
 // NewGetUserUseCase creates a new instance of GetUserUseCase.
-func NewGetUserUseCase(userRepo domain.UserRepository, db domain.Querier, logger *slog.Logger) *GetUserUseCase {
+func NewGetUserUseCase(userRepo domain.UserRepository, db domain.Querier, log *logger.Logger) *GetUserUseCase {
 	return &GetUserUseCase{
 		userRepo: userRepo,
 		db:       db,
-		logger:   logger.With("usecase", "GetUser"),
+		log:      log.With("usecase", "GetUser"),
 	}
 }
 
@@ -62,7 +64,7 @@ func (uc *GetUserUseCase) Execute(ctx context.Context, req GetUserRequest) (GetU
 	// Also fail-closed for missing or unknown roles.
 	if authCtx == nil || strings.TrimSpace(authCtx.Role) == "" || strings.TrimSpace(authCtx.SubjectID) == "" {
 		// Story 2.8: Audit log authorization denial
-		observability.LoggerFromContext(ctx, uc.logger).WarnContext(ctx, "authorization denied: no auth context or invalid credentials",
+		logger.FromContext(ctx, uc.log).WarnContext(ctx, "authorization denied: no auth context or invalid credentials",
 			"resourceId", req.ID,
 		)
 		return GetUserResponse{}, &app.AppError{
@@ -76,7 +78,7 @@ func (uc *GetUserUseCase) Execute(ctx context.Context, req GetUserRequest) (GetU
 	// Only known roles are allowed; unknown roles are denied even if subject matches.
 	if !authCtx.IsAdmin() && !authCtx.IsUser() {
 		// Story 2.8: Audit log unknown role denial
-		observability.LoggerFromContext(ctx, uc.logger).WarnContext(ctx, "authorization denied: unknown role",
+		logger.FromContext(ctx, uc.log).WarnContext(ctx, "authorization denied: unknown role",
 			"actorId", authCtx.SubjectID,
 			"role", authCtx.Role,
 			"resourceId", req.ID,
@@ -93,7 +95,7 @@ func (uc *GetUserUseCase) Execute(ctx context.Context, req GetUserRequest) (GetU
 	// - Regular users can only access their own profile
 	if authCtx.IsUser() && authCtx.SubjectID != string(req.ID) {
 		// Story 2.8: Audit log IDOR attempt
-		observability.LoggerFromContext(ctx, uc.logger).WarnContext(ctx, "authorization denied: IDOR attempt",
+		logger.FromContext(ctx, uc.log).WarnContext(ctx, "authorization denied: IDOR attempt",
 			"actorId", authCtx.SubjectID,
 			"resourceId", req.ID,
 		)
@@ -105,7 +107,7 @@ func (uc *GetUserUseCase) Execute(ctx context.Context, req GetUserRequest) (GetU
 	}
 
 	// Story 2.8: Audit log authorization granted
-	observability.LoggerFromContext(ctx, uc.logger).DebugContext(ctx, "authorization granted",
+	logger.FromContext(ctx, uc.log).DebugContext(ctx, "authorization granted",
 		"actorId", authCtx.SubjectID,
 		"role", authCtx.Role,
 		"resourceId", req.ID,

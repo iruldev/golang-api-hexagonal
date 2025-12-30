@@ -3,32 +3,36 @@
 // with machine-readable codes for transport layer mapping.
 package app
 
-// Error codes for machine-readable error handling.
-// These codes are used by the transport layer to map to HTTP status codes.
+import (
+	domainerrors "github.com/iruldev/golang-api-hexagonal/internal/domain/errors"
+)
+
+// Error codes re-exported from domain layer for app-layer use.
+// This maintains clean layer abstraction while using domain as single source of truth.
+//
+// Format: ERR_{DOMAIN}_{CODE} (stable, documented in domain/errors/codes.go)
+//
+// IMPORTANT: These codes are STABLE and must not be changed once published.
+// They are used in API responses and client integrations.
 const (
-	// CodeUserNotFound indicates that the requested user does not exist.
-	CodeUserNotFound = "USER_NOT_FOUND"
-	// CodeEmailExists indicates that a user with the given email already exists.
-	CodeEmailExists = "EMAIL_EXISTS"
-	// CodeValidationError indicates that input validation failed.
-	CodeValidationError = "VALIDATION_ERROR"
-	// CodeRequestTooLarge indicates that the request body exceeded configured limits.
-	CodeRequestTooLarge = "REQUEST_TOO_LARGE"
-	// CodeUnauthorized indicates that authentication is required or the provided credentials are invalid.
-	CodeUnauthorized = "UNAUTHORIZED"
-	// CodeForbidden indicates that the user is authenticated but not authorized for this action.
-	CodeForbidden = "FORBIDDEN"
-	// CodeRateLimitExceeded indicates that the client has exceeded the rate limit.
-	CodeRateLimitExceeded = "RATE_LIMIT_EXCEEDED"
-	// CodeInternalError indicates an unexpected internal error.
-	CodeInternalError = "INTERNAL_ERROR"
+	// User domain codes
+	CodeUserNotFound = string(domainerrors.ErrCodeUserNotFound) // "ERR_USER_NOT_FOUND"
+	CodeEmailExists  = string(domainerrors.ErrCodeEmailExists)  // "ERR_USER_EMAIL_EXISTS"
+
+	// General codes
+	CodeValidationError   = string(domainerrors.ErrCodeValidation)   // "ERR_VALIDATION"
+	CodeUnauthorized      = string(domainerrors.ErrCodeUnauthorized) // "ERR_UNAUTHORIZED"
+	CodeForbidden         = string(domainerrors.ErrCodeForbidden)    // "ERR_FORBIDDEN"
+	CodeInternalError     = string(domainerrors.ErrCodeInternal)     // "ERR_INTERNAL"
+	CodeRequestTooLarge   = "ERR_REQUEST_TOO_LARGE"                  // App-specific (no domain equivalent)
+	CodeRateLimitExceeded = "ERR_RATE_LIMIT_EXCEEDED"                // App-specific (no domain equivalent)
 )
 
 // AppError represents an application-layer error with machine-readable code.
 // It wraps domain errors and provides context for transport layer mapping.
 type AppError struct {
 	Op      string // operation name: "GetUser", "CreateUser"
-	Code    string // machine-readable: "USER_NOT_FOUND"
+	Code    string // machine-readable: "ERR_USER_NOT_FOUND"
 	Message string // human-readable message
 	Err     error  // wrapped error
 }

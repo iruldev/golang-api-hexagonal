@@ -105,19 +105,19 @@ func TestIntegration_IDORPrevention(t *testing.T) {
 	)
 
 	// 3. Define Test Data
-	userA_ID := uuid.Must(uuid.NewV7()).String()
-	userB_ID := uuid.Must(uuid.NewV7()).String()
+	userAID := uuid.Must(uuid.NewV7()).String()
+	userBID := uuid.Must(uuid.NewV7()).String()
 
 	// Setup Mock: If use case reaches Repo, it returns User B.
 	// But we expect it to BLOCK before reaching Repo.
 	// We'll mock it anyway just in case it fails open (which would be a bug).
-	mockRepo.On("GetByID", mock.Anything, mock.Anything, domain.ID(userB_ID)).
-		Return(domain.User{ID: domain.ID(userB_ID)}, nil).
+	mockRepo.On("GetByID", mock.Anything, mock.Anything, domain.ID(userBID)).
+		Return(domain.User{ID: domain.ID(userBID)}, nil).
 		Maybe() // Should NOT be called if auth works
 
 	// 4. Create and Sign JWT for User A
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":  userA_ID,
+		"sub":  userAID,
 		"role": app.RoleUser,
 		"exp":  time.Now().Add(time.Hour).Unix(),
 	})
@@ -125,7 +125,7 @@ func TestIntegration_IDORPrevention(t *testing.T) {
 	assert.NoError(t, err)
 
 	// 5. Execute Request: User A requests User B
-	req := httptest.NewRequest(http.MethodGet, httpTransport.BasePath+"/users/"+userB_ID, nil)
+	req := httptest.NewRequest(http.MethodGet, httpTransport.BasePath+"/users/"+userBID, nil)
 	req.Header.Set("Authorization", "Bearer "+tokenString)
 	rec := httptest.NewRecorder()
 

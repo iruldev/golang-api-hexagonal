@@ -1,4 +1,3 @@
-// internal/testutil/containers/tx.go
 package containers
 
 import (

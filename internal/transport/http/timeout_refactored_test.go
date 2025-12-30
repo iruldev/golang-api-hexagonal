@@ -39,9 +39,9 @@ func TestHTTPWriteTimeout_Synctest(t *testing.T) {
 
 		// Start server inside the bubble
 		go func() {
-			srv.Serve(ln)
+			_ = srv.Serve(ln)
 		}()
-		defer srv.Shutdown(context.Background())
+		defer func() { _ = srv.Shutdown(context.Background()) }()
 
 		// Client request
 		// Note: http.Client in synctest bubble uses the virtual clock for its timeouts too
@@ -51,7 +51,7 @@ func TestHTTPWriteTimeout_Synctest(t *testing.T) {
 		go func() {
 			resp, err := client.Get(fmt.Sprintf("http://%s/", ln.Addr()))
 			if err == nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 			}
 			errCh <- err
 		}()
@@ -73,10 +73,8 @@ func TestHTTPWriteTimeout_Synctest(t *testing.T) {
 			// Request reached handler.
 			// Now we wait for result.
 			synctest.Wait()
-			select {
-			case err := <-errCh:
-				assert.Error(t, err, "request should fail due to write timeout")
-			}
+			err := <-errCh
+			assert.Error(t, err, "request should fail due to write timeout")
 		}
 	})
 }

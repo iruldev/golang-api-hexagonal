@@ -26,7 +26,7 @@ func BodyLimiter(maxBytes int64) func(http.Handler) http.Handler {
 			}
 
 			limited := http.MaxBytesReader(w, r.Body, maxBytes)
-			defer limited.Close()
+			defer func() { _ = limited.Close() }()
 
 			// Read up to maxBytes+1 to detect overflow before calling handler.
 			data, err := io.ReadAll(io.LimitReader(limited, maxBytes+1))

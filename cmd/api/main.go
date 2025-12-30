@@ -81,11 +81,11 @@ func startServers(
 			// But let's keep it simple.
 			if err := publicSrv.Shutdown(ctx); err != nil {
 				logger.Error("public server shutdown failed", slog.Any("err", err))
-				publicSrv.Close()
+				_ = publicSrv.Close()
 			}
 			if err := internalSrv.Shutdown(ctx); err != nil {
 				logger.Error("internal server shutdown failed", slog.Any("err", err))
-				internalSrv.Close()
+				_ = internalSrv.Close()
 			}
 			return nil
 		},

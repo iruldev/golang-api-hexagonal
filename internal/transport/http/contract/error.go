@@ -46,15 +46,22 @@ type errorDef struct {
 	Slug   string
 }
 
+// errorRegistry maps app-layer error codes to HTTP definitions.
+// These codes are re-exported from domain layer (ERR_* format).
 var errorRegistry = map[string]errorDef{
-	app.CodeUserNotFound:      {http.StatusNotFound, "User Not Found", ProblemTypeNotFoundSlug},
-	app.CodeEmailExists:       {http.StatusConflict, "Email Already Exists", ProblemTypeConflictSlug},
-	app.CodeValidationError:   {http.StatusBadRequest, "Validation Error", ProblemTypeValidationErrorSlug},
+	// User domain codes (via app layer re-export)
+	app.CodeUserNotFound: {http.StatusNotFound, "User Not Found", ProblemTypeNotFoundSlug},
+	app.CodeEmailExists:  {http.StatusConflict, "Email Already Exists", ProblemTypeConflictSlug},
+
+	// General codes (via app layer re-export)
+	app.CodeValidationError: {http.StatusBadRequest, "Validation Error", ProblemTypeValidationErrorSlug},
+	app.CodeUnauthorized:    {http.StatusUnauthorized, "Unauthorized", ProblemTypeUnauthorizedSlug},
+	app.CodeForbidden:       {http.StatusForbidden, "Forbidden", ProblemTypeForbiddenSlug},
+	app.CodeInternalError:   {http.StatusInternalServerError, "Internal Server Error", ProblemTypeInternalErrorSlug},
+
+	// App-specific codes (no domain equivalent)
 	app.CodeRequestTooLarge:   {http.StatusRequestEntityTooLarge, "Request Entity Too Large", ProblemTypeValidationErrorSlug},
-	app.CodeUnauthorized:      {http.StatusUnauthorized, "Unauthorized", ProblemTypeUnauthorizedSlug},
-	app.CodeForbidden:         {http.StatusForbidden, "Forbidden", ProblemTypeForbiddenSlug},
 	app.CodeRateLimitExceeded: {http.StatusTooManyRequests, "Too Many Requests", ProblemTypeRateLimitSlug},
-	app.CodeInternalError:     {http.StatusInternalServerError, "Internal Server Error", ProblemTypeInternalErrorSlug},
 }
 
 var defaultErrorDef = errorDef{

@@ -1,4 +1,3 @@
-// internal/testutil/containers/migrate.go
 package containers
 
 import (
@@ -14,7 +13,7 @@ func Migrate(t *testing.T, pool *pgxpool.Pool, migrationsPath string) {
 	t.Helper()
 
 	db := stdlib.OpenDBFromPool(pool)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := goose.SetDialect("postgres"); err != nil {
 		t.Fatalf("failed to set dialect: %v", err)

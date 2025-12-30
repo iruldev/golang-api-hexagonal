@@ -1,3 +1,4 @@
+// Package metrics provides shared metric interfaces used across layers.
 package metrics
 
 // HTTPMetrics defines the minimal contract needed by HTTP middleware to record metrics.

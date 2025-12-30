@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/domain"
-	"github.com/iruldev/golang-api-hexagonal/internal/infra/observability"
 	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres/sqlcgen"
+	"github.com/iruldev/golang-api-hexagonal/internal/shared/logger"
 )
 
 // AuditEventRepo implements domain.AuditEventRepository for PostgreSQL.
@@ -66,7 +66,7 @@ func (r *AuditEventRepo) Create(ctx context.Context, q domain.Querier, event *do
 			actorID = pgtype.UUID{Bytes: parsed, Valid: true}
 		} else {
 			// Log the dropped ActorID for debugging integration issues
-			observability.LoggerFromContext(ctx, slog.Default()).Warn("audit_event_repo: dropping invalid ActorID", "op", op, "actor_id", event.ActorID, "error", err, "request_id", event.RequestID)
+			logger.FromContext(ctx, slog.Default()).Warn("audit_event_repo: dropping invalid ActorID", "op", op, "actor_id", event.ActorID, "error", err, "request_id", event.RequestID)
 			actorID = pgtype.UUID{Valid: false}
 		}
 	} else {
@@ -147,18 +147,18 @@ func (r *AuditEventRepo) ListByEntityID(ctx context.Context, q domain.Querier, e
 		}
 
 		// UUID conversions
-		var idUuid uuid.UUID
-		copy(idUuid[:], row.ID.Bytes[:])
-		evt.ID = domain.ID(idUuid.String())
+		var idUUID uuid.UUID
+		copy(idUUID[:], row.ID.Bytes[:])
+		evt.ID = domain.ID(idUUID.String())
 
-		var eidUuid uuid.UUID
-		copy(eidUuid[:], row.EntityID.Bytes[:])
-		evt.EntityID = domain.ID(eidUuid.String())
+		var eidUUID uuid.UUID
+		copy(eidUUID[:], row.EntityID.Bytes[:])
+		evt.EntityID = domain.ID(eidUUID.String())
 
 		if row.ActorID.Valid {
-			var aidUuid uuid.UUID
-			copy(aidUuid[:], row.ActorID.Bytes[:])
-			evt.ActorID = domain.ID(aidUuid.String())
+			var aidUUID uuid.UUID
+			copy(aidUUID[:], row.ActorID.Bytes[:])
+			evt.ActorID = domain.ID(aidUUID.String())
 		}
 
 		events = append(events, evt)

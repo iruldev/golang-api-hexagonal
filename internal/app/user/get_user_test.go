@@ -162,7 +162,7 @@ func TestNewGetUserUseCase(t *testing.T) {
 	assert.NotNil(t, useCase)
 	assert.Equal(t, mockRepo, useCase.userRepo)
 	assert.Equal(t, mockDB, useCase.db)
-	assert.NotNil(t, useCase.logger)
+	assert.NotNil(t, useCase.log)
 }
 
 func TestGetUserUseCase_Execute_Authorization(t *testing.T) {

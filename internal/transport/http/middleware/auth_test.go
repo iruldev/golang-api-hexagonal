@@ -92,7 +92,7 @@ func TestJWTAuth_MissingHeader(t *testing.T) {
 	var problem contract.ProblemDetail
 	err := json.Unmarshal(rr.Body.Bytes(), &problem)
 	require.NoError(t, err)
-	assert.Equal(t, "UNAUTHORIZED", problem.Code)
+	assert.Equal(t, app.CodeUnauthorized, problem.Code)
 	assert.Equal(t, 401, problem.Status)
 }
 
@@ -118,7 +118,7 @@ func TestJWTAuth_MalformedToken(t *testing.T) {
 	var problem contract.ProblemDetail
 	err := json.Unmarshal(rr.Body.Bytes(), &problem)
 	require.NoError(t, err)
-	assert.Equal(t, "UNAUTHORIZED", problem.Code)
+	assert.Equal(t, app.CodeUnauthorized, problem.Code)
 }
 
 // TestJWTAuth_InvalidSignature tests AC #2: wrong signature returns 401
