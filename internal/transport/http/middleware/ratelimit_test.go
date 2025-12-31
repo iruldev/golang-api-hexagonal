@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/iruldev/golang-api-hexagonal/internal/app"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
@@ -132,8 +132,8 @@ func TestRateLimitExceededHandler(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, http.StatusTooManyRequests, problem.Status)
-	assert.Equal(t, app.CodeRateLimitExceeded, problem.Code)
-	assert.Equal(t, "Too Many Requests", problem.Title)
+	assert.Equal(t, contract.CodeRateLimitExceeded, problem.Code)
+	assert.Equal(t, "Rate Limit Exceeded", problem.Title)
 	assert.True(t, strings.HasSuffix(problem.Type, "rate-limit-exceeded"))
 	assert.Equal(t, "/api/v1/users", problem.Instance)
 }

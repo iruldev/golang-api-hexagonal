@@ -102,7 +102,10 @@ func NewRouter(
 	r.Use(middleware.Metrics(httpMetrics))
 	r.Use(middleware.RequestLogger(logger))
 	r.Use(middleware.BodyLimiter(maxRequestSize))
-	r.Use(chiMiddleware.Recoverer)
+
+	// Story 2.3: RFC 7807 Panic Recovery - replaced chi's Recoverer with our implementation
+	// that returns proper RFC 7807 responses with SYS-001 error code
+	r.Use(middleware.Recoverer(logger))
 
 	// Story 1.6: Graceful Shutdown - reject new requests during shutdown
 	// and track in-flight requests for drain period coordination.
@@ -161,8 +164,8 @@ func NewInternalRouter(
 ) *chi.Mux {
 	r := chi.NewRouter()
 
-	// Recovery middleware to prevent panics from crashing internal server
-	r.Use(chiMiddleware.Recoverer)
+	// Story 2.3: RFC 7807 Panic Recovery to prevent panics from crashing internal server
+	r.Use(middleware.Recoverer(logger))
 	// Apply metrics middleware to track requests to internal endpoints
 	r.Use(middleware.Metrics(httpMetrics))
 	// Internal router logs are useful for debugging scraping issues

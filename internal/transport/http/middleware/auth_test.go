@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
@@ -91,7 +92,7 @@ func TestJWTAuth_MissingHeader(t *testing.T) {
 	var problem testProblemDetail
 	err := json.Unmarshal(rr.Body.Bytes(), &problem)
 	require.NoError(t, err)
-	assert.Equal(t, app.CodeUnauthorized, problem.Code)
+	assert.Equal(t, contract.CodeAuthExpiredToken, problem.Code) // Story 2.3: New taxonomy
 	assert.Equal(t, 401, problem.Status)
 }
 
@@ -117,7 +118,7 @@ func TestJWTAuth_MalformedToken(t *testing.T) {
 	var problem testProblemDetail
 	err := json.Unmarshal(rr.Body.Bytes(), &problem)
 	require.NoError(t, err)
-	assert.Equal(t, app.CodeUnauthorized, problem.Code)
+	assert.Equal(t, contract.CodeAuthExpiredToken, problem.Code) // Story 2.3: New taxonomy
 }
 
 // TestJWTAuth_InvalidSignature tests AC #2: wrong signature returns 401

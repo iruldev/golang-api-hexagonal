@@ -44,6 +44,15 @@ func (e *ResilienceError) Unwrap() error {
 	return e.Err
 }
 
+// GetCode returns the error code for interface-based detection.
+// This enables cross-layer error code extraction without direct type imports.
+func (e *ResilienceError) GetCode() string {
+	if e == nil {
+		return ""
+	}
+	return e.Code
+}
+
 // Is implements errors.Is matching by comparing error codes.
 func (e *ResilienceError) Is(target error) bool {
 	t, ok := target.(*ResilienceError)

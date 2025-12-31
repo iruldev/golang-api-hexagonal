@@ -151,7 +151,7 @@ func TestUserHandler_CreateUser_DuplicateEmail(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, http.StatusConflict, problemResp.Status)
-	assert.Equal(t, app.CodeEmailExists, problemResp.Code)
+	assert.Equal(t, contract.CodeUsrEmailExists, problemResp.Code) // Story 2.3: New taxonomy
 
 	mockCreateUC.AssertExpectations(t)
 }
@@ -323,7 +323,7 @@ func TestUserHandler_GetUser_NotFound(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, http.StatusNotFound, problemResp.Status)
-	assert.Equal(t, app.CodeUserNotFound, problemResp.Code)
+	assert.Equal(t, contract.CodeUsrNotFound, problemResp.Code) // Story 2.3: New taxonomy
 
 	mockGetUC.AssertExpectations(t)
 }
