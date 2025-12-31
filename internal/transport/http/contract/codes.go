@@ -109,6 +109,10 @@ const (
 	// CodeValIdempotencyConflict indicates an idempotency key conflict.
 	// Reserved for Story 2.4: Idempotency Key Middleware.
 	CodeValIdempotencyConflict = "VAL-100"
+
+	// CodeValIdempotencyKeyInvalid indicates an invalid idempotency key format.
+	// Story 2.4: Idempotency Key Middleware - requires UUID v4 format.
+	CodeValIdempotencyKeyInvalid = "VAL-101"
 )
 
 // -----------------------------------------------------------------------------
@@ -379,6 +383,14 @@ var errorCodeInfoRegistry = map[string]ErrorCodeInfo{
 		DetailTemplate:  "The idempotency key already exists with different request data",
 		HTTPStatus:      http.StatusConflict,
 		ProblemTypeSlug: ProblemTypeConflictSlug,
+	},
+	CodeValIdempotencyKeyInvalid: {
+		Code:            CodeValIdempotencyKeyInvalid,
+		Category:        "VAL",
+		Title:           "Invalid Idempotency Key",
+		DetailTemplate:  "The idempotency key must be a valid UUID v4",
+		HTTPStatus:      http.StatusBadRequest,
+		ProblemTypeSlug: ProblemTypeValidationErrorSlug,
 	},
 
 	// USR codes

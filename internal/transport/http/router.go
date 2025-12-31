@@ -69,6 +69,11 @@ const BasePath = "/api/v1"
 //  8. Recoverer: Panic recovery
 //  9. Shutdown: Reject requests during shutdown (Story 1.6)
 //
+// Per-route group middleware (applied to /api/v1):
+//  1. JWT Auth (if enabled)
+//  2. RateLimiter
+//  3. Idempotency (if store provided) - Story 2.4
+//
 // JWT middleware is applied per-route group (protected endpoints only).
 func NewRouter(
 	logger *slog.Logger,
@@ -81,6 +86,7 @@ func NewRouter(
 	jwtConfig JWTConfig,
 	rateLimitConfig RateLimitConfig,
 	shutdownCoord middleware.ShutdownCoordinator,
+	idempotencyStore middleware.IdempotencyStore,
 ) chi.Router {
 	r := chi.NewRouter()
 
@@ -144,6 +150,14 @@ func NewRouter(
 				RequestsPerSecond: rateLimitConfig.RequestsPerSecond,
 				TrustProxy:        rateLimitConfig.TrustProxy,
 			}))
+
+			// Story 2.4: Apply idempotency middleware for POST requests if store is provided.
+			// The middleware only affects POST requests with Idempotency-Key header.
+			if idempotencyStore != nil {
+				r.Use(middleware.Idempotency(middleware.IdempotencyConfig{
+					Store: idempotencyStore,
+				}))
+			}
 
 			r.Post("/users", userHandler.CreateUser)
 			r.Get("/users/{id}", userHandler.GetUser)

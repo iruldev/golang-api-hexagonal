@@ -372,6 +372,7 @@ func providePublicRouter(
 		jwtConfig,
 		rateLimitConfig,
 		shutdownCoord,
+		nil, // idempotencyStore - Story 2.5 will provide actual implementation
 	)
 }
 
