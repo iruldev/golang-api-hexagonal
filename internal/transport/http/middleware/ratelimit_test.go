@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
-	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
@@ -128,7 +127,7 @@ func TestRateLimitExceededHandler(t *testing.T) {
 	assert.Equal(t, "application/problem+json", rec.Header().Get("Content-Type"))
 
 	// Check RFC 7807 body
-	var problem contract.ProblemDetail
+	var problem testProblemDetail
 	err := json.Unmarshal(rec.Body.Bytes(), &problem)
 	require.NoError(t, err)
 

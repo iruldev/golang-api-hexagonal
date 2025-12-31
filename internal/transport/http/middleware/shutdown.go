@@ -2,7 +2,6 @@
 package middleware
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
@@ -44,14 +43,10 @@ func Shutdown(coord ShutdownCoordinator) func(http.Handler) http.Handler {
 				w.Header().Set("Retry-After", ShutdownRetryAfterSeconds)
 				w.Header().Set("Connection", "close")
 
-				problem := contract.ProblemDetail{
-					Type:     contract.ProblemTypeURL(contract.ProblemTypeServiceUnavailableSlug),
-					Title:    "Service Unavailable",
-					Status:   http.StatusServiceUnavailable,
-					Detail:   "Server is shutting down. Please retry later.",
-					Instance: r.URL.Path,
-					Code:     contract.CodeServiceUnavailable,
-				}
+				problem := contract.NewProblem(http.StatusServiceUnavailable, "Service Unavailable", "Server is shutting down. Please retry later.")
+				problem.Type = contract.ProblemTypeURL(contract.ProblemTypeServiceUnavailableSlug)
+				problem.Code = contract.CodeServiceUnavailable
+				problem.Instance = r.URL.Path
 
 				// Populate request_id and trace_id from context
 				problem.RequestID = ctxutil.GetRequestID(r.Context())
@@ -59,7 +54,7 @@ func Shutdown(coord ShutdownCoordinator) func(http.Handler) http.Handler {
 					problem.TraceID = traceID
 				}
 
-				writeShutdownProblemJSON(w, problem)
+				contract.WriteProblem(w, problem)
 				return
 			}
 
@@ -69,21 +64,4 @@ func Shutdown(coord ShutdownCoordinator) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-
-// writeShutdownProblemJSON writes RFC 7807 problem response using proper JSON encoding.
-// Uses encoding/json for safe serialization of all fields.
-func writeShutdownProblemJSON(w http.ResponseWriter, problem contract.ProblemDetail) {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(problem.Status)
-
-	// Use proper JSON encoding for safety (handles special characters in URL paths, etc.)
-	payload, err := json.Marshal(problem)
-	if err != nil {
-		// Fallback to minimal safe response if marshal fails (RFC 7807 compliant)
-		fallbackType := contract.ProblemTypeURL(contract.ProblemTypeInternalErrorSlug)
-		_, _ = w.Write([]byte(`{"type":"` + fallbackType + `","title":"Internal Server Error","status":500}`))
-		return
-	}
-	_, _ = w.Write(payload)
 }

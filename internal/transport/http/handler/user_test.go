@@ -99,7 +99,7 @@ func TestUserHandler_CreateUser_InvalidEmail(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	assert.Equal(t, "application/problem+json", rr.Header().Get("Content-Type"))
 
-	var problemResp contract.ProblemDetail
+	var problemResp testProblemDetail
 	err := json.Unmarshal(rr.Body.Bytes(), &problemResp)
 	require.NoError(t, err)
 
@@ -146,7 +146,7 @@ func TestUserHandler_CreateUser_DuplicateEmail(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, rr.Code)
 	assert.Equal(t, "application/problem+json", rr.Header().Get("Content-Type"))
 
-	var problemResp contract.ProblemDetail
+	var problemResp testProblemDetail
 	err := json.Unmarshal(rr.Body.Bytes(), &problemResp)
 	require.NoError(t, err)
 
@@ -196,7 +196,7 @@ func TestUserHandler_CreateUser_UnknownField(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	assert.Equal(t, "application/problem+json", rr.Header().Get("Content-Type"))
 
-	var problemResp contract.ProblemDetail
+	var problemResp testProblemDetail
 	err := json.Unmarshal(rr.Body.Bytes(), &problemResp)
 	require.NoError(t, err)
 
@@ -229,7 +229,7 @@ func TestUserHandler_CreateUser_TrailingData(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	assert.Equal(t, "application/problem+json", rr.Header().Get("Content-Type"))
 
-	var problemResp contract.ProblemDetail
+	var problemResp testProblemDetail
 	err := json.Unmarshal(rr.Body.Bytes(), &problemResp)
 	require.NoError(t, err)
 
@@ -318,7 +318,7 @@ func TestUserHandler_GetUser_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rr.Code)
 	assert.Equal(t, "application/problem+json", rr.Header().Get("Content-Type"))
 
-	var problemResp contract.ProblemDetail
+	var problemResp testProblemDetail
 	err := json.Unmarshal(rr.Body.Bytes(), &problemResp)
 	require.NoError(t, err)
 
@@ -350,7 +350,7 @@ func TestUserHandler_GetUser_InvalidUUID(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	assert.Equal(t, "application/problem+json", rr.Header().Get("Content-Type"))
 
-	var problemResp contract.ProblemDetail
+	var problemResp testProblemDetail
 	err := json.Unmarshal(rr.Body.Bytes(), &problemResp)
 	require.NoError(t, err)
 
@@ -401,7 +401,7 @@ func TestUserHandler_GetUser_EmptyID(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	assert.Equal(t, "application/problem+json", rr.Header().Get("Content-Type"))
 
-	var problemResp contract.ProblemDetail
+	var problemResp testProblemDetail
 	err := json.Unmarshal(rr.Body.Bytes(), &problemResp)
 	require.NoError(t, err)
 
@@ -469,7 +469,7 @@ func TestUserHandler_GetUser_NilUUID(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	assert.Equal(t, "application/problem+json", rr.Header().Get("Content-Type"))
 
-	var problemResp contract.ProblemDetail
+	var problemResp testProblemDetail
 	err := json.Unmarshal(rr.Body.Bytes(), &problemResp)
 	require.NoError(t, err)
 

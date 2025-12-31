@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app"
-	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
@@ -89,7 +88,7 @@ func TestJWTAuth_MissingHeader(t *testing.T) {
 	assert.False(t, handlerCalled, "handler should not be called when Authorization header is missing")
 
 	// Verify RFC 7807 response
-	var problem contract.ProblemDetail
+	var problem testProblemDetail
 	err := json.Unmarshal(rr.Body.Bytes(), &problem)
 	require.NoError(t, err)
 	assert.Equal(t, app.CodeUnauthorized, problem.Code)
@@ -115,7 +114,7 @@ func TestJWTAuth_MalformedToken(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	assert.False(t, handlerCalled, "handler should not be called for malformed token")
 
-	var problem contract.ProblemDetail
+	var problem testProblemDetail
 	err := json.Unmarshal(rr.Body.Bytes(), &problem)
 	require.NoError(t, err)
 	assert.Equal(t, app.CodeUnauthorized, problem.Code)

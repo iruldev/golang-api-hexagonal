@@ -206,7 +206,7 @@ func TestValidateRequestBody_HTTPFlow_InvalidEmail(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 
-	var problem ProblemDetail
+	var problem testProblemDetail
 	err := json.NewDecoder(rec.Body).Decode(&problem)
 	require.NoError(t, err)
 	require.Len(t, problem.ValidationErrors, 1)

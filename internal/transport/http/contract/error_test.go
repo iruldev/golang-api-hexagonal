@@ -19,6 +19,19 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
+// testProblemDetail represents the expected JSON response structure for testing.
+type testProblemDetail struct {
+	Type             string            `json:"type"`
+	Title            string            `json:"title"`
+	Status           int               `json:"status"`
+	Detail           string            `json:"detail"`
+	Instance         string            `json:"instance"`
+	Code             string            `json:"code"`
+	RequestID        string            `json:"request_id,omitempty"`
+	TraceID          string            `json:"trace_id,omitempty"`
+	ValidationErrors []ValidationError `json:"validation_errors,omitempty"`
+}
+
 func TestWriteProblemJSON(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -41,7 +54,7 @@ func TestWriteProblemJSON(t *testing.T) {
 				Err:     domain.ErrUserNotFound,
 			},
 			wantStatus: http.StatusNotFound,
-			wantCode:   string(domainerrors.ErrCodeUserNotFound),
+			wantCode:   CodeUsrNotFound,
 			wantTitle:  "User Not Found",
 			wantType:   ProblemBaseURL + "not-found",
 		},
@@ -54,7 +67,7 @@ func TestWriteProblemJSON(t *testing.T) {
 				Err:     domain.ErrEmailAlreadyExists,
 			},
 			wantStatus: http.StatusConflict,
-			wantCode:   string(domainerrors.ErrCodeEmailExists),
+			wantCode:   CodeUsrEmailExists,
 			wantTitle:  "Email Already Exists",
 			wantType:   ProblemBaseURL + "conflict",
 		},
@@ -67,8 +80,8 @@ func TestWriteProblemJSON(t *testing.T) {
 				Err:     domain.ErrInvalidEmail,
 			},
 			wantStatus:   http.StatusBadRequest,
-			wantCode:     string(domainerrors.ErrCodeInvalidEmail),
-			wantTitle:    "Validation Error",
+			wantCode:     CodeValInvalidEmail,
+			wantTitle:    "Invalid Email",
 			wantType:     ProblemBaseURL + "validation-error",
 			wantValField: "email",
 		},
@@ -80,8 +93,8 @@ func TestWriteProblemJSON(t *testing.T) {
 				Message: "Validation failed",
 			},
 			wantStatus:   http.StatusBadRequest,
-			wantCode:     app.CodeValidationError,
-			wantTitle:    "Validation Error",
+			wantCode:     CodeValRequired,
+			wantTitle:    "Required Field Missing",
 			wantType:     ProblemBaseURL + "validation-error",
 			wantValField: "validation",
 		},
@@ -93,7 +106,7 @@ func TestWriteProblemJSON(t *testing.T) {
 				Message: "database connection failed: SQLSTATE 42P01", // sensitive
 			},
 			wantStatus:     http.StatusInternalServerError,
-			wantCode:       app.CodeInternalError,
+			wantCode:       CodeSysInternal,
 			wantTitle:      "Internal Server Error",
 			wantType:       ProblemBaseURL + "internal-error",
 			wantNoInternal: true,
@@ -106,15 +119,15 @@ func TestWriteProblemJSON(t *testing.T) {
 				Message: "Rate limit exceeded",
 			},
 			wantStatus: http.StatusTooManyRequests,
-			wantCode:   app.CodeRateLimitExceeded,
-			wantTitle:  "Too Many Requests",
+			wantCode:   CodeRateLimitExceeded,
+			wantTitle:  "Rate Limit Exceeded",
 			wantType:   ProblemBaseURL + "rate-limit-exceeded",
 		},
 		{
 			name:           "unknown error becomes INTERNAL_ERROR",
 			err:            errors.New("something went wrong"),
 			wantStatus:     http.StatusInternalServerError,
-			wantCode:       app.CodeInternalError,
+			wantCode:       CodeSysInternal,
 			wantTitle:      "Internal Server Error",
 			wantType:       ProblemBaseURL + "internal-error",
 			wantNoInternal: true,
@@ -127,7 +140,7 @@ func TestWriteProblemJSON(t *testing.T) {
 				Message: "User not found",
 			},
 			wantStatus:    http.StatusNotFound,
-			wantCode:      app.CodeUserNotFound,
+			wantCode:      CodeUsrNotFound,
 			wantTitle:     "User Not Found",
 			wantType:      ProblemBaseURL + "not-found",
 			wantRequestID: "req-123",
@@ -148,7 +161,7 @@ func TestWriteProblemJSON(t *testing.T) {
 			assert.Equal(t, tt.wantStatus, rec.Code)
 			assert.Equal(t, ContentTypeProblemJSON, rec.Header().Get("Content-Type"))
 
-			var problem ProblemDetail
+			var problem testProblemDetail
 			err := json.NewDecoder(rec.Body).Decode(&problem)
 			require.NoError(t, err)
 
@@ -190,7 +203,7 @@ func TestWriteValidationError(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Equal(t, ContentTypeProblemJSON, rec.Header().Get("Content-Type"))
 
-	var problem ProblemDetail
+	var problem testProblemDetail
 	err := json.NewDecoder(rec.Body).Decode(&problem)
 	require.NoError(t, err)
 
@@ -224,31 +237,6 @@ func TestNewValidationProblem(t *testing.T) {
 	assert.Equal(t, "/api/v1/users", problem.Instance)
 	assert.Len(t, problem.ValidationErrors, 1)
 }
-
-func TestMapCodeToStatus(t *testing.T) {
-	tests := []struct {
-		code       string
-		wantStatus int
-	}{
-		{app.CodeUserNotFound, http.StatusNotFound},
-		{app.CodeEmailExists, http.StatusConflict},
-		{app.CodeValidationError, http.StatusBadRequest},
-		{app.CodeUnauthorized, http.StatusUnauthorized},
-		{app.CodeForbidden, http.StatusForbidden},
-		{app.CodeRateLimitExceeded, http.StatusTooManyRequests},
-		{app.CodeInternalError, http.StatusInternalServerError},
-		{"UNKNOWN_CODE", http.StatusInternalServerError},
-		{"", http.StatusInternalServerError},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.code, func(t *testing.T) {
-			got := mapCodeToStatus(tt.code)
-			assert.Equal(t, tt.wantStatus, got)
-		})
-	}
-}
-
 func TestProblemTypeURL(t *testing.T) {
 	tests := []struct {
 		slug    string
@@ -265,28 +253,6 @@ func TestProblemTypeURL(t *testing.T) {
 		t.Run(tt.slug, func(t *testing.T) {
 			got := problemTypeURL(tt.slug)
 			assert.Equal(t, tt.wantURL, got)
-		})
-	}
-}
-
-func TestCodeToTitle(t *testing.T) {
-	tests := []struct {
-		code      string
-		wantTitle string
-	}{
-		{app.CodeUserNotFound, "User Not Found"},
-		{app.CodeEmailExists, "Email Already Exists"},
-		{app.CodeValidationError, "Validation Error"},
-		{app.CodeValidationError, "Validation Error"},
-		{app.CodeRateLimitExceeded, "Too Many Requests"},
-		{app.CodeInternalError, "Internal Server Error"},
-		{"UNKNOWN_CODE", "Internal Server Error"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.code, func(t *testing.T) {
-			got := codeToTitle(tt.code)
-			assert.Equal(t, tt.wantTitle, got)
 		})
 	}
 }
@@ -317,7 +283,7 @@ func TestSafeDetail(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := safeDetail(tt.appErr)
+			got := safeAppErrorDetail(tt.appErr)
 			assert.Equal(t, tt.wantDetail, got)
 		})
 	}
@@ -325,7 +291,7 @@ func TestSafeDetail(t *testing.T) {
 
 func TestProblemDetailJSON(t *testing.T) {
 	// Test that ProblemDetail serializes to correct JSON format
-	problem := ProblemDetail{
+	problem := testProblemDetail{
 		Type:     ProblemBaseURL + "validation-error",
 		Title:    "Validation Error",
 		Status:   400,
@@ -360,7 +326,7 @@ func TestProblemDetailJSON(t *testing.T) {
 
 func TestProblemDetailOmitEmpty(t *testing.T) {
 	// Test that ValidationErrors is omitted when empty
-	problem := ProblemDetail{
+	problem := testProblemDetail{
 		Type:     ProblemBaseURL + "not-found",
 		Title:    "Not Found",
 		Status:   404,
@@ -397,7 +363,7 @@ func TestWriteProblemJSON_IncludesRequestID(t *testing.T) {
 
 	WriteProblemJSON(rec, req, err)
 
-	var problem ProblemDetail
+	var problem testProblemDetail
 	decodeErr := json.NewDecoder(rec.Body).Decode(&problem)
 	require.NoError(t, decodeErr)
 
@@ -417,7 +383,7 @@ func TestWriteProblemJSON_NoRequestID_GracefulDegradation(t *testing.T) {
 
 	WriteProblemJSON(rec, req, err)
 
-	var problem ProblemDetail
+	var problem testProblemDetail
 	decodeErr := json.NewDecoder(rec.Body).Decode(&problem)
 	require.NoError(t, decodeErr)
 
@@ -455,7 +421,7 @@ func TestWriteProblemJSON_IncludesTraceID(t *testing.T) {
 
 	WriteProblemJSON(rec, req, err)
 
-	var problem ProblemDetail
+	var problem testProblemDetail
 	decodeErr := json.NewDecoder(rec.Body).Decode(&problem)
 	require.NoError(t, decodeErr)
 
@@ -477,7 +443,7 @@ func TestWriteProblemJSON_ZeroTraceID_Omitted(t *testing.T) {
 
 	WriteProblemJSON(rec, req, err)
 
-	var problem ProblemDetail
+	var problem testProblemDetail
 	decodeErr := json.NewDecoder(rec.Body).Decode(&problem)
 	require.NoError(t, decodeErr)
 
@@ -501,7 +467,7 @@ func TestWriteProblemJSON_BothRequestIDAndTraceID(t *testing.T) {
 
 	WriteProblemJSON(rec, req, err)
 
-	var problem ProblemDetail
+	var problem testProblemDetail
 	decodeErr := json.NewDecoder(rec.Body).Decode(&problem)
 	require.NoError(t, decodeErr)
 
@@ -540,7 +506,7 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "User via domain error",
 			},
 			wantStatus: http.StatusNotFound,
-			wantCode:   string(domainerrors.ErrCodeUserNotFound),
+			wantCode:   CodeUsrNotFound,
 			wantTitle:  "User Not Found",
 			wantType:   ProblemBaseURL + "not-found",
 		},
@@ -551,7 +517,7 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "Email exists",
 			},
 			wantStatus: http.StatusConflict,
-			wantCode:   string(domainerrors.ErrCodeEmailExists),
+			wantCode:   CodeUsrEmailExists,
 			wantTitle:  "Email Already Exists",
 			wantType:   ProblemBaseURL + "conflict",
 		},
@@ -562,8 +528,8 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "Invalid email format",
 			},
 			wantStatus: http.StatusBadRequest,
-			wantCode:   string(domainerrors.ErrCodeInvalidEmail),
-			wantTitle:  "Validation Error",
+			wantCode:   CodeValInvalidEmail,
+			wantTitle:  "Invalid Email",
 			wantType:   ProblemBaseURL + "validation-error",
 		},
 		{
@@ -573,8 +539,8 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "First name is required",
 			},
 			wantStatus: http.StatusBadRequest,
-			wantCode:   string(domainerrors.ErrCodeInvalidFirstName),
-			wantTitle:  "Validation Error",
+			wantCode:   CodeUsrInvalidField,
+			wantTitle:  "Invalid User Field",
 			wantType:   ProblemBaseURL + "validation-error",
 		},
 		{
@@ -584,8 +550,8 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "Last name is required",
 			},
 			wantStatus: http.StatusBadRequest,
-			wantCode:   string(domainerrors.ErrCodeInvalidLastName),
-			wantTitle:  "Validation Error",
+			wantCode:   CodeUsrInvalidField,
+			wantTitle:  "Invalid User Field",
 			wantType:   ProblemBaseURL + "validation-error",
 		},
 		{
@@ -594,10 +560,10 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Code:    domainerrors.ErrCodeAuditNotFound,
 				Message: "Audit event not found",
 			},
-			wantStatus: http.StatusNotFound,
-			wantCode:   string(domainerrors.ErrCodeAuditNotFound),
-			wantTitle:  "Audit Event Not Found",
-			wantType:   ProblemBaseURL + "not-found",
+			wantStatus: http.StatusInternalServerError,
+			wantCode:   CodeSysInternal,
+			wantTitle:  "Internal Server Error",
+			wantType:   ProblemBaseURL + "internal-error",
 		},
 		{
 			name: "Domain InvalidEventType maps to 400",
@@ -606,8 +572,8 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "Invalid event type",
 			},
 			wantStatus: http.StatusBadRequest,
-			wantCode:   string(domainerrors.ErrCodeInvalidEventType),
-			wantTitle:  "Validation Error",
+			wantCode:   CodeValInvalidFormat,
+			wantTitle:  "Invalid Format",
 			wantType:   ProblemBaseURL + "validation-error",
 		},
 		{
@@ -617,8 +583,8 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "Invalid entity type",
 			},
 			wantStatus: http.StatusBadRequest,
-			wantCode:   string(domainerrors.ErrCodeInvalidEntityType),
-			wantTitle:  "Validation Error",
+			wantCode:   CodeValInvalidType,
+			wantTitle:  "Invalid Type",
 			wantType:   ProblemBaseURL + "validation-error",
 		},
 		{
@@ -628,8 +594,8 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "Invalid entity ID",
 			},
 			wantStatus: http.StatusBadRequest,
-			wantCode:   string(domainerrors.ErrCodeInvalidEntityID),
-			wantTitle:  "Validation Error",
+			wantCode:   CodeValInvalidUUID,
+			wantTitle:  "Invalid UUID",
 			wantType:   ProblemBaseURL + "validation-error",
 		},
 		{
@@ -639,8 +605,8 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "Invalid ID",
 			},
 			wantStatus: http.StatusBadRequest,
-			wantCode:   string(domainerrors.ErrCodeInvalidID),
-			wantTitle:  "Validation Error",
+			wantCode:   CodeValInvalidFormat,
+			wantTitle:  "Invalid Format",
 			wantType:   ProblemBaseURL + "validation-error",
 		},
 		{
@@ -650,8 +616,8 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "Invalid timestamp",
 			},
 			wantStatus: http.StatusBadRequest,
-			wantCode:   string(domainerrors.ErrCodeInvalidTimestamp),
-			wantTitle:  "Validation Error",
+			wantCode:   CodeValInvalidFormat,
+			wantTitle:  "Invalid Format",
 			wantType:   ProblemBaseURL + "validation-error",
 		},
 		{
@@ -661,8 +627,8 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "Invalid payload",
 			},
 			wantStatus: http.StatusBadRequest,
-			wantCode:   string(domainerrors.ErrCodeInvalidPayload),
-			wantTitle:  "Validation Error",
+			wantCode:   CodeValInvalidFormat,
+			wantTitle:  "Invalid Format",
 			wantType:   ProblemBaseURL + "validation-error",
 		},
 		{
@@ -672,8 +638,8 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "Invalid request ID",
 			},
 			wantStatus: http.StatusBadRequest,
-			wantCode:   string(domainerrors.ErrCodeInvalidRequestID),
-			wantTitle:  "Validation Error",
+			wantCode:   CodeValInvalidUUID,
+			wantTitle:  "Invalid UUID",
 			wantType:   ProblemBaseURL + "validation-error",
 		},
 		{
@@ -683,8 +649,8 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "User not authorized",
 			},
 			wantStatus: http.StatusUnauthorized,
-			wantCode:   string(domainerrors.ErrCodeUnauthorized),
-			wantTitle:  "Unauthorized",
+			wantCode:   CodeAuthExpiredToken,
+			wantTitle:  "Token Expired",
 			wantType:   ProblemBaseURL + "unauthorized",
 		},
 		{
@@ -694,7 +660,7 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "Access forbidden",
 			},
 			wantStatus: http.StatusForbidden,
-			wantCode:   string(domainerrors.ErrCodeForbidden),
+			wantCode:   CodeAuthzForbidden,
 			wantTitle:  "Forbidden",
 			wantType:   ProblemBaseURL + "forbidden",
 		},
@@ -705,8 +671,8 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "Generic conflict",
 			},
 			wantStatus: http.StatusConflict,
-			wantCode:   string(domainerrors.ErrCodeConflict),
-			wantTitle:  "Conflict",
+			wantCode:   CodeUsrEmailExists,
+			wantTitle:  "Email Already Exists",
 			wantType:   ProblemBaseURL + "conflict",
 		},
 		{
@@ -716,8 +682,8 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "Generic not found",
 			},
 			wantStatus: http.StatusNotFound,
-			wantCode:   string(domainerrors.ErrCodeNotFound),
-			wantTitle:  "Not Found",
+			wantCode:   CodeUsrNotFound,
+			wantTitle:  "User Not Found",
 			wantType:   ProblemBaseURL + "not-found",
 		},
 		{
@@ -727,7 +693,7 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "Something bad happened",
 			},
 			wantStatus: http.StatusInternalServerError,
-			wantCode:   string(domainerrors.ErrCodeInternal),
+			wantCode:   CodeSysInternal,
 			wantTitle:  "Internal Server Error",
 			wantType:   ProblemBaseURL + "internal-error",
 		},
@@ -738,7 +704,7 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "Some unknown error",
 			},
 			wantStatus: http.StatusInternalServerError,
-			wantCode:   "ERR_UNKNOWN_DOMAIN",
+			wantCode:   CodeSysInternal,
 			wantTitle:  "Internal Server Error",
 			wantType:   ProblemBaseURL + "internal-error",
 		},
@@ -749,8 +715,8 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 				Message: "Conflict occurred",
 			}),
 			wantStatus: http.StatusConflict,
-			wantCode:   string(domainerrors.ErrCodeConflict),
-			wantTitle:  "Conflict",
+			wantCode:   CodeUsrEmailExists,
+			wantTitle:  "Email Already Exists",
 			wantType:   ProblemBaseURL + "conflict",
 		},
 	}
@@ -765,7 +731,7 @@ func TestWriteProblemJSON_DomainErrors(t *testing.T) {
 			assert.Equal(t, tt.wantStatus, rec.Code)
 			assert.Equal(t, ContentTypeProblemJSON, rec.Header().Get("Content-Type"))
 
-			var problem ProblemDetail
+			var problem testProblemDetail
 			err := json.NewDecoder(rec.Body).Decode(&problem)
 			require.NoError(t, err)
 
