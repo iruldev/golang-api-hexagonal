@@ -56,6 +56,19 @@ type RateLimitConfig struct {
 // BasePath is the versioned base path for the API.
 const BasePath = "/api/v1"
 
+// RouterHandlers groups all HTTP handlers injected into the router.
+type RouterHandlers struct {
+	// Standard health check handlers
+	LivenessHandler  stdhttp.Handler // /healthz
+	HealthHandler    stdhttp.Handler // /health
+	ReadyHandler     stdhttp.Handler // /ready
+	ReadinessHandler stdhttp.Handler // /readyz
+	StartupHandler   stdhttp.Handler // /startupz
+
+	// Domain handlers
+	UserHandler UserRoutes
+}
+
 // NewRouter creates a new chi router with the provided handlers and logger.
 //
 // Middleware ordering:
@@ -80,8 +93,7 @@ func NewRouter(
 	tracingEnabled bool,
 	metricsReg *prometheus.Registry,
 	httpMetrics metrics.HTTPMetrics,
-	livenessHandler, healthHandler, readyHandler, readinessHandler stdhttp.Handler,
-	userHandler UserRoutes,
+	handlers RouterHandlers,
 	maxRequestSize int64,
 	jwtConfig JWTConfig,
 	rateLimitConfig RateLimitConfig,
@@ -93,7 +105,15 @@ func NewRouter(
 
 	// Story 3.1: K8s liveness probe - lightweight endpoint, no dependency checks.
 	// Registered on root router with NO middleware to avoid logging, metrics, etc.
-	r.Get("/healthz", livenessHandler.ServeHTTP)
+	if handlers.LivenessHandler != nil {
+		r.Get("/healthz", handlers.LivenessHandler.ServeHTTP)
+	}
+
+	// Story 3.3: K8s startup probe - checks implementation readiness.
+	// Registered on root router with NO middleware (like liveness probe) for minimal overhead.
+	if handlers.StartupHandler != nil {
+		r.Get("/startupz", handlers.StartupHandler.ServeHTTP)
+	}
 
 	// Main application group with full middleware stack
 	r.Group(func(r chi.Router) {
@@ -127,18 +147,22 @@ func NewRouter(
 		}
 
 		// Health check endpoints (standard)
-		r.Get("/health", healthHandler.ServeHTTP)
-		r.Get("/ready", readyHandler.ServeHTTP)
+		if handlers.HealthHandler != nil {
+			r.Get("/health", handlers.HealthHandler.ServeHTTP)
+		}
+		if handlers.ReadyHandler != nil {
+			r.Get("/ready", handlers.ReadyHandler.ServeHTTP)
+		}
 
 		// Story 3.2: K8s readiness probe - checks all dependencies
 		// Returns 200 if all dependencies healthy, 503 if any unhealthy
-		if readinessHandler != nil {
-			r.Get("/readyz", readinessHandler.ServeHTTP)
+		if handlers.ReadinessHandler != nil {
+			r.Get("/readyz", handlers.ReadinessHandler.ServeHTTP)
 		}
 
 		// API v1 routes (protected when JWT is enabled)
 		// Note: We use r.Route here which is inside the group, so it inherits the group's middleware
-		if userHandler != nil {
+		if handlers.UserHandler != nil {
 			r.Route(BasePath, func(r chi.Router) {
 				// Apply JWT auth middleware if enabled
 				if jwtConfig.Enabled {
@@ -171,9 +195,9 @@ func NewRouter(
 					}))
 				}
 
-				r.Post("/users", userHandler.CreateUser)
-				r.Get("/users/{id}", userHandler.GetUser)
-				r.Get("/users", userHandler.ListUsers)
+				r.Post("/users", handlers.UserHandler.CreateUser)
+				r.Get("/users/{id}", handlers.UserHandler.GetUser)
+				r.Get("/users", handlers.UserHandler.ListUsers)
 			})
 		}
 	})

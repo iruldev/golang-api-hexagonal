@@ -348,11 +348,13 @@ var TransportModule = fx.Options(
 	fx.Provide(handler.NewHealthHandler),
 	fx.Provide(provideReadyHandler),
 	fx.Provide(provideReadinessHandler),
+	fx.Provide(provideStartupHandler),
 	fx.Provide(provideUserHandler),
 	fx.Provide(provideJWTConfig),
 	fx.Provide(provideRateLimitConfig),
 	fx.Provide(providePublicRouter),
 	fx.Provide(provideInternalRouter),
+	fx.Invoke(registerStartupHook),
 )
 
 func provideReadyHandler(pool postgres.Pooler, logger *slog.Logger) *handler.ReadyHandler {
@@ -401,6 +403,7 @@ func providePublicRouter(
 	healthHandler *handler.HealthHandler,
 	readyHandler *handler.ReadyHandler,
 	readinessHandler *handler.ReadinessHandler,
+	startupHandler *handler.StartupHandler,
 	userHandler *handler.UserHandler,
 	jwtConfig httpTransport.JWTConfig,
 	rateLimitConfig httpTransport.RateLimitConfig,
@@ -412,11 +415,14 @@ func providePublicRouter(
 		cfg.OTELEnabled,
 		registry,
 		httpMetrics,
-		livenessHandler,
-		healthHandler,
-		readyHandler,
-		readinessHandler,
-		userHandler,
+		httpTransport.RouterHandlers{
+			LivenessHandler:  livenessHandler,
+			HealthHandler:    healthHandler,
+			ReadyHandler:     readyHandler,
+			ReadinessHandler: readinessHandler,
+			StartupHandler:   startupHandler,
+			UserHandler:      userHandler,
+		},
 		cfg.MaxRequestSize,
 		jwtConfig,
 		rateLimitConfig,
@@ -432,4 +438,24 @@ func provideInternalRouter(
 	httpMetrics metrics.HTTPMetrics,
 ) *chi.Mux {
 	return httpTransport.NewInternalRouter(logger, registry, httpMetrics)
+}
+
+func provideStartupHandler() *handler.StartupHandler {
+	return handler.NewStartupHandler()
+}
+
+func registerStartupHook(
+	lc fx.Lifecycle,
+	h *handler.StartupHandler,
+	logger *slog.Logger,
+) {
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			// Story 3.3: Mark startup probe as ready when application starts.
+			// This signals to K8s that the application initialization is complete.
+			h.MarkReady()
+			logger.Info("startup probe marked ready", slog.Bool("ready", true))
+			return nil
+		},
+	})
 }

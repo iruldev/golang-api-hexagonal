@@ -97,11 +97,12 @@ func TestIntegration_IDORPrevention(t *testing.T) {
 		false,
 		metricsReg,
 		httpMetrics,
-		livenessHandler,
-		healthHandler,
-		readyHandler,
-		nil, // readinessHandler - Story 3.2
-		userHandler,
+		httpTransport.RouterHandlers{
+			LivenessHandler: livenessHandler,
+			HealthHandler:   healthHandler,
+			ReadyHandler:    readyHandler,
+			UserHandler:     userHandler,
+		},
 		1024,
 		jwtConfig,
 		httpTransport.RateLimitConfig{RequestsPerSecond: 100},

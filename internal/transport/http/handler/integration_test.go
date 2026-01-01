@@ -93,7 +93,11 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("ready OK", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db, logger)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, readyHandler, nil, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, httpTransport.RouterHandlers{
+			LivenessHandler: livenessHandler,
+			HealthHandler:   healthHandler,
+			ReadyHandler:    readyHandler,
+		}, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 		rec := httptest.NewRecorder()
@@ -107,7 +111,11 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("ready not ready", func(t *testing.T) {
 		db := &fakeDB{pingErr: assert.AnError}
 		readyHandler := NewReadyHandler(db, logger)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, readyHandler, nil, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, httpTransport.RouterHandlers{
+			LivenessHandler: livenessHandler,
+			HealthHandler:   healthHandler,
+			ReadyHandler:    readyHandler,
+		}, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 		rec := httptest.NewRecorder()
@@ -122,7 +130,11 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("ready idempotent", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db, logger)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, readyHandler, nil, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, httpTransport.RouterHandlers{
+			LivenessHandler: livenessHandler,
+			HealthHandler:   healthHandler,
+			ReadyHandler:    readyHandler,
+		}, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
 
 		for i := 0; i < 5; i++ {
 			req := httptest.NewRequest(http.MethodGet, "/ready", nil)
@@ -138,7 +150,11 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("health ok", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db, logger)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, readyHandler, nil, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, httpTransport.RouterHandlers{
+			LivenessHandler: livenessHandler,
+			HealthHandler:   healthHandler,
+			ReadyHandler:    readyHandler,
+		}, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rec := httptest.NewRecorder()
@@ -155,7 +171,12 @@ func TestIntegrationRoutes(t *testing.T) {
 		dbChecker := postgres.NewDatabaseHealthChecker(db)
 		readinessHandler := NewReadinessHandler(0, dbChecker)
 
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, NewReadyHandler(db, logger), readinessHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, httpTransport.RouterHandlers{
+			LivenessHandler:  livenessHandler,
+			HealthHandler:    healthHandler,
+			ReadyHandler:     NewReadyHandler(db, logger),
+			ReadinessHandler: readinessHandler,
+		}, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 		rec := httptest.NewRecorder()
@@ -171,7 +192,12 @@ func TestIntegrationRoutes(t *testing.T) {
 		dbChecker := postgres.NewDatabaseHealthChecker(db)
 		readinessHandler := NewReadinessHandler(0, dbChecker)
 
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, NewReadyHandler(db, logger), readinessHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, httpTransport.RouterHandlers{
+			LivenessHandler:  livenessHandler,
+			HealthHandler:    healthHandler,
+			ReadyHandler:     NewReadyHandler(db, logger),
+			ReadinessHandler: readinessHandler,
+		}, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 		rec := httptest.NewRecorder()
@@ -188,23 +214,11 @@ func TestIntegrationRoutes(t *testing.T) {
 	// This ensures the probe is extremely lightweight as per AC#1
 	t.Run("liveness bypasses middleware", func(t *testing.T) {
 		// Setup router with rate limiting and secure headers enabled
-		r := httpTransport.NewRouter(
-			logger,
-			false,
-			metricsReg,
-			httpMetrics,
-			livenessHandler,
-			healthHandler,
-			NewReadyHandler(&fakeDB{}, logger),
-			nil, // readinessHandler - Story 3.2
-			nil,
-			1024,
-			httpTransport.JWTConfig{},
-			httpTransport.RateLimitConfig{RequestsPerSecond: 100},
-			nil,
-			nil,
-			0,
-		)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, httpTransport.RouterHandlers{
+			LivenessHandler: livenessHandler,
+			HealthHandler:   healthHandler,
+			ReadyHandler:    NewReadyHandler(&fakeDB{}, logger),
+		}, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{RequestsPerSecond: 100}, nil, nil, 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 		rec := httptest.NewRecorder()
@@ -225,6 +239,53 @@ func TestIntegrationRoutes(t *testing.T) {
 		// Verify Group Middleware are missing
 		// X-RateLimit-Limit is added by middleware.RateLimiter (if applied)
 		assert.Empty(t, rec.Header().Get("X-RateLimit-Limit"), "Endpoint should NOT have RateLimit headers")
+	})
+
+	// Story 3.3: Verify /startupz endpoint behavior (AC #1, #2)
+	t.Run("startup probe transitions from 503 to 200", func(t *testing.T) {
+		startupHandler := NewStartupHandler()
+
+		// Setup router (similar to real app)
+		r := httpTransport.NewRouter(
+			logger,
+			false,
+			metricsReg,
+			httpMetrics,
+			httpTransport.RouterHandlers{
+				LivenessHandler: livenessHandler,
+				HealthHandler:   healthHandler,
+				ReadyHandler:    NewReadyHandler(&fakeDB{}, logger),
+				StartupHandler:  startupHandler,
+			},
+			1024,
+			httpTransport.JWTConfig{},
+			httpTransport.RateLimitConfig{RequestsPerSecond: 100},
+			nil,
+			nil,
+			0,
+		)
+
+		// 1. Check before ready (AC #1)
+		req := httptest.NewRequest(http.MethodGet, "/startupz", nil)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code, "Should be 503 before ready")
+		assert.JSONEq(t, `{"status":"starting"}`, rec.Body.String())
+
+		// 2. Mark Ready
+		startupHandler.MarkReady()
+
+		// 3. Check after ready (AC #2)
+		req = httptest.NewRequest(http.MethodGet, "/startupz", nil)
+		rec = httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code, "Should be 200 after ready")
+		assert.JSONEq(t, `{"status":"ready"}`, rec.Body.String())
+
+		// 4. Verify no middleware (AC #3 implied - lightweight)
+		assert.Empty(t, rec.Header().Get("X-Request-ID"), "Should have no middleware headers")
 	})
 }
 
@@ -320,11 +381,12 @@ func TestIntegration_CreateUser_LocationHeader(t *testing.T) {
 		false,
 		metricsReg,
 		httpMetrics,
-		livenessHandler,
-		healthHandler,
-		readyHandler,
-		nil, // readinessHandler - Story 3.2
-		userHandler,
+		httpTransport.RouterHandlers{
+			LivenessHandler: livenessHandler,
+			HealthHandler:   healthHandler,
+			ReadyHandler:    readyHandler,
+			UserHandler:     userHandler,
+		},
 		1024,
 		httpTransport.JWTConfig{}, // JWT disabled for this test
 		httpTransport.RateLimitConfig{RequestsPerSecond: 100},
