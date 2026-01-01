@@ -111,34 +111,8 @@ func TestKeyFunc(t *testing.T) {
 	})
 }
 
-// TestRateLimitExceededHandler tests the 429 response handler.
-func TestRateLimitExceededHandler(t *testing.T) {
-	// AC #5: Returns 429 with RFC 7807 and Retry-After header
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
-	rec := httptest.NewRecorder()
-
-	rateLimitExceededHandler(rec, req)
-
-	// Check status code
-	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
-
-	// Retry-After header is set by httprate middleware, not the handler itself
-	// so we don't assert it here (covered in integration test)
-
-	// Check Content-Type
-	assert.Equal(t, "application/problem+json", rec.Header().Get("Content-Type"))
-
-	// Check RFC 7807 body
-	var problem testProblemDetail
-	err := json.Unmarshal(rec.Body.Bytes(), &problem)
-	require.NoError(t, err)
-
-	assert.Equal(t, http.StatusTooManyRequests, problem.Status)
-	assert.Equal(t, contract.CodeRateLimitExceeded, problem.Code)
-	assert.Equal(t, "Rate Limit Exceeded", problem.Title)
-	assert.True(t, strings.HasSuffix(problem.Type, "rate-limit-exceeded"))
-	assert.Equal(t, "/api/v1/users", problem.Instance)
-}
+// TestRateLimitExceededHandler removed as logic is now internal to RateLimiter closure.
+// Verification is done via TestRateLimiterMiddleware.
 
 // TestRateLimiterMiddleware tests the complete middleware integration.
 func TestRateLimiterMiddleware(t *testing.T) {
@@ -195,6 +169,20 @@ func TestRateLimiterMiddleware(t *testing.T) {
 				assert.Equal(t, "1", rec.Header().Get("Retry-After"))
 				// Verify Content-Type
 				assert.Equal(t, "application/problem+json", rec.Header().Get("Content-Type"))
+
+				// AC #1, #2: Verify RFC 7807 body
+				var problem testProblemDetail
+				err := json.Unmarshal(rec.Body.Bytes(), &problem)
+				require.NoError(t, err)
+
+				assert.Equal(t, http.StatusTooManyRequests, problem.Status)
+				assert.Equal(t, contract.CodeRateLimitExceeded, problem.Code)
+				assert.Equal(t, "Rate Limit Exceeded", problem.Title)
+				assert.True(t, strings.HasSuffix(problem.Type, "rate-limit-exceeded"))
+
+				// AC #2: Verify detail includes reset time information
+				assert.Contains(t, problem.Detail, "Try again after", "Detail should mention retry time")
+				assert.Contains(t, problem.Detail, "20", "Detail should contain year in timestamp")
 			}
 		}
 
@@ -248,6 +236,39 @@ func TestRateLimiterMiddleware(t *testing.T) {
 			middleware.ServeHTTP(recB, reqB)
 			assert.Equal(t, http.StatusOK, recB.Code, "User B request %d should succeed", i+1)
 		}
+	})
+
+	t.Run("custom window configuration", func(t *testing.T) {
+		cfg := RateLimitConfig{
+			RequestsPerSecond: 2,
+			Window:            2 * time.Second,
+		}
+
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		middleware := RateLimiter(cfg)(handler)
+
+		// Exhaust the limit
+		for i := 0; i < 2; i++ {
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			req.RemoteAddr = "192.168.3.1:12345"
+			rec := httptest.NewRecorder()
+			middleware.ServeHTTP(rec, req)
+			assert.Equal(t, http.StatusOK, rec.Code)
+		}
+
+		// Next request should be blocked
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "192.168.3.1:12345"
+		rec := httptest.NewRecorder()
+		middleware.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusTooManyRequests, rec.Code)
+
+		// Verify Retry-After is likely 1 or 2 (depending on window consumed)
+		retryAfter := rec.Header().Get("Retry-After")
+		assert.NotEmpty(t, retryAfter)
 	})
 }
 

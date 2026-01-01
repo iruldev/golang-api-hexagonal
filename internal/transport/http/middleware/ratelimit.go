@@ -5,6 +5,7 @@ package middleware
 import (
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,13 +16,18 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
 )
 
-// RateLimitWindow is the time window for rate limiting.
-const RateLimitWindow = time.Second
+// DefaultRateLimitWindow is the default time window for rate limiting.
+const DefaultRateLimitWindow = time.Second
 
 // RateLimitConfig holds rate limiting configuration.
 type RateLimitConfig struct {
-	// RequestsPerSecond is the number of requests allowed per second.
+	// RequestsPerSecond is the number of requests allowed per window.
+	// Required (> 0).
 	RequestsPerSecond int
+
+	// Window is the time window for rate limiting.
+	// Optional (default: 1 second).
+	Window time.Duration
 }
 
 // RateLimiter returns middleware that limits requests per key (user ID or IP).
@@ -44,11 +50,45 @@ type RateLimitConfig struct {
 // AC #7: Rate limit is configurable via RATE_LIMIT_RPS.
 // AC #8: Rate limit headers on all responses (Story 2.6).
 func RateLimiter(cfg RateLimitConfig) func(http.Handler) http.Handler {
+	// Validate config
+	if cfg.RequestsPerSecond <= 0 {
+		// Log warning or set sensible default? For middleware, usually panic on invalid startup config
+		// or log. Here we'll default to 10 to ensure safety if not provided.
+		// A panic might be better to signal misconfiguration, but let's be safe.
+		cfg.RequestsPerSecond = 10
+	}
+	if cfg.Window <= 0 {
+		cfg.Window = DefaultRateLimitWindow
+	}
+
 	return httprate.Limit(
 		cfg.RequestsPerSecond,
-		RateLimitWindow,
+		cfg.Window,
 		httprate.WithKeyFuncs(keyFunc()),
-		httprate.WithLimitHandler(rateLimitExceededHandler),
+		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
+			// AC #2: Calculate reset time
+			// Try to get precise reset time from header set by httprate
+			var resetTimeStr string
+			if resetTimestampStr := w.Header().Get("X-RateLimit-Reset"); resetTimestampStr != "" {
+				if ts, err := time.Parse(time.RFC3339, resetTimestampStr); err == nil {
+					resetTimeStr = ts.Format(time.RFC3339)
+				} else if ts, err := strconv.ParseInt(resetTimestampStr, 10, 64); err == nil {
+					resetTimeStr = time.Unix(ts, 0).Format(time.RFC3339)
+				}
+			}
+
+			// Fallback if header missing or unparseable
+			if resetTimeStr == "" {
+				resetTimeStr = time.Now().Add(cfg.Window).Format(time.RFC3339)
+			}
+
+			// AC #1: Write RFC 7807 error response with RATE-001 code and dynamic detail
+			contract.WriteProblemJSON(w, r, &app.AppError{
+				Op:      "RateLimiter",
+				Code:    app.CodeRateLimitExceeded,
+				Message: "Rate limit exceeded. Try again after " + resetTimeStr,
+			})
+		}),
 		httprate.WithResponseHeaders(httprate.ResponseHeaders{
 			Limit:      "X-RateLimit-Limit",
 			Remaining:  "X-RateLimit-Remaining",
@@ -89,18 +129,4 @@ func resolveClientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return ip
-}
-
-// rateLimitExceededHandler handles 429 responses with RFC 7807 format.
-// It sets the Retry-After header and writes the error response (AC #5).
-func rateLimitExceededHandler(w http.ResponseWriter, r *http.Request) {
-	// AC #5: RFC 7807 error response is written here.
-	// Retry-After header is set by httprate via WithResponseHeaders option.
-
-	// Write RFC 7807 error response
-	contract.WriteProblemJSON(w, r, &app.AppError{
-		Op:      "RateLimiter",
-		Code:    app.CodeRateLimitExceeded,
-		Message: "Rate limit exceeded",
-	})
 }
