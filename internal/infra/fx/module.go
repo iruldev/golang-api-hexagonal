@@ -344,6 +344,7 @@ var AppModule = fx.Options(
 
 // TransportModule provides HTTP transport dependencies.
 var TransportModule = fx.Options(
+	fx.Provide(handler.NewLivenessHandler),
 	fx.Provide(handler.NewHealthHandler),
 	fx.Provide(provideReadyHandler),
 	fx.Provide(provideUserHandler),
@@ -388,6 +389,7 @@ func providePublicRouter(
 	logger *slog.Logger,
 	registry *prometheus.Registry,
 	httpMetrics metrics.HTTPMetrics,
+	livenessHandler *handler.LivenessHandler,
 	healthHandler *handler.HealthHandler,
 	readyHandler *handler.ReadyHandler,
 	userHandler *handler.UserHandler,
@@ -401,6 +403,7 @@ func providePublicRouter(
 		cfg.OTELEnabled,
 		registry,
 		httpMetrics,
+		livenessHandler,
 		healthHandler,
 		readyHandler,
 		userHandler,

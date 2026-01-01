@@ -80,7 +80,7 @@ func NewRouter(
 	tracingEnabled bool,
 	metricsReg *prometheus.Registry,
 	httpMetrics metrics.HTTPMetrics,
-	healthHandler, readyHandler stdhttp.Handler,
+	livenessHandler, healthHandler, readyHandler stdhttp.Handler,
 	userHandler UserRoutes,
 	maxRequestSize int64,
 	jwtConfig JWTConfig,
@@ -91,80 +91,86 @@ func NewRouter(
 ) chi.Router {
 	r := chi.NewRouter()
 
-	// Global middleware stack (order matters!)
-	// SecureHeaders FIRST - ensures security headers on ALL responses including errors
-	r.Use(middleware.SecureHeaders)
-	r.Use(middleware.RequestID)
+	// Story 3.1: K8s liveness probe - lightweight endpoint, no dependency checks.
+	// Registered on root router with NO middleware to avoid logging, metrics, etc.
+	r.Get("/healthz", livenessHandler.ServeHTTP)
 
-	// Story 2.6: Only trust proxy headers (X-Forwarded-For, X-Real-IP) when explicitly configured.
-	// This prevents IP spoofing when not behind a trusted proxy.
-	// MUST be before Logger and Metrics so they see the real IP.
-	if rateLimitConfig.TrustProxy {
-		r.Use(chiMiddleware.RealIP)
-	}
+	// Main application group with full middleware stack
+	r.Group(func(r chi.Router) {
+		// Global middleware stack (order matters!)
+		// SecureHeaders FIRST - ensures security headers on ALL responses including errors
+		r.Use(middleware.SecureHeaders)
+		r.Use(middleware.RequestID)
 
-	if tracingEnabled {
-		r.Use(middleware.Tracing)
-	}
-	r.Use(middleware.Metrics(httpMetrics))
-	r.Use(middleware.RequestLogger(logger))
-	r.Use(middleware.BodyLimiter(maxRequestSize))
+		// Story 2.6: Only trust proxy headers (X-Forwarded-For, X-Real-IP) when explicitly configured.
+		// This prevents IP spoofing when not behind a trusted proxy.
+		// MUST be before Logger and Metrics so they see the real IP.
+		if rateLimitConfig.TrustProxy {
+			r.Use(chiMiddleware.RealIP)
+		}
 
-	// Story 2.3: RFC 7807 Panic Recovery - replaced chi's Recoverer with our implementation
-	// that returns proper RFC 7807 responses with SYS-001 error code
-	r.Use(middleware.Recoverer(logger))
+		if tracingEnabled {
+			r.Use(middleware.Tracing)
+		}
+		r.Use(middleware.Metrics(httpMetrics))
+		r.Use(middleware.RequestLogger(logger))
+		r.Use(middleware.BodyLimiter(maxRequestSize))
 
-	// Story 1.6: Graceful Shutdown - reject new requests during shutdown
-	// and track in-flight requests for drain period coordination.
-	if shutdownCoord != nil {
-		r.Use(middleware.Shutdown(shutdownCoord))
-	}
+		// Story 2.3: RFC 7807 Panic Recovery - replaced chi's Recoverer with our implementation
+		// that returns proper RFC 7807 responses with SYS-001 error code
+		r.Use(middleware.Recoverer(logger))
 
-	// NOTE: /metrics endpoint moved to internal router (Story 2.5b)
+		// Story 1.6: Graceful Shutdown - reject new requests during shutdown
+		// and track in-flight requests for drain period coordination.
+		if shutdownCoord != nil {
+			r.Use(middleware.Shutdown(shutdownCoord))
+		}
 
-	// Health check endpoints (no auth required)
-	r.Get("/health", healthHandler.ServeHTTP)
-	r.Get("/ready", readyHandler.ServeHTTP)
+		// Health check endpoints (standard)
+		r.Get("/health", healthHandler.ServeHTTP)
+		r.Get("/ready", readyHandler.ServeHTTP)
 
-	// API v1 routes (protected when JWT is enabled)
-	if userHandler != nil {
-		r.Route(BasePath, func(r chi.Router) {
-			// Apply JWT auth middleware if enabled
-			if jwtConfig.Enabled {
-				now := jwtConfig.Now
-				if now == nil {
-					now = time.Now
+		// API v1 routes (protected when JWT is enabled)
+		// Note: We use r.Route here which is inside the group, so it inherits the group's middleware
+		if userHandler != nil {
+			r.Route(BasePath, func(r chi.Router) {
+				// Apply JWT auth middleware if enabled
+				if jwtConfig.Enabled {
+					now := jwtConfig.Now
+					if now == nil {
+						now = time.Now
+					}
+					r.Use(middleware.JWTAuth(middleware.JWTAuthConfig{
+						Secret:    jwtConfig.Secret,
+						Logger:    logger,
+						Now:       now,
+						Issuer:    jwtConfig.Issuer,
+						Audience:  jwtConfig.Audience,
+						ClockSkew: jwtConfig.ClockSkew,
+					}))
+					r.Use(middleware.AuthContextBridge)
 				}
-				r.Use(middleware.JWTAuth(middleware.JWTAuthConfig{
-					Secret:    jwtConfig.Secret,
-					Logger:    logger,
-					Now:       now,
-					Issuer:    jwtConfig.Issuer,
-					Audience:  jwtConfig.Audience,
-					ClockSkew: jwtConfig.ClockSkew,
+
+				// Apply rate limiting after JWT auth so claims are available for per-user limiting
+				r.Use(middleware.RateLimiter(middleware.RateLimitConfig{
+					RequestsPerSecond: rateLimitConfig.RequestsPerSecond,
 				}))
-				r.Use(middleware.AuthContextBridge)
-			}
 
-			// Apply rate limiting after JWT auth so claims are available for per-user limiting
-			r.Use(middleware.RateLimiter(middleware.RateLimitConfig{
-				RequestsPerSecond: rateLimitConfig.RequestsPerSecond,
-			}))
+				// Story 2.4: Apply idempotency middleware for POST requests if store is provided.
+				// The middleware only affects POST requests with Idempotency-Key header.
+				if idempotencyStore != nil {
+					r.Use(middleware.Idempotency(middleware.IdempotencyConfig{
+						Store: idempotencyStore,
+						TTL:   idempotencyTTL,
+					}))
+				}
 
-			// Story 2.4: Apply idempotency middleware for POST requests if store is provided.
-			// The middleware only affects POST requests with Idempotency-Key header.
-			if idempotencyStore != nil {
-				r.Use(middleware.Idempotency(middleware.IdempotencyConfig{
-					Store: idempotencyStore,
-					TTL:   idempotencyTTL,
-				}))
-			}
-
-			r.Post("/users", userHandler.CreateUser)
-			r.Get("/users/{id}", userHandler.GetUser)
-			r.Get("/users", userHandler.ListUsers)
-		})
-	}
+				r.Post("/users", userHandler.CreateUser)
+				r.Get("/users/{id}", userHandler.GetUser)
+				r.Get("/users", userHandler.ListUsers)
+			})
+		}
+	})
 
 	return r
 }

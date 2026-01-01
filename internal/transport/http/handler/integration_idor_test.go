@@ -80,6 +80,7 @@ func TestIntegration_IDORPrevention(t *testing.T) {
 
 	// Real Handler
 	userHandler := NewUserHandler(mockCreateUC, realUseCase, mockListUC, httpTransport.BasePath+"/users")
+	livenessHandler := NewLivenessHandler()
 	healthHandler := NewHealthHandler()
 	readyHandler := NewReadyHandler(mockDB, logger)
 
@@ -96,6 +97,7 @@ func TestIntegration_IDORPrevention(t *testing.T) {
 		false,
 		metricsReg,
 		httpMetrics,
+		livenessHandler,
 		healthHandler,
 		readyHandler,
 		userHandler,

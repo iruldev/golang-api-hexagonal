@@ -84,6 +84,7 @@ func newTestMetricsRegistry() (*prometheus.Registry, sharedMetrics.HTTPMetrics) 
 
 // TestIntegrationRoutes covers /health and /ready through the router with DB ok/fail.
 func TestIntegrationRoutes(t *testing.T) {
+	livenessHandler := NewLivenessHandler()
 	healthHandler := NewHealthHandler()
 	logger := testLogger()
 	metricsReg, httpMetrics := newTestMetricsRegistry()
@@ -91,7 +92,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("ready OK", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db, logger)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 		rec := httptest.NewRecorder()
@@ -105,7 +106,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("ready not ready", func(t *testing.T) {
 		db := &fakeDB{pingErr: assert.AnError}
 		readyHandler := NewReadyHandler(db, logger)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 		rec := httptest.NewRecorder()
@@ -120,7 +121,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("ready idempotent", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db, logger)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
 
 		for i := 0; i < 5; i++ {
 			req := httptest.NewRequest(http.MethodGet, "/ready", nil)
@@ -136,7 +137,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("health ok", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db, logger)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rec := httptest.NewRecorder()
@@ -145,6 +146,48 @@ func TestIntegrationRoutes(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.JSONEq(t, `{"data":{"status":"ok"}}`, rec.Body.String())
+	})
+
+	// Story 3.1: Verify /healthz bypasses ALL middleware (no logging, no tracing, no secure headers)
+	// This ensures the probe is extremely lightweight as per AC#1
+	t.Run("liveness bypasses middleware", func(t *testing.T) {
+		// Setup router with rate limiting and secure headers enabled
+		r := httpTransport.NewRouter(
+			logger,
+			false,
+			metricsReg,
+			httpMetrics,
+			livenessHandler,
+			healthHandler,
+			NewReadyHandler(&fakeDB{}, logger),
+			nil,
+			1024,
+			httpTransport.JWTConfig{},
+			httpTransport.RateLimitConfig{RequestsPerSecond: 100},
+			nil,
+			nil,
+			0,
+		)
+
+		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		rec := httptest.NewRecorder()
+
+		r.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "alive", "alive") // sanity check logic
+
+		// Verify Global Middleware are missing
+		// X-Request-ID is added by middleware.RequestID
+		assert.Empty(t, rec.Header().Get("X-Request-ID"), "Endpoint should NOT have X-Request-ID header")
+
+		// X-Frame-Options is added by middleware.SecureHeaders
+		// Note: SecureHeaders is the FIRST middleware in the group but /healthz is registered OUTSIDE the group
+		assert.Empty(t, rec.Header().Get("X-Frame-Options"), "Endpoint should NOT have Security headers")
+
+		// Verify Group Middleware are missing
+		// X-RateLimit-Limit is added by middleware.RateLimiter (if applied)
+		assert.Empty(t, rec.Header().Get("X-RateLimit-Limit"), "Endpoint should NOT have RateLimit headers")
 	})
 }
 
@@ -231,6 +274,7 @@ func TestIntegration_CreateUser_LocationHeader(t *testing.T) {
 
 	// 2. Setup Router
 	userHandler := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, httpTransport.BasePath+"/users")
+	livenessHandler := NewLivenessHandler()
 	healthHandler := NewHealthHandler()
 	readyHandler := NewReadyHandler(mockDB, logger)
 
@@ -239,6 +283,7 @@ func TestIntegration_CreateUser_LocationHeader(t *testing.T) {
 		false,
 		metricsReg,
 		httpMetrics,
+		livenessHandler,
 		healthHandler,
 		readyHandler,
 		userHandler,

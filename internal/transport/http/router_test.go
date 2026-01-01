@@ -71,6 +71,7 @@ func TestNewRouter_JWTEnabled(t *testing.T) {
 
 	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
+	livenessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 
 	jwtSecret := []byte("this-is-a-32-byte-secret-key!!@@")
 	jwtConfig := JWTConfig{
@@ -91,6 +92,7 @@ func TestNewRouter_JWTEnabled(t *testing.T) {
 		false, // tracing disabled
 		metricsReg,
 		mockMetrics,
+		livenessHandler,
 		healthHandler,
 		readyHandler,
 		mockUserHandler,
@@ -125,6 +127,7 @@ func TestNewRouter_JWTDisabled(t *testing.T) {
 
 	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
+	livenessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 
 	jwtConfig := JWTConfig{
 		Enabled: false, // Disabled!
@@ -140,6 +143,7 @@ func TestNewRouter_JWTDisabled(t *testing.T) {
 		false,
 		metricsReg,
 		mockMetrics,
+		livenessHandler,
 		healthHandler,
 		readyHandler,
 		mockUserHandler,
@@ -176,6 +180,7 @@ func TestNewRouter_HealthCheck_NoAuth(t *testing.T) {
 		w.Write([]byte("OK"))
 	})
 	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
+	livenessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 
 	jwtConfig := JWTConfig{
 		Enabled: true, // Enabled for API, but shouldn't affect /health
@@ -191,6 +196,7 @@ func TestNewRouter_HealthCheck_NoAuth(t *testing.T) {
 		false,
 		metricsReg,
 		mockMetrics,
+		livenessHandler,
 		healthHandler,
 		readyHandler,
 		mockUserHandler,
@@ -225,6 +231,7 @@ func TestNewRouter_MetricsNotExposed(t *testing.T) {
 
 	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
+	livenessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 
 	jwtConfig := JWTConfig{Enabled: false}
 	rateLimitConfig := RateLimitConfig{RequestsPerSecond: 100}
@@ -234,6 +241,7 @@ func TestNewRouter_MetricsNotExposed(t *testing.T) {
 		false,
 		metricsReg,
 		mockMetrics,
+		livenessHandler,
 		healthHandler,
 		readyHandler,
 		nil, // no user handler
@@ -292,6 +300,7 @@ func TestNewRouter_TrustProxyFalse_IgnoresXFF(t *testing.T) {
 		w.Write([]byte(r.RemoteAddr))
 	})
 	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
+	livenessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 
 	jwtConfig := JWTConfig{Enabled: false}
 	rateLimitConfig := RateLimitConfig{
@@ -304,6 +313,7 @@ func TestNewRouter_TrustProxyFalse_IgnoresXFF(t *testing.T) {
 		false,
 		metricsReg,
 		mockMetrics,
+		livenessHandler,
 		healthHandler,
 		readyHandler,
 		nil,
@@ -343,6 +353,7 @@ func TestNewRouter_TrustProxyTrue_UsesXFF(t *testing.T) {
 		w.Write([]byte(r.RemoteAddr))
 	})
 	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
+	livenessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 
 	jwtConfig := JWTConfig{Enabled: false}
 	rateLimitConfig := RateLimitConfig{
@@ -355,6 +366,7 @@ func TestNewRouter_TrustProxyTrue_UsesXFF(t *testing.T) {
 		false,
 		metricsReg,
 		mockMetrics,
+		livenessHandler,
 		healthHandler,
 		readyHandler,
 		nil,
@@ -416,6 +428,7 @@ func TestNewRouter_IdempotencyIntegration(t *testing.T) {
 
 	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
+	livenessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 
 	jwtConfig := JWTConfig{Enabled: false}
 	rateLimitConfig := RateLimitConfig{RequestsPerSecond: 100}
@@ -425,6 +438,7 @@ func TestNewRouter_IdempotencyIntegration(t *testing.T) {
 		false,
 		metricsReg,
 		mockMetrics,
+		livenessHandler,
 		healthHandler,
 		readyHandler,
 		mockUserHandler,
