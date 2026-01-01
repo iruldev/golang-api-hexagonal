@@ -347,6 +347,7 @@ var TransportModule = fx.Options(
 	fx.Provide(handler.NewLivenessHandler),
 	fx.Provide(handler.NewHealthHandler),
 	fx.Provide(provideReadyHandler),
+	fx.Provide(provideReadinessHandler),
 	fx.Provide(provideUserHandler),
 	fx.Provide(provideJWTConfig),
 	fx.Provide(provideRateLimitConfig),
@@ -356,6 +357,13 @@ var TransportModule = fx.Options(
 
 func provideReadyHandler(pool postgres.Pooler, logger *slog.Logger) *handler.ReadyHandler {
 	return handler.NewReadyHandler(pool, logger)
+}
+
+// provideReadinessHandler creates the ReadinessHandler with database health checker.
+// Story 3.2: K8s readiness probe with dependency status.
+func provideReadinessHandler(pool postgres.Pooler) *handler.ReadinessHandler {
+	dbChecker := postgres.NewDatabaseHealthChecker(pool)
+	return handler.NewReadinessHandler(handler.DefaultCheckTimeout, dbChecker)
 }
 
 func provideUserHandler(
@@ -392,6 +400,7 @@ func providePublicRouter(
 	livenessHandler *handler.LivenessHandler,
 	healthHandler *handler.HealthHandler,
 	readyHandler *handler.ReadyHandler,
+	readinessHandler *handler.ReadinessHandler,
 	userHandler *handler.UserHandler,
 	jwtConfig httpTransport.JWTConfig,
 	rateLimitConfig httpTransport.RateLimitConfig,
@@ -406,6 +415,7 @@ func providePublicRouter(
 		livenessHandler,
 		healthHandler,
 		readyHandler,
+		readinessHandler,
 		userHandler,
 		cfg.MaxRequestSize,
 		jwtConfig,

@@ -95,6 +95,7 @@ func TestNewRouter_JWTEnabled(t *testing.T) {
 		livenessHandler,
 		healthHandler,
 		readyHandler,
+		nil, // readinessHandler - Story 3.2
 		mockUserHandler,
 		1024,
 		jwtConfig,
@@ -146,6 +147,7 @@ func TestNewRouter_JWTDisabled(t *testing.T) {
 		livenessHandler,
 		healthHandler,
 		readyHandler,
+		nil, // readinessHandler - Story 3.2
 		mockUserHandler,
 		1024,
 		jwtConfig,
@@ -199,6 +201,7 @@ func TestNewRouter_HealthCheck_NoAuth(t *testing.T) {
 		livenessHandler,
 		healthHandler,
 		readyHandler,
+		nil, // readinessHandler - Story 3.2
 		mockUserHandler,
 		1024,
 		jwtConfig,
@@ -244,6 +247,7 @@ func TestNewRouter_MetricsNotExposed(t *testing.T) {
 		livenessHandler,
 		healthHandler,
 		readyHandler,
+		nil, // readinessHandler - Story 3.2
 		nil, // no user handler
 		1024,
 		jwtConfig,
@@ -316,6 +320,7 @@ func TestNewRouter_TrustProxyFalse_IgnoresXFF(t *testing.T) {
 		livenessHandler,
 		healthHandler,
 		readyHandler,
+		nil, // readinessHandler - Story 3.2
 		nil,
 		1024,
 		jwtConfig,
@@ -369,6 +374,7 @@ func TestNewRouter_TrustProxyTrue_UsesXFF(t *testing.T) {
 		livenessHandler,
 		healthHandler,
 		readyHandler,
+		nil, // readinessHandler - Story 3.2
 		nil,
 		1024,
 		jwtConfig,
@@ -441,6 +447,7 @@ func TestNewRouter_IdempotencyIntegration(t *testing.T) {
 		livenessHandler,
 		healthHandler,
 		readyHandler,
+		nil, // readinessHandler - Story 3.2
 		mockUserHandler,
 		1024,
 		jwtConfig,

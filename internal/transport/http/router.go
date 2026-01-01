@@ -80,7 +80,7 @@ func NewRouter(
 	tracingEnabled bool,
 	metricsReg *prometheus.Registry,
 	httpMetrics metrics.HTTPMetrics,
-	livenessHandler, healthHandler, readyHandler stdhttp.Handler,
+	livenessHandler, healthHandler, readyHandler, readinessHandler stdhttp.Handler,
 	userHandler UserRoutes,
 	maxRequestSize int64,
 	jwtConfig JWTConfig,
@@ -129,6 +129,12 @@ func NewRouter(
 		// Health check endpoints (standard)
 		r.Get("/health", healthHandler.ServeHTTP)
 		r.Get("/ready", readyHandler.ServeHTTP)
+
+		// Story 3.2: K8s readiness probe - checks all dependencies
+		// Returns 200 if all dependencies healthy, 503 if any unhealthy
+		if readinessHandler != nil {
+			r.Get("/readyz", readinessHandler.ServeHTTP)
+		}
 
 		// API v1 routes (protected when JWT is enabled)
 		// Note: We use r.Route here which is inside the group, so it inherits the group's middleware

@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/iruldev/golang-api-hexagonal/internal/app/user"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres"
 	sharedMetrics "github.com/iruldev/golang-api-hexagonal/internal/shared/metrics"
 	httpTransport "github.com/iruldev/golang-api-hexagonal/internal/transport/http"
 )
@@ -92,7 +93,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("ready OK", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db, logger)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, readyHandler, nil, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 		rec := httptest.NewRecorder()
@@ -106,7 +107,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("ready not ready", func(t *testing.T) {
 		db := &fakeDB{pingErr: assert.AnError}
 		readyHandler := NewReadyHandler(db, logger)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, readyHandler, nil, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/ready", nil)
 		rec := httptest.NewRecorder()
@@ -121,7 +122,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("ready idempotent", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db, logger)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, readyHandler, nil, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
 
 		for i := 0; i < 5; i++ {
 			req := httptest.NewRequest(http.MethodGet, "/ready", nil)
@@ -137,7 +138,7 @@ func TestIntegrationRoutes(t *testing.T) {
 	t.Run("health ok", func(t *testing.T) {
 		db := &fakeDB{pingErr: nil}
 		readyHandler := NewReadyHandler(db, logger)
-		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, readyHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, readyHandler, nil, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rec := httptest.NewRecorder()
@@ -146,6 +147,41 @@ func TestIntegrationRoutes(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.JSONEq(t, `{"data":{"status":"ok"}}`, rec.Body.String())
+	})
+
+	// Story 3.2: Verify /readyz (K8s readiness probe) behavior
+	t.Run("readyz OK", func(t *testing.T) {
+		db := &fakeDB{pingErr: nil}
+		dbChecker := postgres.NewDatabaseHealthChecker(db)
+		readinessHandler := NewReadinessHandler(0, dbChecker)
+
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, NewReadyHandler(db, logger), readinessHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
+
+		req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+		rec := httptest.NewRecorder()
+
+		r.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.JSONEq(t, `{"status":"healthy","checks":{"database":{"status":"healthy","latency_ms":0}}}`, rec.Body.String())
+	})
+
+	t.Run("readyz not ready", func(t *testing.T) {
+		db := &fakeDB{pingErr: assert.AnError}
+		dbChecker := postgres.NewDatabaseHealthChecker(db)
+		readinessHandler := NewReadinessHandler(0, dbChecker)
+
+		r := httpTransport.NewRouter(logger, false, metricsReg, httpMetrics, livenessHandler, healthHandler, NewReadyHandler(db, logger), readinessHandler, nil, 1024, httpTransport.JWTConfig{}, httpTransport.RateLimitConfig{}, nil, nil, 0)
+
+		req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+		rec := httptest.NewRecorder()
+
+		r.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+		// Error message depends on the assert.AnError value
+		assert.Contains(t, rec.Body.String(), `"status":"unhealthy"`)
+		assert.Contains(t, rec.Body.String(), `"database":{"status":"unhealthy"`)
 	})
 
 	// Story 3.1: Verify /healthz bypasses ALL middleware (no logging, no tracing, no secure headers)
@@ -160,6 +196,7 @@ func TestIntegrationRoutes(t *testing.T) {
 			livenessHandler,
 			healthHandler,
 			NewReadyHandler(&fakeDB{}, logger),
+			nil, // readinessHandler - Story 3.2
 			nil,
 			1024,
 			httpTransport.JWTConfig{},
@@ -286,6 +323,7 @@ func TestIntegration_CreateUser_LocationHeader(t *testing.T) {
 		livenessHandler,
 		healthHandler,
 		readyHandler,
+		nil, // readinessHandler - Story 3.2
 		userHandler,
 		1024,
 		httpTransport.JWTConfig{}, // JWT disabled for this test

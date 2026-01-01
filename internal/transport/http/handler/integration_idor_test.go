@@ -100,6 +100,7 @@ func TestIntegration_IDORPrevention(t *testing.T) {
 		livenessHandler,
 		healthHandler,
 		readyHandler,
+		nil, // readinessHandler - Story 3.2
 		userHandler,
 		1024,
 		jwtConfig,
