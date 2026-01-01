@@ -135,6 +135,12 @@ type Config struct {
 	ShutdownDrainPeriod time.Duration `envconfig:"SHUTDOWN_DRAIN_PERIOD" default:"30s"`
 	// ShutdownGracePeriod is additional time after drain for cleanup operations. Default: 5s.
 	ShutdownGracePeriod time.Duration `envconfig:"SHUTDOWN_GRACE_PERIOD" default:"5s"`
+
+	// Idempotency (Story 2.5)
+	// IdempotencyTTL is the time-to-live for idempotency records. Default: 24h.
+	IdempotencyTTL time.Duration `envconfig:"IDEMPOTENCY_TTL" default:"24h"`
+	// IdempotencyCleanupInterval is the interval between cleanup job runs. Default: 1h.
+	IdempotencyCleanupInterval time.Duration `envconfig:"IDEMPOTENCY_CLEANUP_INTERVAL" default:"1h"`
 }
 
 // Redacted returns a safe string representation of the Config for logging.

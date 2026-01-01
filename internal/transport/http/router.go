@@ -87,6 +87,7 @@ func NewRouter(
 	rateLimitConfig RateLimitConfig,
 	shutdownCoord middleware.ShutdownCoordinator,
 	idempotencyStore middleware.IdempotencyStore,
+	idempotencyTTL time.Duration,
 ) chi.Router {
 	r := chi.NewRouter()
 
@@ -156,6 +157,7 @@ func NewRouter(
 			if idempotencyStore != nil {
 				r.Use(middleware.Idempotency(middleware.IdempotencyConfig{
 					Store: idempotencyStore,
+					TTL:   idempotencyTTL,
 				}))
 			}
 

@@ -99,6 +99,7 @@ func TestNewRouter_JWTEnabled(t *testing.T) {
 		rateLimitConfig,
 		nil, // shutdownCoord - not tested here
 		nil, // idempotencyStore - not tested here
+		0,   // idempotencyTTL
 	)
 
 	// Case 1: JWT Enabled, No Token provided -> Should be 401
@@ -147,6 +148,7 @@ func TestNewRouter_JWTDisabled(t *testing.T) {
 		rateLimitConfig,
 		nil, // shutdownCoord - not tested here
 		nil, // idempotencyStore - not tested here
+		0,   // idempotencyTTL
 	)
 
 	// Case 2: JWT Disabled, No Token provided -> Should be 200 (Mock returns 200)
@@ -197,6 +199,7 @@ func TestNewRouter_HealthCheck_NoAuth(t *testing.T) {
 		rateLimitConfig,
 		nil, // shutdownCoord - not tested here
 		nil, // idempotencyStore - not tested here
+		0,   // idempotencyTTL
 	)
 
 	req := httptest.NewRequest("GET", "/health", nil)
@@ -239,6 +242,7 @@ func TestNewRouter_MetricsNotExposed(t *testing.T) {
 		rateLimitConfig,
 		nil, // shutdownCoord - not tested here
 		nil, // idempotencyStore - not tested here
+		0,   // idempotencyTTL
 	)
 
 	// /metrics should return 404 on public router
@@ -308,6 +312,7 @@ func TestNewRouter_TrustProxyFalse_IgnoresXFF(t *testing.T) {
 		rateLimitConfig,
 		nil, // shutdownCoord - not tested here
 		nil, // idempotencyStore - not tested here
+		0,   // idempotencyTTL
 	)
 
 	// Request with X-Forwarded-For header - should be IGNORED
@@ -358,6 +363,7 @@ func TestNewRouter_TrustProxyTrue_UsesXFF(t *testing.T) {
 		rateLimitConfig,
 		nil, // shutdownCoord - not tested here
 		nil, // idempotencyStore - not tested here
+		0,   // idempotencyTTL
 	)
 
 	// Request with X-Forwarded-For header - should be USED
@@ -427,6 +433,7 @@ func TestNewRouter_IdempotencyIntegration(t *testing.T) {
 		rateLimitConfig,
 		nil,
 		mockIdempotencyStore, // Provide store to enable middleware
+		0,                    // idempotencyTTL
 	)
 
 	// Case 1: POST request with Idempotency-Key

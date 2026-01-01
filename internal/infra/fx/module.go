@@ -33,6 +33,7 @@ import (
 	httpTransport "github.com/iruldev/golang-api-hexagonal/internal/transport/http"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/handler"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/middleware"
 )
 
 // Module provides all application dependencies via Uber Fx.
@@ -232,6 +233,10 @@ var PostgresModule = fx.Options(
 	fx.Provide(providePool),
 	fx.Provide(provideQuerier),
 	fx.Provide(provideTxManager),
+	// Idempotency storage (Story 2.5)
+	fx.Provide(provideIdempotencyRepo),
+	fx.Provide(provideIdempotencyStore),
+	fx.Invoke(startIdempotencyCleaner),
 )
 
 func providePoolConfig(cfg *config.Config) postgres.PoolConfig {
@@ -269,6 +274,36 @@ func provideTxManager(pool postgres.Pooler) domain.TxManager {
 		return nil
 	}
 	return postgres.NewTxManager(pool)
+}
+
+func provideIdempotencyRepo(pool postgres.Pooler) *postgres.IdempotencyRepo {
+	return postgres.NewIdempotencyRepo(pool)
+}
+
+func provideIdempotencyStore(repo *postgres.IdempotencyRepo) middleware.IdempotencyStore {
+	return repo
+}
+
+func startIdempotencyCleaner(
+	lc fx.Lifecycle,
+	pool postgres.Pooler,
+	cfg *config.Config,
+	logger *slog.Logger,
+	registry *prometheus.Registry,
+) {
+	cleaner := postgres.NewIdempotencyCleaner(
+		pool,
+		postgres.IdempotencyCleanerConfig{
+			Interval: cfg.IdempotencyCleanupInterval,
+		},
+		logger,
+		registry,
+	)
+
+	lc.Append(fx.Hook{
+		OnStart: cleaner.Start,
+		OnStop:  cleaner.Stop,
+	})
 }
 
 // DomainModule provides domain-level dependencies.
@@ -359,6 +394,7 @@ func providePublicRouter(
 	jwtConfig httpTransport.JWTConfig,
 	rateLimitConfig httpTransport.RateLimitConfig,
 	shutdownCoord resilience.ShutdownCoordinator,
+	idempotencyStore middleware.IdempotencyStore,
 ) chi.Router {
 	return httpTransport.NewRouter(
 		logger,
@@ -372,7 +408,8 @@ func providePublicRouter(
 		jwtConfig,
 		rateLimitConfig,
 		shutdownCoord,
-		nil, // idempotencyStore - Story 2.5 will provide actual implementation
+		idempotencyStore,
+		cfg.IdempotencyTTL,
 	)
 }
 

@@ -104,6 +104,7 @@ func TestIntegration_IDORPrevention(t *testing.T) {
 		httpTransport.RateLimitConfig{RequestsPerSecond: 100},
 		nil, // shutdownCoord - not tested here
 		nil, // idempotencyStore - not tested here
+		0,   // idempotencyTTL
 	)
 
 	// 3. Define Test Data
