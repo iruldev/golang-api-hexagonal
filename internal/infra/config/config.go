@@ -141,6 +141,10 @@ type Config struct {
 	IdempotencyTTL time.Duration `envconfig:"IDEMPOTENCY_TTL" default:"24h"`
 	// IdempotencyCleanupInterval is the interval between cleanup job runs. Default: 1h.
 	IdempotencyCleanupInterval time.Duration `envconfig:"IDEMPOTENCY_CLEANUP_INTERVAL" default:"1h"`
+
+	// Health Check (Story 3.4)
+	// HealthCheckDBTimeout is the timeout for database health check. Default: 2s.
+	HealthCheckDBTimeout time.Duration `envconfig:"HEALTH_CHECK_DB_TIMEOUT" default:"2s"`
 }
 
 // Redacted returns a safe string representation of the Config for logging.

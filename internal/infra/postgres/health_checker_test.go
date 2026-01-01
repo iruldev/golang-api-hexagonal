@@ -54,3 +54,29 @@ func TestDatabaseHealthChecker_Name(t *testing.T) {
 	checker := NewDatabaseHealthChecker(mockPool)
 	assert.Equal(t, "database", checker.Name())
 }
+
+func TestNewDatabaseCheck(t *testing.T) {
+	t.Run("returns nil when ping succeeds", func(t *testing.T) {
+		mockPool := new(mockPingable)
+		mockPool.On("Ping", mock.Anything).Return(nil)
+
+		check := NewDatabaseCheck(mockPool, 100*time.Millisecond)
+		err := check()
+
+		assert.NoError(t, err)
+		mockPool.AssertExpectations(t)
+	})
+
+	t.Run("returns error when ping fails", func(t *testing.T) {
+		mockPool := new(mockPingable)
+		expectedErr := errors.New("connection failed")
+		mockPool.On("Ping", mock.Anything).Return(expectedErr)
+
+		check := NewDatabaseCheck(mockPool, 100*time.Millisecond)
+		err := check()
+
+		assert.Error(t, err)
+		assert.Equal(t, expectedErr, err)
+		mockPool.AssertExpectations(t)
+	})
+}

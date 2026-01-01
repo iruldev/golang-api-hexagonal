@@ -171,6 +171,7 @@ linters:
             - go.opentelemetry.io/otel/propagation
             - go.opentelemetry.io/otel/trace
             - github.com/moogar0880/problems
+            - github.com/heptiolabs/healthcheck  # Story 3.4: Health check library
           deny:
             - pkg: github.com/jackc/pgx
               desc: "Transport layer must not import database drivers"
@@ -187,6 +188,7 @@ linters:
             - github.com/stretchr/testify
             - github.com/prometheus/client_golang/prometheus
             - github.com/golang-jwt/jwt/v5
+            - github.com/heptiolabs/healthcheck  # Story 3.4: Health check library tests
 
         # =============================================================
         # INFRA LAYER - Database/external adapters, imports domain + shared
@@ -253,6 +255,7 @@ linters:
             - go.opentelemetry.io/otel
             - go.uber.org/fx
             - github.com/stretchr/testify
+            - github.com/heptiolabs/healthcheck  # Story 3.4: Health check library wiring
 
         # =============================================================
         # CMD LAYER - Entry points

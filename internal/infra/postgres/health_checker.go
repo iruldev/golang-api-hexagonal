@@ -41,3 +41,18 @@ func (c *DatabaseHealthChecker) CheckHealth(ctx context.Context) (string, time.D
 	}
 	return "healthy", latency, nil
 }
+
+// =============================================================================
+// Story 3.4: Health Check Library Integration
+// =============================================================================
+
+// NewDatabaseCheck returns a healthcheck.Check function for database connectivity.
+// This is compatible with heptiolabs/healthcheck library.
+// The timeout parameter controls how long to wait for the ping before timing out.
+func NewDatabaseCheck(pool pingable, timeout time.Duration) func() error {
+	return func() error {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		return pool.Ping(ctx)
+	}
+}

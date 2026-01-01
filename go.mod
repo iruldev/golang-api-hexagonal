@@ -9,6 +9,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/golangci/golangci-lint v1.64.8
 	github.com/google/uuid v1.6.0
+	github.com/heptiolabs/healthcheck v0.0.0-20211123025425-613501dd5deb
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/moogar0880/problems v0.1.1
@@ -313,6 +314,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/grpc v1.77.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
+	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

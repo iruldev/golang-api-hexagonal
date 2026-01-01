@@ -18,6 +18,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/heptiolabs/healthcheck"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/fx"
 
@@ -344,14 +345,14 @@ var AppModule = fx.Options(
 
 // TransportModule provides HTTP transport dependencies.
 var TransportModule = fx.Options(
-	fx.Provide(handler.NewLivenessHandler),
 	fx.Provide(handler.NewHealthHandler),
 	fx.Provide(provideReadyHandler),
-	fx.Provide(provideReadinessHandler),
 	fx.Provide(provideStartupHandler),
 	fx.Provide(provideUserHandler),
 	fx.Provide(provideJWTConfig),
 	fx.Provide(provideRateLimitConfig),
+	// Story 3.4: Health Check Library Integration
+	fx.Provide(provideHealthCheckRegistry),
 	fx.Provide(providePublicRouter),
 	fx.Provide(provideInternalRouter),
 	fx.Invoke(registerStartupHook),
@@ -361,11 +362,24 @@ func provideReadyHandler(pool postgres.Pooler, logger *slog.Logger) *handler.Rea
 	return handler.NewReadyHandler(pool, logger)
 }
 
-// provideReadinessHandler creates the ReadinessHandler with database health checker.
-// Story 3.2: K8s readiness probe with dependency status.
-func provideReadinessHandler(pool postgres.Pooler) *handler.ReadinessHandler {
-	dbChecker := postgres.NewDatabaseHealthChecker(pool)
-	return handler.NewReadinessHandler(handler.DefaultCheckTimeout, dbChecker)
+// provideHealthCheckRegistry creates the HealthCheckRegistry with standard checks.
+// Story 3.4: Health Check Library Integration.
+func provideHealthCheckRegistry(
+	cfg *config.Config,
+	registry *prometheus.Registry,
+	pool postgres.Pooler,
+) *handler.HealthCheckRegistry {
+	hc := handler.NewHealthCheckRegistry(registry, "app")
+
+	// Add standard liveness check - goroutine count threshold
+	// Detects goroutine leaks that could indicate unhealthy state
+	hc.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(10000))
+
+	// Add database readiness check with configurable timeout
+	// Uses the library-compatible check function
+	hc.AddReadinessCheck("database", postgres.NewDatabaseCheck(pool, cfg.HealthCheckDBTimeout))
+
+	return hc
 }
 
 func provideUserHandler(
@@ -399,10 +413,9 @@ func providePublicRouter(
 	logger *slog.Logger,
 	registry *prometheus.Registry,
 	httpMetrics metrics.HTTPMetrics,
-	livenessHandler *handler.LivenessHandler,
+	healthRegistry *handler.HealthCheckRegistry, // Story 3.4: Use library registry
 	healthHandler *handler.HealthHandler,
 	readyHandler *handler.ReadyHandler,
-	readinessHandler *handler.ReadinessHandler,
 	startupHandler *handler.StartupHandler,
 	userHandler *handler.UserHandler,
 	jwtConfig httpTransport.JWTConfig,
@@ -416,10 +429,10 @@ func providePublicRouter(
 		registry,
 		httpMetrics,
 		httpTransport.RouterHandlers{
-			LivenessHandler:  livenessHandler,
+			LivenessHandler:  healthRegistry.LiveHandler(), // Story 3.4: Library handler
 			HealthHandler:    healthHandler,
 			ReadyHandler:     readyHandler,
-			ReadinessHandler: readinessHandler,
+			ReadinessHandler: healthRegistry.ReadyHandler(), // Story 3.4: Library handler
 			StartupHandler:   startupHandler,
 			UserHandler:      userHandler,
 		},
