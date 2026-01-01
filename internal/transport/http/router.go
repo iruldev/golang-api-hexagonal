@@ -149,7 +149,6 @@ func NewRouter(
 			// Apply rate limiting after JWT auth so claims are available for per-user limiting
 			r.Use(middleware.RateLimiter(middleware.RateLimitConfig{
 				RequestsPerSecond: rateLimitConfig.RequestsPerSecond,
-				TrustProxy:        rateLimitConfig.TrustProxy,
 			}))
 
 			// Story 2.4: Apply idempotency middleware for POST requests if store is provided.

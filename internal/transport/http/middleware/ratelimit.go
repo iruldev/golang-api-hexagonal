@@ -5,7 +5,6 @@ package middleware
 import (
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -23,13 +22,19 @@ const RateLimitWindow = time.Second
 type RateLimitConfig struct {
 	// RequestsPerSecond is the number of requests allowed per second.
 	RequestsPerSecond int
-	// TrustProxy enables trusting X-Forwarded-For/X-Real-IP headers for client IP.
-	TrustProxy bool
 }
 
 // RateLimiter returns middleware that limits requests per key (user ID or IP).
 // For authenticated requests, limits are per-user (claims.Subject).
 // For unauthenticated requests, limits are per-IP.
+//
+// The middleware sets the following headers on ALL responses:
+//   - X-RateLimit-Limit: Maximum requests allowed per window
+//   - X-RateLimit-Remaining: Remaining requests in current window
+//   - X-RateLimit-Reset: Unix timestamp when limit resets
+//
+// When rate limit is exceeded (429), additional headers are set:
+//   - Retry-After: Seconds until retry is allowed
 //
 // AC #1: Unauthenticated requests use resolved client IP as key.
 // AC #2: Authenticated requests use claims.Subject (userId) as key.
@@ -37,12 +42,19 @@ type RateLimitConfig struct {
 // AC #5: Returns 429 with RFC 7807 and Retry-After header.
 // AC #6: Uses go-chi/httprate.
 // AC #7: Rate limit is configurable via RATE_LIMIT_RPS.
+// AC #8: Rate limit headers on all responses (Story 2.6).
 func RateLimiter(cfg RateLimitConfig) func(http.Handler) http.Handler {
 	return httprate.Limit(
 		cfg.RequestsPerSecond,
 		RateLimitWindow,
 		httprate.WithKeyFuncs(keyFunc()),
 		httprate.WithLimitHandler(rateLimitExceededHandler),
+		httprate.WithResponseHeaders(httprate.ResponseHeaders{
+			Limit:      "X-RateLimit-Limit",
+			Remaining:  "X-RateLimit-Remaining",
+			Reset:      "X-RateLimit-Reset",
+			RetryAfter: "Retry-After",
+		}),
 	)
 }
 
@@ -82,8 +94,8 @@ func resolveClientIP(r *http.Request) string {
 // rateLimitExceededHandler handles 429 responses with RFC 7807 format.
 // It sets the Retry-After header and writes the error response (AC #5).
 func rateLimitExceededHandler(w http.ResponseWriter, r *http.Request) {
-	// Set Retry-After header (based on window)
-	w.Header().Set("Retry-After", strconv.Itoa(int(RateLimitWindow.Seconds())))
+	// AC #5: RFC 7807 error response is written here.
+	// Retry-After header is set by httprate via WithResponseHeaders option.
 
 	// Write RFC 7807 error response
 	contract.WriteProblemJSON(w, r, &app.AppError{

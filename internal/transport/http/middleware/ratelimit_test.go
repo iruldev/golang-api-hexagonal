@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
@@ -120,8 +122,8 @@ func TestRateLimitExceededHandler(t *testing.T) {
 	// Check status code
 	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
 
-	// Check Retry-After header
-	assert.Equal(t, "1", rec.Header().Get("Retry-After"))
+	// Retry-After header is set by httprate middleware, not the handler itself
+	// so we don't assert it here (covered in integration test)
 
 	// Check Content-Type
 	assert.Equal(t, "application/problem+json", rec.Header().Get("Content-Type"))
@@ -143,7 +145,6 @@ func TestRateLimiterMiddleware(t *testing.T) {
 	t.Run("requests under limit pass through", func(t *testing.T) {
 		cfg := RateLimitConfig{
 			RequestsPerSecond: 10,
-			TrustProxy:        false,
 		}
 
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -167,7 +168,6 @@ func TestRateLimiterMiddleware(t *testing.T) {
 	t.Run("requests exceeding limit return 429", func(t *testing.T) {
 		cfg := RateLimitConfig{
 			RequestsPerSecond: 3,
-			TrustProxy:        false,
 		}
 
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -206,7 +206,6 @@ func TestRateLimiterMiddleware(t *testing.T) {
 	t.Run("different users have separate rate limits", func(t *testing.T) {
 		cfg := RateLimitConfig{
 			RequestsPerSecond: 2,
-			TrustProxy:        false,
 		}
 
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -257,16 +256,13 @@ func TestRateLimitConfig(t *testing.T) {
 	t.Run("default config values", func(t *testing.T) {
 		cfg := RateLimitConfig{}
 		assert.Equal(t, 0, cfg.RequestsPerSecond)
-		assert.False(t, cfg.TrustProxy)
 	})
 
 	t.Run("custom config values", func(t *testing.T) {
 		cfg := RateLimitConfig{
 			RequestsPerSecond: 100,
-			TrustProxy:        true,
 		}
 		assert.Equal(t, 100, cfg.RequestsPerSecond)
-		assert.True(t, cfg.TrustProxy)
 	})
 }
 
@@ -313,4 +309,157 @@ func BenchmarkResolveClientIP(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = resolveClientIP(req)
 	}
+}
+
+// TestRateLimitHeaders tests that X-RateLimit-* headers are set on all responses.
+// Story 2.6: Rate Limit Headers Enhancement
+func TestRateLimitHeaders(t *testing.T) {
+	t.Run("headers present on successful requests", func(t *testing.T) {
+		// AC #1: Response includes X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
+		cfg := RateLimitConfig{
+			RequestsPerSecond: 10,
+		}
+
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("OK"))
+		})
+
+		middleware := RateLimiter(cfg)(handler)
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "192.168.100.1:12345"
+		rec := httptest.NewRecorder()
+
+		middleware.ServeHTTP(rec, req)
+
+		// Verify successful response
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		// AC #1: X-RateLimit-Limit header present
+		limitHeader := rec.Header().Get("X-RateLimit-Limit")
+		assert.NotEmpty(t, limitHeader, "X-RateLimit-Limit header should be present")
+		limit, err := strconv.Atoi(limitHeader)
+		require.NoError(t, err, "X-RateLimit-Limit should be a valid integer")
+		assert.Equal(t, cfg.RequestsPerSecond, limit, "X-RateLimit-Limit should match configured RequestsPerSecond")
+
+		// AC #1: X-RateLimit-Remaining header present
+		remainingHeader := rec.Header().Get("X-RateLimit-Remaining")
+		assert.NotEmpty(t, remainingHeader, "X-RateLimit-Remaining header should be present")
+		remaining, err := strconv.Atoi(remainingHeader)
+		require.NoError(t, err, "X-RateLimit-Remaining should be a valid integer")
+		assert.GreaterOrEqual(t, remaining, 0, "X-RateLimit-Remaining should be >= 0")
+		assert.Less(t, remaining, cfg.RequestsPerSecond, "X-RateLimit-Remaining should be less than limit after request")
+
+		// AC #1: X-RateLimit-Reset header present
+		resetHeader := rec.Header().Get("X-RateLimit-Reset")
+		assert.NotEmpty(t, resetHeader, "X-RateLimit-Reset header should be present")
+		resetTimestamp, err := strconv.ParseInt(resetHeader, 10, 64)
+		require.NoError(t, err, "X-RateLimit-Reset should be a valid Unix timestamp")
+		assert.Greater(t, resetTimestamp, time.Now().Unix()-10, "X-RateLimit-Reset should be a recent timestamp")
+	})
+
+	t.Run("remaining decrements with each request", func(t *testing.T) {
+		// AC #1: X-RateLimit-Remaining decrements correctly
+		cfg := RateLimitConfig{
+			RequestsPerSecond: 5,
+		}
+
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		middleware := RateLimiter(cfg)(handler)
+
+		var previousRemaining int = -1
+
+		// Make 3 requests and verify remaining decrements
+		for i := 0; i < 3; i++ {
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			req.RemoteAddr = "192.168.200.1:12345" // Unique IP
+			rec := httptest.NewRecorder()
+
+			middleware.ServeHTTP(rec, req)
+
+			remainingHeader := rec.Header().Get("X-RateLimit-Remaining")
+			require.NotEmpty(t, remainingHeader)
+			remaining, err := strconv.Atoi(remainingHeader)
+			require.NoError(t, err)
+
+			if previousRemaining != -1 {
+				assert.Equal(t, previousRemaining-1, remaining, "Remaining should decrement by 1")
+			}
+			previousRemaining = remaining
+		}
+	})
+
+	t.Run("headers present on 429 responses", func(t *testing.T) {
+		// AC #2: Rate limit headers still show current limit state on 429
+		cfg := RateLimitConfig{
+			RequestsPerSecond: 2,
+		}
+
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		middleware := RateLimiter(cfg)(handler)
+
+		// Exhaust the rate limit
+		for i := 0; i < 5; i++ {
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			req.RemoteAddr = "192.168.201.1:12345" // Unique IP
+			rec := httptest.NewRecorder()
+
+			middleware.ServeHTTP(rec, req)
+
+			if rec.Code == http.StatusTooManyRequests {
+				// Verify rate limit headers on 429
+				assert.NotEmpty(t, rec.Header().Get("X-RateLimit-Limit"), "X-RateLimit-Limit should be present on 429")
+				assert.NotEmpty(t, rec.Header().Get("X-RateLimit-Remaining"), "X-RateLimit-Remaining should be present on 429")
+				assert.NotEmpty(t, rec.Header().Get("X-RateLimit-Reset"), "X-RateLimit-Reset should be present on 429")
+				assert.NotEmpty(t, rec.Header().Get("Retry-After"), "Retry-After should be present on 429")
+
+				// Remaining should be 0 when rate limited
+				remainingHeader := rec.Header().Get("X-RateLimit-Remaining")
+				remaining, _ := strconv.Atoi(remainingHeader)
+				assert.Equal(t, 0, remaining, "Remaining should be 0 when rate limited")
+				return
+			}
+		}
+		t.Fatal("Expected to hit rate limit")
+	})
+
+	t.Run("headers present for authenticated requests", func(t *testing.T) {
+		// AC #1: Headers present for authenticated requests
+		cfg := RateLimitConfig{
+			RequestsPerSecond: 10,
+		}
+
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		middleware := RateLimiter(cfg)(handler)
+
+		// Set up authenticated request
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "192.168.202.1:12345"
+		claims := &ctxutil.Claims{
+			RegisteredClaims: jwt.RegisteredClaims{
+				Subject: "user-test-headers",
+			},
+		}
+		ctx := ctxutil.SetClaims(req.Context(), claims)
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		middleware.ServeHTTP(rec, req)
+
+		// Verify headers are present
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.NotEmpty(t, rec.Header().Get("X-RateLimit-Limit"), "X-RateLimit-Limit should be present for authenticated requests")
+		assert.NotEmpty(t, rec.Header().Get("X-RateLimit-Remaining"), "X-RateLimit-Remaining should be present for authenticated requests")
+		assert.NotEmpty(t, rec.Header().Get("X-RateLimit-Reset"), "X-RateLimit-Reset should be present for authenticated requests")
+	})
 }
