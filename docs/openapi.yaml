@@ -14,7 +14,7 @@ info:
     ## API Versioning
     This API uses URL-based versioning with the version embedded in the path (e.g., `/api/v1/`).
     For details on version lifecycle, migration guides, and deprecation policy, see the
-    [API Versioning Strategy](./api-versioning.md) documentation.
+    [API Versioning Strategy](./api-versioning.md) and [API Deprecation Policy](./api-deprecation-policy.md) documentation.
   version: 1.0.0
   contact:
     name: API Support
@@ -912,6 +912,29 @@ paths:
                     trace_id: "d01234567890d123456789012345672"
 
 components:
+  headers:
+    Deprecation:
+      description: |
+        The Deprecation HTTP header field is a timestamp indicating when the
+        resource was deprecated. defined in [draft-ietf-httpapi-deprecation-header](https://datatracker.ietf.org/doc/draft-ietf-httpapi-deprecation-header/)
+      schema:
+        type: string
+      example: "Sat, 01 Jul 2026 00:00:00 GMT"
+    Sunset:
+      description: |
+        The Sunset HTTP header field is a timestamp indicating when the
+        resource is likely to become unresponsive. Defined in RFC 8594.
+      schema:
+        type: string
+      example: "Sun, 01 Jan 2027 00:00:00 GMT"
+    Link:
+      description: |
+        The Link HTTP header field provides value(s) for the context IRI that
+        are related to the target IRI. Used for migration guides with rel="deprecation".
+      schema:
+        type: string
+      example: '<https://api.example.com/docs/migrations/v1-to-v2>; rel="deprecation"'
+
   securitySchemes:
     bearerAuth:
       type: http
