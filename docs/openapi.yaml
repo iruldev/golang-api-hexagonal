@@ -10,6 +10,11 @@ info:
     
     ## Error Responses
     All errors follow [RFC 7807](https://tools.ietf.org/html/rfc7807) format.
+    
+    ## API Versioning
+    This API uses URL-based versioning with the version embedded in the path (e.g., `/api/v1/`).
+    For details on version lifecycle, migration guides, and deprecation policy, see the
+    [API Versioning Strategy](./api-versioning.md) documentation.
   version: 1.0.0
   contact:
     name: API Support
