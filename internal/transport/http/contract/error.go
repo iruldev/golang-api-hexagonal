@@ -141,6 +141,7 @@ func NewValidationProblem(r *http.Request, validationErrors []ValidationError) *
 			fieldErrors[i] = FieldError{
 				Field:   ve.Field,
 				Message: ve.Message,
+				Code:    ve.Code,
 			}
 		}
 	}

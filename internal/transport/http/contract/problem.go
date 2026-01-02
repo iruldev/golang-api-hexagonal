@@ -42,6 +42,7 @@ type FieldError struct {
 type ValidationError struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
+	Code    string `json:"code,omitempty"`
 }
 
 // Problem represents an RFC 7807 Problem Details response with project-specific extensions.
@@ -303,6 +304,7 @@ func fieldErrorsToValidationErrors(fieldErrors []FieldError) []ValidationError {
 		legacyErrors[i] = ValidationError{
 			Field:   fe.Field,
 			Message: fe.Message,
+			Code:    fe.Code,
 		}
 	}
 	return legacyErrors

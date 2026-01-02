@@ -140,18 +140,40 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 // ListUsers handles GET /api/v1/users.
 func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	// Parse pagination params with defaults
-	page := parseIntOrDefault(r.URL.Query().Get("page"), 1)
-	pageSize := parseIntOrDefault(r.URL.Query().Get("pageSize"), 20)
+	// Parse pagination params
+	pageStr := r.URL.Query().Get("page")
+	pageSizeStr := r.URL.Query().Get("pageSize")
 
-	if page < 1 {
-		page = 1
+	// Defaults
+	page := 1
+	pageSize := 20
+
+	if pageStr != "" {
+		p, err := strconv.Atoi(pageStr)
+		if err != nil || p < 1 {
+			contract.WriteValidationError(w, r, []contract.ValidationError{
+				{Field: "page", Message: "must be a positive integer", Code: contract.CodeValOutOfRange},
+			})
+			return
+		}
+		page = p
 	}
-	if pageSize < 1 {
-		pageSize = 20
-	}
-	if pageSize > 100 {
-		pageSize = 100 // max limit
+
+	if pageSizeStr != "" {
+		ps, err := strconv.Atoi(pageSizeStr)
+		if err != nil || ps < 1 {
+			contract.WriteValidationError(w, r, []contract.ValidationError{
+				{Field: "pageSize", Message: "must be a positive integer", Code: contract.CodeValOutOfRange},
+			})
+			return
+		}
+		if ps > 100 {
+			// Cap at 100 but don't error, as per common practice?
+			// Spec says: "Maximum: 100 (values above 100 are capped)"
+			// So we just cap it.
+			ps = 100
+		}
+		pageSize = ps
 	}
 
 	req := user.ListUsersRequest{
@@ -169,15 +191,4 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	// Build response
 	listResp := contract.NewListUsersResponse(resp.Users, page, pageSize, resp.TotalCount)
 	_ = contract.WriteJSON(w, http.StatusOK, listResp)
-}
-
-func parseIntOrDefault(s string, defaultVal int) int {
-	if s == "" {
-		return defaultVal
-	}
-	v, err := strconv.Atoi(s)
-	if err != nil {
-		return defaultVal
-	}
-	return v
 }

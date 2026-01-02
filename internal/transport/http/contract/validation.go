@@ -34,16 +34,19 @@ func DecodeAndValidateJSON[T any](r io.Reader, dst *T) ([]ValidationError, error
 				return []ValidationError{{
 					Field:   jsonErr.Field,
 					Message: "unknown field",
+					Code:    CodeValInvalidFormat,
 				}}, err
 			case JSONDecodeErrorKindTypeMismatch:
 				return []ValidationError{{
 					Field:   jsonErr.Field,
 					Message: "invalid type",
+					Code:    CodeValInvalidType,
 				}}, err
 			case JSONDecodeErrorKindTrailingData:
 				return []ValidationError{{
 					Field:   "body",
 					Message: "request body contains trailing data",
+					Code:    CodeValInvalidFormat,
 				}}, err
 			}
 		}

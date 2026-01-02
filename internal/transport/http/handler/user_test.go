@@ -588,6 +588,74 @@ func TestUserHandler_ListUsers_MaxPageSize(t *testing.T) {
 	mockListUC.AssertExpectations(t)
 }
 
+func TestUserHandler_ListUsers_InvalidPage(t *testing.T) {
+	mockCreateUC := new(MockCreateUserUseCase)
+	mockGetUC := new(MockGetUserUseCase)
+	mockListUC := new(MockListUsersUseCase)
+
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
+
+	// Invalid page (0)
+	req := httptest.NewRequest(http.MethodGet, testUserResourcePath+"?page=0", nil)
+	rr := httptest.NewRecorder()
+
+	h.ListUsers(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Equal(t, "application/problem+json", rr.Header().Get("Content-Type"))
+
+	var problemResp testProblemDetail
+	err := json.Unmarshal(rr.Body.Bytes(), &problemResp)
+	require.NoError(t, err)
+	assert.Equal(t, contract.CodeValOutOfRange, problemResp.ValidationErrors[0].Code)
+}
+
+func TestUserHandler_ListUsers_InvalidPageSize(t *testing.T) {
+	mockCreateUC := new(MockCreateUserUseCase)
+	mockGetUC := new(MockGetUserUseCase)
+	mockListUC := new(MockListUsersUseCase)
+
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
+
+	// Invalid pageSize (negative)
+	req := httptest.NewRequest(http.MethodGet, testUserResourcePath+"?pageSize=-1", nil)
+	rr := httptest.NewRecorder()
+
+	h.ListUsers(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+
+	var problemResp testProblemDetail
+	err := json.Unmarshal(rr.Body.Bytes(), &problemResp)
+	require.NoError(t, err)
+	assert.Equal(t, contract.CodeValOutOfRange, problemResp.ValidationErrors[0].Code)
+}
+
+// Added for strict verification of defaults
+func TestUserHandler_ListUsers_ExplicitDefaultPagination(t *testing.T) {
+	mockCreateUC := new(MockCreateUserUseCase)
+	mockGetUC := new(MockGetUserUseCase)
+	mockListUC := new(MockListUsersUseCase)
+
+	mockListUC.On("Execute", mock.Anything, user.ListUsersRequest{Page: 1, PageSize: 20}).
+		Return(user.ListUsersResponse{
+			Users:      []domain.User{},
+			TotalCount: 0,
+			Page:       1,
+			PageSize:   20,
+		}, nil)
+
+	h := NewUserHandler(mockCreateUC, mockGetUC, mockListUC, testUserResourcePath)
+
+	req := httptest.NewRequest(http.MethodGet, testUserResourcePath+"?page=1&pageSize=20", nil)
+	rr := httptest.NewRecorder()
+
+	h.ListUsers(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	mockListUC.AssertExpectations(t)
+}
+
 // =============================================================================
 // Helper Functions
 // =============================================================================

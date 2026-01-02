@@ -337,6 +337,23 @@ paths:
                     code: "AUTH-001"
                     request_id: "req_9e8d7c6b5a4f3e2d"
                     trace_id: "b2c3d4e5f6a78901bcdef2345678901a"
+        '403':
+          description: Forbidden - Insufficient permissions
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                insufficientPermissions:
+                  summary: JWT token lacks required permissions
+                  value:
+                    type: "https://api.example.com/problems/forbidden"
+                    title: "Forbidden"
+                    status: 403
+                    detail: "You do not have permission to create users. Required scope: users:write"
+                    code: "AUTHZ-001"
+                    request_id: "req_af1b2c3d4e5f6789"
+                    trace_id: "a1b2c3d4e5f67890bcdef1234567899a"
         '409':
           description: Email already exists
           content:
@@ -354,6 +371,16 @@ paths:
                     code: "USR-002"
                     request_id: "req_0f1e2d3c4b5a6978"
                     trace_id: "c3d4e5f6a7890123cdef34567890123b"
+                idempotencyConflict:
+                  summary: Idempotency key mismatch
+                  value:
+                    type: "https://api.example.com/problems/conflict"
+                    title: "Conflict"
+                    status: 409
+                    detail: "Idempotency key 'key_123' was previously used for a different request"
+                    code: "VAL-100"
+                    request_id: "req_1a2b3c4d5e6f7890"
+                    trace_id: "e5f6a789012345678901234567890123"
         '429':
           description: Rate limit exceeded
           headers:
@@ -560,9 +587,41 @@ paths:
                     code: "AUTH-001"
                     request_id: "req_2b3c4d5e6f7a8901"
                     trace_id: "e5f6a789012345ef567890123456789d"
+        '403':
+          description: Forbidden - Insufficient permissions
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                insufficientPermissions:
+                  summary: JWT token lacks required permissions
+                  value:
+                    type: "https://api.example.com/problems/forbidden"
+                    title: "Forbidden"
+                    status: 403
+                    detail: "You do not have permission to list users. Required scope: users:read"
+                    code: "AUTHZ-001"
+                    request_id: "req_bf2c3d4e5f678901"
+                    trace_id: "b2c3d4e5f67890a0cdef23456789012b"
         '429':
           description: Rate limit exceeded
           headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per window
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+              example: 0
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+              example: 1735815600
             Retry-After:
               description: Seconds until rate limit resets
               schema:
@@ -651,6 +710,12 @@ paths:
       responses:
         '200':
           description: User found
+          headers:
+            Cache-Control:
+              description: Standard HTTP cache control header
+              schema:
+                type: string
+              example: "max-age=60, private"
           content:
             application/json:
               schema:
@@ -700,6 +765,23 @@ paths:
                     code: "AUTH-001"
                     request_id: "req_4d5e6f7a8b9c0123"
                     trace_id: "a78901234567a78901234567890123f"
+        '403':
+          description: Forbidden - Insufficient permissions
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                insufficientPermissions:
+                  summary: JWT token lacks required permissions
+                  value:
+                    type: "https://api.example.com/problems/forbidden"
+                    title: "Forbidden"
+                    status: 403
+                    detail: "You do not have permission to view this user. Required scope: users:read"
+                    code: "AUTHZ-001"
+                    request_id: "req_cf3d4e5f6a789012"
+                    trace_id: "c3d4e5f6789012b1cdef345678901234"
         '404':
           description: User not found
           content:
@@ -720,6 +802,21 @@ paths:
         '429':
           description: Rate limit exceeded
           headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per window
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+              example: 0
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+              example: 1735815600
             Retry-After:
               description: Seconds until rate limit resets
               schema:
@@ -892,12 +989,38 @@ components:
       description: |
         RFC 7807 Problem Details response format. All API errors follow this structure.
         
+        ## Error Code Taxonomy
+        
         Error codes follow the pattern `{CATEGORY}-{NUMBER}`:
-        - `AUTH-xxx`: Authentication errors
-        - `VAL-xxx`: Validation errors
-        - `USR-xxx`: User domain errors
-        - `RATE-xxx`: Rate limiting errors
-        - `SYS-xxx`: System errors
+        
+        | Category | Pattern | Description | HTTP Status |
+        |----------|---------|-------------|-------------|
+        | AUTH | `AUTH-xxx` | Authentication errors (invalid/expired tokens) | 401 |
+        | AUTHZ | `AUTHZ-xxx` | Authorization errors (insufficient permissions) | 403 |
+        | VAL | `VAL-xxx` | Validation errors (invalid input) | 400 |
+        | USR | `USR-xxx` | User domain errors | 404, 409 |
+        | DB | `DB-xxx` | Database errors | 500, 503 |
+        | SYS | `SYS-xxx` | System/internal errors | 500 |
+        | RATE | `RATE-xxx` | Rate limiting errors | 429 |
+        | RES | `RES-xxx` | Resilience errors (circuit breaker, timeout) | 503, 504 |
+        
+        ## Common Error Codes
+        
+        - `AUTH-001`: Invalid or expired authentication token
+        - `AUTH-002`: Missing authentication token
+        - `AUTHZ-001`: Insufficient permissions for this operation
+        - `VAL-001`: Required field missing
+        - `VAL-002`: Invalid field format
+        - `VAL-003`: Invalid UUID format
+        - `VAL-004`: Invalid pagination parameters
+        - `VAL-100`: Idempotency key conflict
+        - `USR-001`: User not found
+        - `USR-002`: Email already exists
+        - `DB-001`: Database connection failed
+        - `SYS-001`: Unexpected internal error
+        - `RATE-001`: Rate limit exceeded
+        - `RES-001`: Circuit breaker open
+        - `RES-002`: Bulkhead capacity exceeded
       properties:
         type:
           type: string
