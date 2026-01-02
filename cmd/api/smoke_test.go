@@ -114,12 +114,12 @@ func TestMain_Smoke(t *testing.T) {
 	// 4. Verify Endpoints
 
 	// Public /health
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/health", port))
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/healthz", port))
 	if assert.NoError(t, err) {
 		defer func() { _ = resp.Body.Close() }()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		body, _ := io.ReadAll(resp.Body)
-		assert.Contains(t, string(body), "ok")
+		assert.Contains(t, string(body), "{}")
 	}
 
 	// Internal /metrics

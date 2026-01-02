@@ -69,9 +69,8 @@ func TestNewRouter_JWTEnabled(t *testing.T) {
 	// Expect handlers NOT to be called if auth fails
 	// But if auth succeeds (or is disabled), they will be called.
 
-	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
-	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 	livenessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
+	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 
 	jwtSecret := []byte("this-is-a-32-byte-secret-key!!@@")
 	jwtConfig := JWTConfig{
@@ -93,10 +92,9 @@ func TestNewRouter_JWTEnabled(t *testing.T) {
 		metricsReg,
 		mockMetrics,
 		RouterHandlers{
-			LivenessHandler: livenessHandler,
-			HealthHandler:   healthHandler,
-			ReadyHandler:    readyHandler,
-			UserHandler:     mockUserHandler,
+			LivenessHandler:  livenessHandler,
+			ReadinessHandler: readyHandler, // Using readyHandler var for ReadinessHandler field for test purposes
+			UserHandler:      mockUserHandler,
 		},
 		1024,
 		jwtConfig,
@@ -127,7 +125,6 @@ func TestNewRouter_JWTDisabled(t *testing.T) {
 	mockUserHandler := new(MockUserRoutes)
 	mockUserHandler.On("ListUsers", mock.Anything, mock.Anything).Return()
 
-	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 	livenessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 
@@ -146,10 +143,9 @@ func TestNewRouter_JWTDisabled(t *testing.T) {
 		metricsReg,
 		mockMetrics,
 		RouterHandlers{
-			LivenessHandler: livenessHandler,
-			HealthHandler:   healthHandler,
-			ReadyHandler:    readyHandler,
-			UserHandler:     mockUserHandler,
+			LivenessHandler:  livenessHandler,
+			ReadinessHandler: readyHandler,
+			UserHandler:      mockUserHandler,
 		},
 		1024,
 		jwtConfig,
@@ -168,7 +164,7 @@ func TestNewRouter_JWTDisabled(t *testing.T) {
 	mockUserHandler.AssertCalled(t, "ListUsers", mock.Anything, mock.Anything)
 }
 
-func TestNewRouter_HealthCheck_NoAuth(t *testing.T) {
+func TestNewRouter_LivenessCheck_NoAuth(t *testing.T) {
 	// Setup dependencies
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	metricsReg := prometheus.NewRegistry()
@@ -179,15 +175,14 @@ func TestNewRouter_HealthCheck_NoAuth(t *testing.T) {
 
 	mockUserHandler := new(MockUserRoutes)
 
-	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	livenessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		w.WriteHeader(stdhttp.StatusOK)
 		w.Write([]byte("OK"))
 	})
-	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
-	livenessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
+	readinessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 
 	jwtConfig := JWTConfig{
-		Enabled: true, // Enabled for API, but shouldn't affect /health
+		Enabled: true, // Enabled for API, but shouldn't affect /healthz
 		Secret:  []byte("secret"),
 	}
 
@@ -201,10 +196,9 @@ func TestNewRouter_HealthCheck_NoAuth(t *testing.T) {
 		metricsReg,
 		mockMetrics,
 		RouterHandlers{
-			LivenessHandler: livenessHandler,
-			HealthHandler:   healthHandler,
-			ReadyHandler:    readyHandler,
-			UserHandler:     mockUserHandler,
+			LivenessHandler:  livenessHandler,
+			ReadinessHandler: readinessHandler,
+			UserHandler:      mockUserHandler,
 		},
 		1024,
 		jwtConfig,
@@ -214,7 +208,7 @@ func TestNewRouter_HealthCheck_NoAuth(t *testing.T) {
 		0,   // idempotencyTTL
 	)
 
-	req := httptest.NewRequest("GET", "/health", nil)
+	req := httptest.NewRequest("GET", "/healthz", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -235,7 +229,6 @@ func TestNewRouter_MetricsNotExposed(t *testing.T) {
 	mockMetrics.On("ObserveRequestDuration", mock.Anything, mock.Anything, mock.Anything).Return()
 	mockMetrics.On("ObserveResponseSize", mock.Anything, mock.Anything, mock.Anything).Return()
 
-	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 	livenessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 
@@ -248,9 +241,8 @@ func TestNewRouter_MetricsNotExposed(t *testing.T) {
 		metricsReg,
 		mockMetrics,
 		RouterHandlers{
-			LivenessHandler: livenessHandler,
-			HealthHandler:   healthHandler,
-			ReadyHandler:    readyHandler,
+			LivenessHandler:  livenessHandler,
+			ReadinessHandler: readyHandler,
 		},
 		1024,
 		jwtConfig,
@@ -301,13 +293,12 @@ func TestNewRouter_TrustProxyFalse_IgnoresXFF(t *testing.T) {
 	mockMetrics.On("ObserveRequestDuration", mock.Anything, mock.Anything, mock.Anything).Return()
 	mockMetrics.On("ObserveResponseSize", mock.Anything, mock.Anything, mock.Anything).Return()
 
-	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-		// Write the RemoteAddr to response body to verify it wasn't modified by RealIP
+	livenessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
+	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		// Write the RemoteAddr to the response so we can verify the effect of RealIP middleware
 		w.WriteHeader(stdhttp.StatusOK)
 		w.Write([]byte(r.RemoteAddr))
 	})
-	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
-	livenessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 
 	jwtConfig := JWTConfig{Enabled: false}
 	rateLimitConfig := RateLimitConfig{
@@ -321,9 +312,8 @@ func TestNewRouter_TrustProxyFalse_IgnoresXFF(t *testing.T) {
 		metricsReg,
 		mockMetrics,
 		RouterHandlers{
-			LivenessHandler: livenessHandler,
-			HealthHandler:   healthHandler,
-			ReadyHandler:    readyHandler,
+			LivenessHandler:  livenessHandler,
+			ReadinessHandler: readyHandler,
 		},
 		1024,
 		jwtConfig,
@@ -334,7 +324,7 @@ func TestNewRouter_TrustProxyFalse_IgnoresXFF(t *testing.T) {
 	)
 
 	// Request with X-Forwarded-For header - should be IGNORED
-	req := httptest.NewRequest("GET", "/health", nil)
+	req := httptest.NewRequest("GET", "/readyz", nil)
 	req.RemoteAddr = "192.168.1.100:12345"
 	req.Header.Set("X-Forwarded-For", "203.0.113.50")
 	w := httptest.NewRecorder()
@@ -355,12 +345,11 @@ func TestNewRouter_TrustProxyTrue_UsesXFF(t *testing.T) {
 	mockMetrics.On("ObserveRequestDuration", mock.Anything, mock.Anything, mock.Anything).Return()
 	mockMetrics.On("ObserveResponseSize", mock.Anything, mock.Anything, mock.Anything).Return()
 
-	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-		// Write the RemoteAddr to response body to verify it WAS modified by RealIP
+	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		// Write the RemoteAddr to the response so we can verify the effect of RealIP middleware
 		w.WriteHeader(stdhttp.StatusOK)
 		w.Write([]byte(r.RemoteAddr))
 	})
-	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 	livenessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 
 	jwtConfig := JWTConfig{Enabled: false}
@@ -375,9 +364,8 @@ func TestNewRouter_TrustProxyTrue_UsesXFF(t *testing.T) {
 		metricsReg,
 		mockMetrics,
 		RouterHandlers{
-			LivenessHandler: livenessHandler,
-			HealthHandler:   healthHandler,
-			ReadyHandler:    readyHandler,
+			LivenessHandler:  livenessHandler,
+			ReadinessHandler: readyHandler,
 		},
 		1024,
 		jwtConfig,
@@ -388,7 +376,7 @@ func TestNewRouter_TrustProxyTrue_UsesXFF(t *testing.T) {
 	)
 
 	// Request with X-Forwarded-For header - should be USED
-	req := httptest.NewRequest("GET", "/health", nil)
+	req := httptest.NewRequest("GET", "/readyz", nil)
 	req.RemoteAddr = "192.168.1.100:12345"
 	req.Header.Set("X-Forwarded-For", "203.0.113.50")
 	w := httptest.NewRecorder()
@@ -435,7 +423,6 @@ func TestNewRouter_IdempotencyIntegration(t *testing.T) {
 
 	mockIdempotencyStore := new(MockIdempotencyStore)
 
-	healthHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 	readyHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 	livenessHandler := stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {})
 
@@ -448,10 +435,9 @@ func TestNewRouter_IdempotencyIntegration(t *testing.T) {
 		metricsReg,
 		mockMetrics,
 		RouterHandlers{
-			LivenessHandler: livenessHandler,
-			HealthHandler:   healthHandler,
-			ReadyHandler:    readyHandler,
-			UserHandler:     mockUserHandler,
+			LivenessHandler:  livenessHandler,
+			ReadinessHandler: readyHandler,
+			UserHandler:      mockUserHandler,
 		},
 		1024,
 		jwtConfig,

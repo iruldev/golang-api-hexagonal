@@ -60,8 +60,6 @@ const BasePath = "/api/v1"
 type RouterHandlers struct {
 	// Standard health check handlers
 	LivenessHandler  stdhttp.Handler // /healthz
-	HealthHandler    stdhttp.Handler // /health
-	ReadyHandler     stdhttp.Handler // /ready
 	ReadinessHandler stdhttp.Handler // /readyz
 	StartupHandler   stdhttp.Handler // /startupz
 
@@ -147,12 +145,6 @@ func NewRouter(
 		}
 
 		// Health check endpoints (standard)
-		if handlers.HealthHandler != nil {
-			r.Get("/health", handlers.HealthHandler.ServeHTTP)
-		}
-		if handlers.ReadyHandler != nil {
-			r.Get("/ready", handlers.ReadyHandler.ServeHTTP)
-		}
 
 		// Story 3.2: K8s readiness probe - checks all dependencies
 		// Returns 200 if all dependencies healthy, 503 if any unhealthy

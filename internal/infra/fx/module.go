@@ -345,8 +345,7 @@ var AppModule = fx.Options(
 
 // TransportModule provides HTTP transport dependencies.
 var TransportModule = fx.Options(
-	fx.Provide(handler.NewHealthHandler),
-	fx.Provide(provideReadyHandler),
+
 	fx.Provide(provideStartupHandler),
 	fx.Provide(provideUserHandler),
 	fx.Provide(provideJWTConfig),
@@ -357,10 +356,6 @@ var TransportModule = fx.Options(
 	fx.Provide(provideInternalRouter),
 	fx.Invoke(registerStartupHook),
 )
-
-func provideReadyHandler(pool postgres.Pooler, logger *slog.Logger) *handler.ReadyHandler {
-	return handler.NewReadyHandler(pool, logger)
-}
 
 // provideHealthCheckRegistry creates the HealthCheckRegistry with standard checks.
 // Story 3.4: Health Check Library Integration.
@@ -414,8 +409,6 @@ func providePublicRouter(
 	registry *prometheus.Registry,
 	httpMetrics metrics.HTTPMetrics,
 	healthRegistry *handler.HealthCheckRegistry, // Story 3.4: Use library registry
-	healthHandler *handler.HealthHandler,
-	readyHandler *handler.ReadyHandler,
 	startupHandler *handler.StartupHandler,
 	userHandler *handler.UserHandler,
 	jwtConfig httpTransport.JWTConfig,
@@ -429,9 +422,7 @@ func providePublicRouter(
 		registry,
 		httpMetrics,
 		httpTransport.RouterHandlers{
-			LivenessHandler:  healthRegistry.LiveHandler(), // Story 3.4: Library handler
-			HealthHandler:    healthHandler,
-			ReadyHandler:     readyHandler,
+			LivenessHandler:  healthRegistry.LiveHandler(),  // Story 3.4: Library handler
 			ReadinessHandler: healthRegistry.ReadyHandler(), // Story 3.4: Library handler
 			StartupHandler:   startupHandler,
 			UserHandler:      userHandler,

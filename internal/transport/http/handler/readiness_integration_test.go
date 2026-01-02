@@ -4,7 +4,6 @@ package handler_test
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -45,28 +44,21 @@ func TestReadinessHandler_Integration_RealDB(t *testing.T) {
 	err = pool.Ping(ctx)
 	require.NoError(t, err, "Database connection is not healthy")
 
-	// 2. Setup the ReadinessHandler with the real DatabaseHealthChecker
-	dbChecker := postgres.NewDatabaseHealthChecker(pool)
-	readinessHandler := handler.NewReadinessHandler(2*time.Second, dbChecker)
+	// 2. Setup HealthCheckRegistry
+	registry := handler.NewHealthCheckRegistrySimple()
+	registry.AddReadinessCheck("database", postgres.NewDatabaseCheck(pool, 2*time.Second))
 
 	t.Run("Healthy Database", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 		rec := httptest.NewRecorder()
 
-		readinessHandler.ServeHTTP(rec, req)
+		registry.ReadyHandler()(rec, req)
 
 		// Assert 200 OK
 		assert.Equal(t, http.StatusOK, rec.Code)
 
-		// Assert Response Body
-		var resp handler.ReadinessResponse
-		err := json.NewDecoder(rec.Body).Decode(&resp)
-		require.NoError(t, err)
-
-		assert.Equal(t, "healthy", resp.Status)
-		assert.Equal(t, "healthy", resp.Checks["database"].Status)
-		assert.GreaterOrEqual(t, resp.Checks["database"].LatencyMs, int64(0))
-		assert.Empty(t, resp.Checks["database"].Error)
+		// Library returns {} for success
+		assert.JSONEq(t, "{}", rec.Body.String())
 	})
 
 	t.Run("Unhealthy Database (Closed Pool)", func(t *testing.T) {
@@ -75,25 +67,18 @@ func TestReadinessHandler_Integration_RealDB(t *testing.T) {
 		require.NoError(t, err)
 		deadPool.Close() // Immediately close it to simulate failure
 
-		deadChecker := postgres.NewDatabaseHealthChecker(deadPool)
-		deadHandler := handler.NewReadinessHandler(2*time.Second, deadChecker)
+		registry := handler.NewHealthCheckRegistrySimple()
+		registry.AddReadinessCheck("database", postgres.NewDatabaseCheck(deadPool, 2*time.Second))
 
 		req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 		rec := httptest.NewRecorder()
 
-		deadHandler.ServeHTTP(rec, req)
+		registry.ReadyHandler()(rec, req)
 
 		// Assert 503 Service Unavailable
 		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 
-		// Assert Response Body
-		var resp handler.ReadinessResponse
-		err = json.NewDecoder(rec.Body).Decode(&resp)
-		require.NoError(t, err)
-
-		assert.Equal(t, "unhealthy", resp.Status)
-		assert.Equal(t, "unhealthy", resp.Checks["database"].Status)
-		assert.NotEmpty(t, resp.Checks["database"].Error)
-		assert.Contains(t, resp.Checks["database"].Error, "closed") // pgx returns "closed pool" or similar
+		// Assert Response Body is empty (library behavior)
+		assert.JSONEq(t, "{}", rec.Body.String())
 	})
 }

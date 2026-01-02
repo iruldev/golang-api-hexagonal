@@ -24,53 +24,218 @@ servers:
 
 tags:
   - name: Health
-    description: Health check endpoints
+    description: Health check endpoints for Kubernetes probes
   - name: Users
     description: User management endpoints
 
 paths:
-  /health:
+  /healthz:
     get:
       tags:
         - Health
       summary: Liveness probe
-      description: Returns 200 if the service is alive
-      operationId: getHealth
+      description: |
+        Lightweight liveness probe for Kubernetes container orchestration.
+        
+        ## Purpose
+        Indicates whether the service process is running and responsive. Kubernetes uses this
+        probe to determine if a container needs to be restarted due to a deadlock or unresponsive state.
+        
+        ## Behavior
+        - Returns `200 OK` if the service process is alive
+        - Bypasses all middleware for minimal overhead (<10ms response time)
+        - No dependency checks performed (database, external services)
+        
+        ## Recommended Kubernetes Configuration
+        ```yaml
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          periodSeconds: 10
+          failureThreshold: 3
+        ```
+        
+        ## Related Endpoints
+        - `GET /readyz` - Check if service can accept traffic (includes dependency checks)
+        - `GET /startupz` - Check if service has completed initialization
+      operationId: getLiveness
       responses:
         '200':
           description: Service is alive
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HealthResponse'
+                type: object
+              example: {}
 
-  /ready:
+  /readyz:
     get:
       tags:
         - Health
       summary: Readiness probe
-      description: Returns 200 if the service is ready to accept traffic
-      operationId: getReady
+      description: |
+        Readiness probe that verifies the service can accept and process traffic.
+        
+        ## Purpose
+        Kubernetes uses this probe to determine if the pod should receive traffic from Services.
+        Unlike the liveness probe, this actively checks all critical dependencies.
+        
+        ## Checks Performed
+        - **Database**: PostgreSQL connection pool health
+        - Additional dependencies can be registered dynamically
+        
+        ## Response Details
+        - `200 OK`: All dependencies healthy. Body is empty by default (or contains checks if configured).
+        - `503 Service Unavailable`: One or more dependencies unhealthy. Body is empty by default.
+        
+        ## Recommended Kubernetes Configuration
+        ```yaml
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          periodSeconds: 5
+          failureThreshold: 3
+        ```
+        
+        ## Timeouts
+        - Default check timeout: 2 seconds per dependency
+        - Overall timeout: 5 seconds
+        
+        ## Related Endpoints
+        - `GET /healthz` - Simple liveness check (no dependencies)
+        - `GET /startupz` - Startup completion status
+      operationId: getReadiness
       responses:
         '200':
-          description: Service is ready
+          description: Service is ready to accept traffic
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReadyResponse'
+                type: object
+                additionalProperties:
+                  type: string
+                description: Map of check names to status (OK) or specific success messages
+              examples:
+                allHealthy:
+                  summary: All dependencies are healthy
+                  value: {}
         '503':
           description: Service is not ready
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReadyResponse'
+                 type: object
+              examples:
+                serviceUnhealthy:
+                  summary: One or more checks failed
+                  value: {}
+
+  /startupz:
+    get:
+      tags:
+        - Health
+      summary: Startup probe
+      description: |
+        Startup probe for slow-starting containers in Kubernetes environments.
+        
+        ## Purpose
+        Prevents Kubernetes from killing containers during slow initialization. Once the
+        startup probe succeeds, liveness and readiness probes take over. This is critical
+        for applications that need time to load configuration, establish connections, or
+        warm caches.
+        
+        ## Behavior
+        - Returns `503 Service Unavailable` during initialization phase
+        - Returns `200 OK` once all startup tasks complete (connections established, migrations run)
+        - After first `200`, all subsequent calls return `200`
+        
+        ## Recommended Kubernetes Configuration
+        ```yaml
+        startupProbe:
+          httpGet:
+            path: /startupz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 30  # Allows up to 150 seconds for startup
+        ```
+        
+        ## Initialization Sequence
+        1. Database connection pool established
+        2. Configuration loaded and validated
+        3. Background workers initialized
+        4. Startup probe returns ready
+        
+        ## Related Endpoints
+        - `GET /healthz` - Liveness check (enabled after startup completes)
+        - `GET /readyz` - Readiness check (enabled after startup completes)
+      operationId: getStartup
+      responses:
+        '200':
+          description: Application startup complete
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ready]
+              examples:
+                ready:
+                  summary: Application has completed startup
+                  value:
+                    status: "ready"
+        '503':
+          description: Application is still initializing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [starting]
+              examples:
+                starting:
+                  summary: Application is still initializing
+                  value:
+                    status: "starting"
 
   /api/v1/users:
     post:
       tags:
         - Users
       summary: Create a new user
-      description: Creates a new user with the provided details
+      description: |
+        Creates a new user account in the system with the provided details.
+        
+        ## Business Purpose
+        Use this endpoint to register new users during onboarding, admin user creation,
+        or programmatic account provisioning. Each user must have a unique email address.
+        
+        ## Authentication
+        Requires a valid JWT Bearer token with appropriate permissions.
+        
+        ## Constraints
+        - **Email uniqueness**: Each email can only be registered once (409 Conflict on duplicate)
+        - **Field validation**: All fields validated per schema constraints
+        - **Rate limiting**: 100 requests per second per IP address
+        
+        ## Generated Fields
+        - `id`: UUID v7 format (time-ordered for database performance)
+        - `createdAt`: RFC 3339 timestamp
+        - `updatedAt`: RFC 3339 timestamp (same as createdAt on creation)
+        
+        ## Idempotency
+        Supports `Idempotency-Key` header for safe retries. Duplicate requests with the
+        same idempotency key return the cached response without creating duplicate users.
+        
+        ## Related Endpoints
+        - `GET /api/v1/users/{id}` - Retrieve the created user using the returned ID
+        - `GET /api/v1/users` - List all users including the newly created one
       operationId: createUser
       security:
         - bearerAuth: []
@@ -80,6 +245,19 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateUserRequest'
+            examples:
+              standardUser:
+                summary: Create a standard user
+                value:
+                  email: "sarah.johnson@techcorp.io"
+                  firstName: "Sarah"
+                  lastName: "Johnson"
+              minimalFields:
+                summary: Minimal required fields
+                value:
+                  email: "m.rodriguez@startup.co"
+                  firstName: "Miguel"
+                  lastName: "Rodriguez"
       responses:
         '201':
           description: User created successfully
@@ -88,54 +266,222 @@ paths:
               description: URL of the created resource
               schema:
                 type: string
-                example: /api/v1/users/019400a0-1234-7abc-8def-1234567890ab
+              example: /api/v1/users/01940a5b-7c3d-7def-8901-234567890abc
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserDataResponse'
+              examples:
+                createdUser:
+                  summary: Successfully created user
+                  value:
+                    data:
+                      id: "01940a5b-7c3d-7def-8901-234567890abc"
+                      email: "sarah.johnson@techcorp.io"
+                      firstName: "Sarah"
+                      lastName: "Johnson"
+                      createdAt: "2026-01-02T10:30:00Z"
+                      updatedAt: "2026-01-02T10:30:00Z"
         '400':
           description: Validation error
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                invalidEmail:
+                  summary: Invalid email format
+                  value:
+                    type: "https://api.example.com/problems/validation-error"
+                    title: "Validation Error"
+                    status: 400
+                    detail: "One or more fields failed validation"
+                    code: "VAL-002"
+                    request_id: "req_8f7a6b5c4d3e2f1a"
+                    trace_id: "4bf92f3577b34da6a3ce929d0e0e4736"
+                    validation_errors:
+                      - field: "email"
+                        message: "must be a valid email address"
+                        code: "VAL-002"
+                missingRequired:
+                  summary: Missing required fields
+                  value:
+                    type: "https://api.example.com/problems/validation-error"
+                    title: "Validation Error"
+                    status: 400
+                    detail: "One or more required fields are missing"
+                    code: "VAL-001"
+                    request_id: "req_1a2b3c4d5e6f7890"
+                    trace_id: "a1b2c3d4e5f67890abcdef1234567890"
+                    validation_errors:
+                      - field: "firstName"
+                        message: "is required"
+                        code: "VAL-001"
+                      - field: "lastName"
+                        message: "is required"
+                        code: "VAL-001"
         '401':
-          description: Unauthorized
+          description: Unauthorized - Invalid or missing JWT token
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                invalidToken:
+                  summary: Invalid or expired JWT token
+                  value:
+                    type: "https://api.example.com/problems/unauthorized"
+                    title: "Unauthorized"
+                    status: 401
+                    detail: "The provided authentication token is invalid or has expired"
+                    code: "AUTH-001"
+                    request_id: "req_9e8d7c6b5a4f3e2d"
+                    trace_id: "b2c3d4e5f6a78901bcdef2345678901a"
         '409':
           description: Email already exists
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                duplicateEmail:
+                  summary: Email already registered
+                  value:
+                    type: "https://api.example.com/problems/conflict"
+                    title: "Conflict"
+                    status: 409
+                    detail: "A user with email 'sarah.johnson@techcorp.io' already exists"
+                    code: "USR-002"
+                    request_id: "req_0f1e2d3c4b5a6978"
+                    trace_id: "c3d4e5f6a7890123cdef34567890123b"
+        '429':
+          description: Rate limit exceeded
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per window
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+              example: 0
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+              example: 1735815600
+            Retry-After:
+              description: Seconds until rate limit resets
+              schema:
+                type: integer
+              example: 60
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                rateLimited:
+                  summary: Too many requests
+                  value:
+                    type: "https://api.example.com/problems/rate-limit-exceeded"
+                    title: "Too Many Requests"
+                    status: 429
+                    detail: "Rate limit exceeded. Retry after 60 seconds."
+                    code: "RATE-001"
+                    request_id: "req_7a8b9c0d1e2f3456"
+                    trace_id: "d4e5f6a78901234def456789012345c"
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                internalError:
+                  summary: Unexpected system error
+                  value:
+                    type: "https://api.example.com/problems/internal-server-error"
+                    title: "Internal Server Error"
+                    status: 500
+                    detail: "An unexpected error occurred while processing the request"
+                    code: "SYS-001"
+                    request_id: "req_8b9c0d1e2f345678"
+                    trace_id: "e5f6a789012345ef67890123456789d"
 
     get:
       tags:
         - Users
       summary: List users
-      description: Returns a paginated list of users
+      description: |
+        Returns a paginated list of all users in the system.
+        
+        ## Business Purpose
+        Use this endpoint to display user directories, admin dashboards, or export user
+        data. Supports efficient pagination for large datasets.
+        
+        ## Authentication
+        Requires a valid JWT Bearer token with read permissions.
+        
+        ## Pagination
+        Uses offset-based pagination with 1-indexed page numbers:
+        - `page`: Which page to retrieve (default: 1)
+        - `pageSize`: Items per page (default: 20, max: 100)
+        
+        Response includes `pagination` metadata:
+        - `totalItems`: Total users in the database
+        - `totalPages`: Calculated from totalItems and pageSize
+        
+        ## Ordering
+        Results are ordered by `createdAt` descending (newest first).
+        
+        ## Rate Limiting
+        100 requests per second per IP address.
+        
+        ## Performance Notes
+        - First page is fastest (no offset calculation)
+        - Large pageSize values may increase response latency
+        - Consider cursor-based pagination for very large datasets
+        
+        ## Related Endpoints
+        - `GET /api/v1/users/{id}` - Retrieve a specific user by ID
+        - `POST /api/v1/users` - Create a new user
       operationId: listUsers
       security:
         - bearerAuth: []
       parameters:
         - name: page
           in: query
-          description: Page number (1-indexed)
+          description: |
+            Page number to retrieve (1-indexed). Use with `pageSize` for pagination.
+            
+            **Behavior**:
+            - Values less than 1 return 400 Bad Request
+            - Values exceeding total pages return empty data array
+            - Default value used when not provided
           schema:
             type: integer
             minimum: 1
             default: 1
+          example: 1
         - name: pageSize
           in: query
-          description: Number of items per page
+          description: |
+            Number of users to return per page.
+            
+            **Constraints**:
+            - Minimum: 1
+            - Maximum: 100 (values above 100 are capped)
+            - Default: 20
+            
+            **Performance**: Larger values increase response time and payload size.
           schema:
             type: integer
             minimum: 1
             maximum: 100
             default: 20
+          example: 20
       responses:
         '200':
           description: List of users
@@ -143,19 +489,147 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListUsersResponse'
+              examples:
+                multipleUsers:
+                  summary: Page with multiple users
+                  value:
+                    data:
+                      - id: "01940a5b-7c3d-7def-8901-234567890abc"
+                        email: "sarah.johnson@techcorp.io"
+                        firstName: "Sarah"
+                        lastName: "Johnson"
+                        createdAt: "2026-01-02T10:30:00Z"
+                        updatedAt: "2026-01-02T10:30:00Z"
+                      - id: "01940a5c-8d4e-7def-9012-345678901bcd"
+                        email: "alex.chen@innovate.dev"
+                        firstName: "Alex"
+                        lastName: "Chen"
+                        createdAt: "2026-01-01T14:22:00Z"
+                        updatedAt: "2026-01-01T14:22:00Z"
+                      - id: "01940a5d-9e5f-7def-0123-456789012cde"
+                        email: "priya.sharma@globaltech.com"
+                        firstName: "Priya"
+                        lastName: "Sharma"
+                        createdAt: "2025-12-28T09:15:00Z"
+                        updatedAt: "2025-12-30T16:45:00Z"
+                    pagination:
+                      page: 1
+                      pageSize: 20
+                      totalItems: 47
+                      totalPages: 3
+                emptyList:
+                  summary: No users found
+                  value:
+                    data: []
+                    pagination:
+                      page: 1
+                      pageSize: 20
+                      totalItems: 0
+                      totalPages: 0
+        '400':
+          description: Invalid pagination parameters
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                invalidPagination:
+                  summary: Invalid page number
+                  value:
+                    type: "https://api.example.com/problems/validation-error"
+                    title: "Validation Error"
+                    status: 400
+                    detail: "Page number must be greater than 0"
+                    code: "VAL-004"
+                    request_id: "req_9c0d1e2f34567890"
+                    trace_id: "f6a7890123456f7890123456789012e"
         '401':
           description: Unauthorized
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                unauthorized:
+                  summary: Missing authentication token
+                  value:
+                    type: "https://api.example.com/problems/unauthorized"
+                    title: "Unauthorized"
+                    status: 401
+                    detail: "Authentication required. Please provide a valid Bearer token."
+                    code: "AUTH-001"
+                    request_id: "req_2b3c4d5e6f7a8901"
+                    trace_id: "e5f6a789012345ef567890123456789d"
+        '429':
+          description: Rate limit exceeded
+          headers:
+            Retry-After:
+              description: Seconds until rate limit resets
+              schema:
+                type: integer
+              example: 60
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                rateLimited:
+                  summary: Too many requests
+                  value:
+                    type: "https://api.example.com/problems/rate-limit-exceeded"
+                    title: "Too Many Requests"
+                    status: 429
+                    detail: "Rate limit exceeded. Retry after 60 seconds."
+                    code: "RATE-001"
+                    request_id: "req_0d1e2f3456789012"
+                    trace_id: "a78901234567a89012345678901234f"
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                internalError:
+                  summary: Unexpected system error
+                  value:
+                    type: "https://api.example.com/problems/internal-server-error"
+                    title: "Internal Server Error"
+                    status: 500
+                    detail: "An unexpected error occurred while processing the request"
+                    code: "SYS-001"
+                    request_id: "req_1e2f345678901234"
+                    trace_id: "b89012345678b901234567890123450"
 
   /api/v1/users/{id}:
     get:
       tags:
         - Users
       summary: Get user by ID
-      description: Returns a single user by their UUID v7 ID
+      description: |
+        Retrieves a single user's complete details by their unique identifier.
+        
+        ## Business Purpose
+        Use this endpoint to display user profiles, fetch user data for editing,
+        or verify user existence. Returns the same data structure as the user creation response.
+        
+        ## Authentication
+        Requires a valid JWT Bearer token with read permissions.
+        
+        ## ID Format
+        The `id` parameter must be a valid UUID v7. Invalid formats return 400 Bad Request.
+        UUID v7 is time-ordered, meaning IDs roughly sort by creation time.
+        
+        ## Response Caching
+        Results may be cached for performance. Use appropriate cache-control headers
+        if you need fresh data.
+        
+        ## Rate Limiting
+        100 requests per second per IP address.
+        
+        ## Related Endpoints
+        - `GET /api/v1/users` - List all users with pagination
+        - `POST /api/v1/users` - Create a new user (returns same structure)
       operationId: getUser
       security:
         - bearerAuth: []
@@ -163,11 +637,17 @@ paths:
         - name: id
           in: path
           required: true
-          description: User ID (UUID v7)
+          description: |
+            Unique user identifier in UUID v7 format.
+            
+            **Format**: `xxxxxxxx-xxxx-7xxx-xxxx-xxxxxxxxxxxx`
+            
+            UUID v7 is time-ordered, meaning the ID encodes the approximate creation time.
+            Invalid UUID formats return 400 Bad Request with error code `VAL-003`.
           schema:
             type: string
             format: uuid
-            example: 019400a0-1234-7abc-8def-1234567890ab
+          example: "01940a5b-7c3d-7def-8901-234567890abc"
       responses:
         '200':
           description: User found
@@ -175,24 +655,108 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserDataResponse'
+              examples:
+                foundUser:
+                  summary: User retrieved successfully
+                  value:
+                    data:
+                      id: "01940a5b-7c3d-7def-8901-234567890abc"
+                      email: "sarah.johnson@techcorp.io"
+                      firstName: "Sarah"
+                      lastName: "Johnson"
+                      createdAt: "2026-01-02T10:30:00Z"
+                      updatedAt: "2026-01-02T10:30:00Z"
         '400':
           description: Invalid ID format
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                invalidUuid:
+                  summary: Invalid UUID format
+                  value:
+                    type: "https://api.example.com/problems/validation-error"
+                    title: "Validation Error"
+                    status: 400
+                    detail: "The provided ID 'not-a-valid-uuid' is not a valid UUID"
+                    code: "VAL-003"
+                    request_id: "req_3c4d5e6f7a8b9012"
+                    trace_id: "f6a7890123456f67890123456789012e"
         '401':
           description: Unauthorized
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                unauthorized:
+                  summary: Invalid or missing token
+                  value:
+                    type: "https://api.example.com/problems/unauthorized"
+                    title: "Unauthorized"
+                    status: 401
+                    detail: "The provided authentication token is invalid or has expired"
+                    code: "AUTH-001"
+                    request_id: "req_4d5e6f7a8b9c0123"
+                    trace_id: "a78901234567a78901234567890123f"
         '404':
           description: User not found
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                notFound:
+                  summary: User does not exist
+                  value:
+                    type: "https://api.example.com/problems/not-found"
+                    title: "Not Found"
+                    status: 404
+                    detail: "User with ID '01940a5b-7c3d-7def-8901-234567890abc' was not found"
+                    code: "USR-001"
+                    request_id: "req_5e6f7a8b9c0d1234"
+                    trace_id: "890123456789b890123456789012340"
+        '429':
+          description: Rate limit exceeded
+          headers:
+            Retry-After:
+              description: Seconds until rate limit resets
+              schema:
+                type: integer
+              example: 60
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                rateLimited:
+                  summary: Too many requests
+                  value:
+                    type: "https://api.example.com/problems/rate-limit-exceeded"
+                    title: "Too Many Requests"
+                    status: 429
+                    detail: "Rate limit exceeded. Retry after 60 seconds."
+                    code: "RATE-001"
+                    request_id: "req_2f34567890123456"
+                    trace_id: "c90123456789c012345678901234561"
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              examples:
+                internalError:
+                  summary: Unexpected system error
+                  value:
+                    type: "https://api.example.com/problems/internal-server-error"
+                    title: "Internal Server Error"
+                    status: 500
+                    detail: "An unexpected error occurred while processing the request"
+                    code: "SYS-001"
+                    request_id: "req_3456789012345678"
+                    trace_id: "d01234567890d123456789012345672"
 
 components:
   securitySchemes:
@@ -200,38 +764,16 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: |
+        JWT token with required claims: `exp` (expiration), `iss` (issuer), `aud` (audience).
+        
+        Example header: `Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
 
   schemas:
-    HealthResponse:
-      type: object
-      properties:
-        data:
-          type: object
-          properties:
-            status:
-              type: string
-              example: ok
-      required:
-        - data
-
-    ReadyResponse:
-      type: object
-      properties:
-        data:
-          type: object
-          properties:
-            status:
-              type: string
-              enum: [ready, not_ready]
-            checks:
-              type: object
-              additionalProperties:
-                type: string
-              example:
-                database: ok
 
     CreateUserRequest:
       type: object
+      description: Request body for creating a new user
       required:
         - email
         - firstName
@@ -241,66 +783,85 @@ components:
           type: string
           format: email
           maxLength: 255
-          example: user@example.com
+          description: User's email address (must be unique)
+          example: "sarah.johnson@techcorp.io"
         firstName:
           type: string
           minLength: 1
           maxLength: 100
-          example: John
+          description: User's first name
+          example: "Sarah"
         lastName:
           type: string
           minLength: 1
           maxLength: 100
-          example: Doe
+          description: User's last name
+          example: "Johnson"
 
     UserResponse:
       type: object
+      description: User entity returned by the API
       properties:
         id:
           type: string
           format: uuid
-          example: 019400a0-1234-7abc-8def-1234567890ab
+          description: User's unique identifier (UUID v7)
+          example: "01940a5b-7c3d-7def-8901-234567890abc"
         email:
           type: string
           format: email
-          example: user@example.com
+          description: User's email address
+          example: "sarah.johnson@techcorp.io"
         firstName:
           type: string
-          example: John
+          description: User's first name
+          example: "Sarah"
         lastName:
           type: string
-          example: Doe
+          description: User's last name
+          example: "Johnson"
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the user was created (RFC 3339)
+          example: "2026-01-02T10:30:00Z"
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the user was last updated (RFC 3339)
+          example: "2026-01-02T10:30:00Z"
 
     UserDataResponse:
       type: object
+      description: Wrapper for single user response
       properties:
         data:
           $ref: '#/components/schemas/UserResponse'
 
     PaginationResponse:
       type: object
+      description: Pagination metadata
       properties:
         page:
           type: integer
+          description: Current page number (1-indexed)
           example: 1
         pageSize:
           type: integer
+          description: Number of items per page
           example: 20
         totalItems:
           type: integer
-          example: 100
+          description: Total number of items across all pages
+          example: 47
         totalPages:
           type: integer
-          example: 5
+          description: Total number of pages
+          example: 3
 
     ListUsersResponse:
       type: object
+      description: Paginated list of users
       properties:
         data:
           type: array
@@ -311,45 +872,69 @@ components:
 
     ValidationError:
       type: object
+      description: Individual field validation error
       properties:
         field:
           type: string
-          example: email
+          description: Name of the field that failed validation
+          example: "email"
         message:
           type: string
-          example: must be a valid email address
+          description: Human-readable error message
+          example: "must be a valid email address"
+        code:
+          type: string
+          description: Error code for programmatic handling
+          example: "VAL-002"
 
     ProblemDetail:
       type: object
-      description: RFC 7807 Problem Detail
+      description: |
+        RFC 7807 Problem Details response format. All API errors follow this structure.
+        
+        Error codes follow the pattern `{CATEGORY}-{NUMBER}`:
+        - `AUTH-xxx`: Authentication errors
+        - `VAL-xxx`: Validation errors
+        - `USR-xxx`: User domain errors
+        - `RATE-xxx`: Rate limiting errors
+        - `SYS-xxx`: System errors
       properties:
         type:
           type: string
           format: uri
-          example: https://api.example.com/problems/validation-error
+          description: URI reference identifying the problem type
+          example: "https://api.example.com/problems/validation-error"
         title:
           type: string
-          example: Validation Error
+          description: Short, human-readable summary of the problem
+          example: "Validation Error"
         status:
           type: integer
+          description: HTTP status code
           example: 400
         detail:
           type: string
-          example: One or more fields failed validation
+          description: Human-readable explanation specific to this occurrence
+          example: "One or more fields failed validation"
         instance:
           type: string
-          format: uri
-          example: https://api.example.com/api/v1/users
+          format: uri-reference
+          description: URI reference to the specific occurrence (relative or absolute)
+          example: "/api/v1/users"
         code:
           type: string
-          example: VALIDATION_ERROR
+          description: Application-specific error code
+          example: "VAL-001"
         request_id:
           type: string
-          example: abc123
+          description: Unique request identifier for debugging
+          example: "req_8f7a6b5c4d3e2f1a"
         trace_id:
           type: string
-          example: 4bf92f3577b34da6a3ce929d0e0e4736
+          description: Distributed tracing identifier
+          example: "4bf92f3577b34da6a3ce929d0e0e4736"
         validation_errors:
           type: array
+          description: List of field-level validation errors (when applicable)
           items:
             $ref: '#/components/schemas/ValidationError'

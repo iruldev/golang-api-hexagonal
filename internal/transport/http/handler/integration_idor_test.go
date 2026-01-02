@@ -80,9 +80,10 @@ func TestIntegration_IDORPrevention(t *testing.T) {
 
 	// Real Handler
 	userHandler := NewUserHandler(mockCreateUC, realUseCase, mockListUC, httpTransport.BasePath+"/users")
-	livenessHandler := NewLivenessHandler()
-	healthHandler := NewHealthHandler()
-	readyHandler := NewReadyHandler(mockDB, logger)
+	livenessHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"alive"}`))
+	})
 
 	// 2. Setup Router with JWT Enabled
 	jwtSecret := []byte("test-secret-key-12345") // 32 bytes not required for HS256 but good practice
@@ -99,8 +100,6 @@ func TestIntegration_IDORPrevention(t *testing.T) {
 		httpMetrics,
 		httpTransport.RouterHandlers{
 			LivenessHandler: livenessHandler,
-			HealthHandler:   healthHandler,
-			ReadyHandler:    readyHandler,
 			UserHandler:     userHandler,
 		},
 		1024,
