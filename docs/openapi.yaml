@@ -67,7 +67,10 @@ paths:
             application/json:
               schema:
                 type: object
-              example: {}
+              examples:
+                alive:
+                  summary: Service is alive
+                  value: {}
 
   /readyz:
     get:
@@ -124,7 +127,7 @@ paths:
         '503':
           description: Service is not ready
           content:
-            application/json:
+            application/problem+json:
               schema:
                  type: object
               examples:
@@ -191,7 +194,7 @@ paths:
         '503':
           description: Application is still initializing
           content:
-            application/json:
+            application/problem+json:
               schema:
                 type: object
                 properties:

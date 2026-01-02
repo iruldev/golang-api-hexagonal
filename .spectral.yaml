@@ -1,1 +1,167 @@
-extends: ["spectral:oas"]
+# Spectral OpenAPI Linting Configuration
+# Story 4.5: Enhanced Spectral ruleset for RFC 7807 and documentation quality
+#
+# Usage:
+#   make openapi        # Run via Docker (CI/CD consistent)
+#   make lint-api       # Alias for make openapi
+#
+# Documentation: https://meta.stoplight.io/docs/spectral/4dec24461f3af-open-api-rules
+
+extends:
+  - "spectral:oas"
+
+rules:
+  # =============================================================================
+  # Description Enforcement (AC2, AC8)
+  # =============================================================================
+
+  # Require descriptions on all operations
+  operation-description:
+    description: "Operations must have detailed descriptions explaining purpose and usage"
+    message: "{{property}} must have a description"
+    severity: error
+    given: "$.paths[*][get,post,put,patch,delete]"
+    then:
+      field: "description"
+      function: truthy
+
+  # Require summaries on all operations (short one-line descriptions)
+  operation-summary-present:
+    description: "Operations must have a one-line summary"
+    message: "{{property}} must have a summary"
+    severity: error
+    given: "$.paths[*][get,post,put,patch,delete]"
+    then:
+      field: "summary"
+      function: truthy
+
+  # Require operationId on all operations for code generation
+  operation-operationId-present:
+    description: "Operations must have operationId for client code generation"
+    message: "{{property}} must have an operationId"
+    severity: error
+    given: "$.paths[*][get,post,put,patch,delete]"
+    then:
+      field: "operationId"
+      function: truthy
+
+  # Require descriptions on path parameters
+  path-params-description:
+    description: "Path parameters must have descriptions"
+    message: "Path parameter '{{value}}' must have a description"
+    severity: error
+    given: "$.paths[*].parameters[?(@.in == 'path')]"
+    then:
+      field: "description"
+      function: truthy
+
+  # Require descriptions on query parameters
+  query-params-description:
+    description: "Query parameters should have descriptions"
+    message: "Query parameter '{{value}}' should have a description"
+    severity: warn
+    given: "$.paths[*][*].parameters[?(@.in == 'query')]"
+    then:
+      field: "description"
+      function: truthy
+
+  # =============================================================================
+  # Example Completeness (AC3, AC7)
+  # =============================================================================
+
+  # Require examples on success responses (2xx)
+  response-2xx-examples:
+    description: "Success responses (2xx) should have examples"
+    message: "Response {{property}} should include examples"
+    severity: warn
+    given: "$.paths[*][*].responses[?(@property >= 200 && @property < 300)].content[*]"
+    then:
+      field: "examples"
+      function: truthy
+
+  # Require examples on request bodies
+  request-body-examples:
+    description: "Request bodies should have examples"
+    message: "Request body should include examples"
+    severity: warn
+    given: "$.paths[*][*].requestBody.content[*]"
+    then:
+      field: "examples"
+      function: truthy
+
+  # =============================================================================
+  # RFC 7807 Error Response Validation (AC6)
+  # =============================================================================
+
+  # Validate 4xx error responses use application/problem+json
+  error-4xx-problem-json:
+    description: "4xx error responses should use application/problem+json content type"
+    message: "Error response {{property}} should include application/problem+json content type"
+    severity: warn
+    given: "$.paths[*][*].responses[?(@property >= 400 && @property < 500)]"
+    then:
+      field: "content.application/problem+json"
+      function: truthy
+
+  # Validate 5xx error responses use application/problem+json
+  error-5xx-problem-json:
+    description: "5xx error responses should use application/problem+json content type"
+    message: "Error response {{property}} should include application/problem+json content type"
+    severity: warn
+    given: "$.paths[*][*].responses[?(@property >= 500 && @property < 600)]"
+    then:
+      field: "content.application/problem+json"
+      function: truthy
+
+  # Validate error responses reference ProblemDetail schema
+  error-responses-problem-detail-schema:
+    description: "Error responses should reference the ProblemDetail schema"
+    message: "Error response schema should reference ProblemDetail"
+    severity: warn
+    given: "$.paths[*][*].responses[?(@property >= 400)].content['application/problem+json'].schema"
+    then:
+      field: "$ref"
+      function: pattern
+      functionOptions:
+        match: "ProblemDetail"
+
+  # =============================================================================
+  # API Quality Rules
+  # =============================================================================
+
+  # Require tags on operations for organization
+  operation-tags-present:
+    description: "Operations must be organized with tags"
+    message: "{{property}} must have at least one tag"
+    severity: error
+    given: "$.paths[*][get,post,put,patch,delete]"
+    then:
+      field: "tags"
+      function: truthy
+
+  # Security requirements on non-health endpoints
+  # Note: This is informational - health endpoints intentionally skip auth
+  operation-security-defined:
+    description: "Non-health operations should define security requirements"
+    message: "{{property}} should define security requirements (or empty array for public)"
+    severity: off  # Disabled - handled per-project basis
+    given: "$.paths[?(!@property.match(/health|ready|startup/))][get,post,put,patch,delete]"
+    then:
+      field: "security"
+      function: defined
+
+  # =============================================================================
+  # Built-in Rule Overrides
+  # =============================================================================
+
+  # Ensure API has contact information
+  info-contact: error
+
+  # Ensure API has license information
+  info-license: warn
+
+  # Ensure servers are defined
+  oas3-api-servers: error
+
+  # Disable overly strict rules that conflict with our patterns
+  oas3-unused-component: off  # We may have future-use components

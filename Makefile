@@ -474,6 +474,10 @@ openapi:
 		fi; \
 	fi
 
+## lint-api: Alias for openapi - Validate OpenAPI spec with enhanced Spectral rules
+.PHONY: lint-api
+lint-api: openapi
+
 ## openapi-view: View OpenAPI spec in browser (requires redoc-cli or npx)
 .PHONY: openapi-view
 openapi-view:
