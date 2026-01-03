@@ -145,6 +145,47 @@ test-integration:
 	$(GOTEST) -v -race -tags=integration ./... $(ARGS)
 	@echo "✅ Integration tests complete"
 
+## test-contract-consumer: Run Pact consumer contract tests
+.PHONY: test-contract-consumer
+test-contract-consumer:
+	@echo "📜 Running Pact consumer contract tests..."
+	@if [ ! -d "test/contract/pacts" ]; then mkdir -p test/contract/pacts; fi
+	@rm -rf test/contract/pacts/*
+	$(GOTEST) -v -tags=contract ./test/contract/... -run TestConsumer
+	@echo "✅ Consumer contract tests complete"
+	@echo "   Pact files generated in: test/contract/pacts/"
+
+## test-contract-provider: Run Pact provider verification (requires running server)
+.PHONY: test-contract-provider
+test-contract-provider:
+	@echo "📜 Running Pact provider verification..."
+	@if [ -z "$$(ls -A test/contract/pacts/*.json 2>/dev/null)" ]; then \
+		echo "⚠️  No pact files found. Run 'make test-contract-consumer' first."; \
+		exit 1; \
+	fi
+	PACT_PROVIDER_TEST=true $(GOTEST) -v -tags=contract ./test/contract/... -run TestProvider
+	@echo "✅ Provider verification complete"
+
+## test-contract: Run all contract tests (consumer + provider)
+.PHONY: test-contract
+test-contract: test-contract-consumer
+	@echo ""
+	@echo "📜 Contract tests complete!"
+	@echo "   Consumer tests: ✅"
+	@echo "   Provider tests: Skipped (run 'make test-contract-provider' with server running)"
+	@echo ""
+	@echo "💡 To run full verification:"
+	@echo "   1. Start the server: make run"
+	@echo "   2. In another terminal: make test-contract-provider"
+
+## pact-install: Install Pact FFI native library (required for contract tests)
+.PHONY: pact-install
+pact-install:
+	@echo "🔧 Installing Pact FFI native library..."
+	go install github.com/pact-foundation/pact-go/v2@v2.4.2
+	pact-go install
+	@echo "✅ Pact FFI installed"
+
 ## test-unit: Run unit tests with coverage (Story 1.4)
 .PHONY: test-unit
 test-unit:
