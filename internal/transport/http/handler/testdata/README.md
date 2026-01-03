@@ -1,6 +1,13 @@
 # Testdata Directory
 
-This directory contains test fixtures and sample data for tests.
+This directory contains test fixtures and sample data for handler tests.
+
+## Available Fixtures
+
+| File | Description |
+|------|-------------|
+| `valid_create_user.json` | Valid user creation request payload |
+| `invalid_create_user.json` | Invalid user creation (missing/invalid fields) |
 
 ## Usage
 
@@ -26,10 +33,19 @@ Example:
 ```
 testdata/
 ├── valid_create_user.json
-├── invalid_create_user_missing_email.json
+├── invalid_create_user.json
 └── fixtures/
     └── sample_user.json
 ```
+
+## Template Reference
+
+For creating new test files, copy the template from:
+```
+internal/shared/testutil/template_test.go.example
+```
+
+See `docs/testing-patterns.md` for complete testing guidelines.
 
 ## Note
 

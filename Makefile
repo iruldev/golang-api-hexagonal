@@ -338,6 +338,26 @@ coverage-detail:
 lint:
 	golangci-lint run ./...
 
+## check-test-size: Check for test files exceeding 500 lines (Story 5.5)
+.PHONY: check-test-size
+check-test-size:
+	@echo "📏 Checking test file sizes (max 500 lines)..."
+	@LARGE_FILES=$$(find internal -name "*_test.go" -exec wc -l {} \; 2>/dev/null | awk '$$1 > 500 {print}' | sort -rn); \
+	if [ -n "$$LARGE_FILES" ]; then \
+		echo ""; \
+		echo "⚠️  Test files exceeding 500 lines:"; \
+		echo "$$LARGE_FILES" | while read lines file; do \
+			echo "  $$lines lines: $$file"; \
+		done; \
+		echo ""; \
+		echo "💡 Consider splitting these files using the pattern: {component}_{category}_test.go"; \
+		echo "   See docs/testing-patterns.md for guidelines."; \
+		echo ""; \
+		exit 1; \
+	else \
+		echo "✅ All test files are within 500 line limit"; \
+	fi
+
 # =============================================================================
 # CI Pipeline
 # =============================================================================

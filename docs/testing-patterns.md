@@ -216,7 +216,7 @@ make coverage-report
 
 ## Linter Configuration
 
-The `funlen` linter enforces function/file size limits:
+The `funlen` linter enforces function size limits:
 
 ```yaml
 # .golangci.yml
@@ -231,10 +231,20 @@ linters:
       ignore-comments: true
 ```
 
-To check function lengths:
+### Checking Function Lengths
 ```bash
 golangci-lint run --enable funlen
 ```
+
+### Checking Test File Size (500 Line Limit)
+Test files should not exceed 500 lines. Use the dedicated Makefile target:
+
+```bash
+# Check all test files for size violations
+make check-test-size
+```
+
+This will warn about any test files exceeding 500 lines and suggest splitting them using the `{component}_{category}_test.go` pattern.
 
 ## Running Tests
 

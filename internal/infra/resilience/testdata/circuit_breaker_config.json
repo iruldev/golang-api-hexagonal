@@ -1,0 +1,7 @@
+{
+  "max_requests": 5,
+  "interval": "10s",
+  "timeout": "30s",
+  "ready_to_trip_count": 3,
+  "on_state_change": true
+}

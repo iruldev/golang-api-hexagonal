@@ -1,0 +1,6 @@
+User login attempt for email: secret@example.com
+Password hash: $2a$10$abcdefghijklmnopqrstuv
+Credit card: 4111-1111-1111-1111
+SSN: 123-45-6789
+API Key: sk_live_abc123def456
+Bearer token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test
