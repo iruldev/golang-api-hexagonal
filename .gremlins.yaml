@@ -1,0 +1,41 @@
+# Gremlins Mutation Testing Configuration
+# https://github.com/go-gremlins/gremlins
+# 
+# Run with: make test-mutation
+# Install tool: make gremlins-install
+#
+# Note: Path filtering is done via CLI arguments (see Makefile)
+# This config sets global options for mutation testing
+
+# Mutation score thresholds (NFR-MAINT-2: ≥60% mutations killed)
+# These set quality gates for CI
+threshold-efficacy: 0.6
+threshold-mcover: 0.8
+
+# Timeout coefficient for each test run
+# Multiplied by the baseline test time to set timeout
+timeout-coefficient: 2
+
+# Number of parallel workers (adjust based on CPU cores)
+workers: 4
+
+# Exclude test files and mocks from mutation
+exclude-files:
+  - "_test\\.go$"
+  - "_mock\\.go$"
+  - "mock_.*\\.go$"
+
+# Enable default mutant types
+arithmetic-base: true
+conditionals-boundary: true
+conditionals-negation: true
+increment-decrement: true
+invert-negatives: true
+
+# Disable slower mutant types for faster execution
+invert-assignments: false
+invert-bitwise: false
+invert-bwassign: false
+invert-logical: false
+invert-loopctrl: false
+remove-self-assignments: false

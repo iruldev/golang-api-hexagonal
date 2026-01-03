@@ -51,9 +51,7 @@ type ValidationError struct {
 //
 // Thread-safety: Problem instances are not safe for concurrent modification.
 // Create a new Problem for each error response.
-// Problem represents an RFC 7807 Problem Details response with project-specific extensions.
-// It embeds the moogar0880/problems DefaultProblem for core RFC 7807 compliance
-// and adds extension fields for error correlation and validation details.
+
 type Problem struct {
 	*problems.DefaultProblem
 
@@ -301,11 +299,9 @@ func fieldErrorsToValidationErrors(fieldErrors []FieldError) []ValidationError {
 	}
 	legacyErrors := make([]ValidationError, len(fieldErrors))
 	for i, fe := range fieldErrors {
-		legacyErrors[i] = ValidationError{
-			Field:   fe.Field,
-			Message: fe.Message,
-			Code:    fe.Code,
-		}
+		// Convert FieldError to ValidationError
+		legacyErrors[i] = ValidationError(fe)
+
 	}
 	return legacyErrors
 }

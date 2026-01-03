@@ -186,6 +186,33 @@ pact-install:
 	pact-go install
 	@echo "✅ Pact FFI installed"
 
+## gremlins-install: Install Gremlins mutation testing tool
+.PHONY: gremlins-install
+gremlins-install:
+	@echo "🧟 Installing Gremlins mutation testing tool..."
+	go install github.com/go-gremlins/gremlins/cmd/gremlins@latest
+	@echo "✅ Gremlins installed"
+
+## test-mutation: Run mutation tests on domain and app layers (NFR-MAINT-2: ≥60% kill rate)
+# Using integration mode (-i) to run full test suite for proper cross-package coverage
+.PHONY: test-mutation
+test-mutation:
+	@echo "🧟 Running mutation tests on domain and app layers..."
+	@which gremlins > /dev/null || (echo "❌ gremlins not found. Run 'make gremlins-install' first." && exit 1)
+	@echo "📊 Running mutation tests (this may take several minutes)..."
+	gremlins unleash ./... -i --config .gremlins.yaml --threshold-efficacy 0.6
+	@echo "✅ Mutation testing complete"
+
+## test-mutation-report: Run mutation tests with JSON output for CI
+.PHONY: test-mutation-report
+test-mutation-report:
+	@echo "🧟 Running mutation tests with JSON output..."
+	@which gremlins > /dev/null || (echo "❌ gremlins not found. Run 'make gremlins-install' first." && exit 1)
+	gremlins unleash ./... -i --config .gremlins.yaml -o mutation-report.json
+	@echo "✅ Mutation report generated: mutation-report.json"
+
+
+
 ## test-unit: Run unit tests with coverage (Story 1.4)
 .PHONY: test-unit
 test-unit:

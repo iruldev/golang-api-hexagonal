@@ -138,11 +138,9 @@ func NewValidationProblem(r *http.Request, validationErrors []ValidationError) *
 	if len(validationErrors) > 0 {
 		fieldErrors = make([]FieldError, len(validationErrors))
 		for i, ve := range validationErrors {
-			fieldErrors[i] = FieldError{
-				Field:   ve.Field,
-				Message: ve.Message,
-				Code:    ve.Code,
-			}
+			// Convert ValidationError to FieldError
+			fieldErrors[i] = FieldError(ve)
+
 		}
 	}
 
