@@ -133,6 +133,31 @@ func TestProviderVerification(t *testing.T) {
 				}
 				return nil, nil
 			},
+
+			// Story 5.2: New state handlers for additional contract tests
+			"valid user data": stateNoOp, // No special setup needed for valid create request
+
+			"user exists for update": func(setup bool, _ models.ProviderState) (models.ProviderStateResponse, error) {
+				if setup {
+					return stateSeedUser(config.DB)
+				}
+				return nil, nil
+			},
+
+			"user exists for deletion": func(setup bool, _ models.ProviderState) (models.ProviderStateResponse, error) {
+				if setup {
+					return stateSeedUserForDeletion(config.DB)
+				}
+				return nil, nil
+			},
+
+			"server error occurs": stateNoOp, // Server error state - provider handles this naturally
+
+			"a request to update a non-existent user":    stateNoOp, // 404 - no user to update
+			"a request to delete a non-existent user":    stateNoOp, // 404 - no user to delete
+			"a request to create user with invalid data": stateNoOp, // Validation error handled by API
+			"a request without valid authentication":     stateNoOp, // 401 - no token handling
+			"a request that causes a server error":       stateNoOp, // 500 - mock behavior
 		},
 	})
 
@@ -202,6 +227,35 @@ func stateSeedUser(db *sql.DB) (models.ProviderStateResponse, error) {
 	var count int
 	_ = db.QueryRow("SELECT count(*) FROM users WHERE id = $1", id).Scan(&count)
 	fmt.Printf("DEBUG: Verified user count: %d\n", count)
+
+	return nil, nil
+}
+
+// stateSeedUserForDeletion seeds a user specifically for deletion tests
+func stateSeedUserForDeletion(db *sql.DB) (models.ProviderStateResponse, error) {
+	fmt.Println("DEBUG: stateSeedUserForDeletion starting...")
+	// Seed a user with the specific ID expected by the deletion contract
+	// ID: 0193e456-7e89-7123-a456-426614174001
+	id := "0193e456-7e89-7123-a456-426614174001"
+	firstName := "Delete"
+	lastName := "TestUser"
+	email := "delete.test@example.com"
+	createdAt, _ := time.Parse(time.RFC3339, "2024-01-01T00:00:00Z")
+	updatedAt, _ := time.Parse(time.RFC3339, "2024-01-01T00:00:00Z")
+
+	res, err := db.Exec(`
+		INSERT INTO users (id, first_name, last_name, email, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (id) DO UPDATE 
+		SET first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name, email = EXCLUDED.email
+	`, id, firstName, lastName, email, createdAt, updatedAt)
+
+	if err != nil {
+		fmt.Printf("DEBUG: stateSeedUserForDeletion failed: %v\n", err)
+		return nil, fmt.Errorf("failed to seed user for deletion: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	fmt.Printf("DEBUG: stateSeedUserForDeletion success. Rows affected: %d\n", rows)
 
 	return nil, nil
 }
