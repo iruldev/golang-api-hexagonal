@@ -167,83 +167,16 @@ func (w *resilienceWrapper) Execute(ctx context.Context, name string, fn func(ct
 	operation := fn
 
 	// Wrap with timeout if configured (innermost wrapper)
-	if w.timeout != nil {
-		originalOp := operation
-		operation = func(ctx context.Context) error {
-			span.AddEvent("timeout.start", trace.WithAttributes(
-				attribute.String("component", "timeout"),
-				attribute.String("duration", w.timeout.Duration().String()),
-			))
-			err := w.timeout.Do(ctx, originalOp)
-			if err != nil {
-				span.AddEvent("timeout.error", trace.WithAttributes(
-					attribute.String("error", err.Error()),
-				))
-			}
-			return err
-		}
-	}
+	operation = w.wrapTimeout(operation, span)
 
 	// Wrap with retry if configured
-	if w.retrier != nil {
-		originalOp := operation
-		operation = func(ctx context.Context) error {
-			span.AddEvent("retry.start", trace.WithAttributes(
-				attribute.String("component", "retry"),
-				attribute.String("retrier", w.retrier.Name()),
-			))
-			err := w.retrier.Do(ctx, originalOp)
-			if err != nil {
-				span.AddEvent("retry.exhausted", trace.WithAttributes(
-					attribute.String("error", err.Error()),
-				))
-			}
-			return err
-		}
-	}
+	operation = w.wrapRetry(operation, span)
 
 	// Wrap with circuit breaker if configured
-	if w.cbFactory != nil {
-		cb := w.cbFactory(name)
-		originalOp := operation
-		operation = func(ctx context.Context) error {
-			span.AddEvent("circuit_breaker.check", trace.WithAttributes(
-				attribute.String("component", "circuit_breaker"),
-				attribute.String("name", cb.Name()),
-				attribute.String("state", string(cb.State())),
-			))
-			_, err := cb.Execute(ctx, func() (any, error) {
-				return nil, originalOp(ctx)
-			})
-			if err != nil {
-				span.AddEvent("circuit_breaker.error", trace.WithAttributes(
-					attribute.String("error", err.Error()),
-					attribute.String("state", string(cb.State())),
-				))
-			}
-			return err
-		}
-	}
+	operation = w.wrapCircuitBreaker(name, operation, span)
 
 	// Wrap with bulkhead if configured (outermost)
-	if w.bulkhead != nil {
-		originalOp := operation
-		operation = func(ctx context.Context) error {
-			span.AddEvent("bulkhead.acquire", trace.WithAttributes(
-				attribute.String("component", "bulkhead"),
-				attribute.String("name", w.bulkhead.Name()),
-				attribute.Int("active_count", w.bulkhead.ActiveCount()),
-				attribute.Int("waiting_count", w.bulkhead.WaitingCount()),
-			))
-			err := w.bulkhead.Do(ctx, originalOp)
-			if err != nil {
-				span.AddEvent("bulkhead.error", trace.WithAttributes(
-					attribute.String("error", err.Error()),
-				))
-			}
-			return err
-		}
-	}
+	operation = w.wrapBulkhead(operation, span)
 
 	// Execute the composed operation
 	err := operation(ctx)
@@ -251,6 +184,99 @@ func (w *resilienceWrapper) Execute(ctx context.Context, name string, fn func(ct
 	duration := time.Since(start)
 
 	// Record result in span
+	w.recordResult(span, name, err, duration)
+
+	return err
+}
+
+func (w *resilienceWrapper) wrapTimeout(next func(ctx context.Context) error, span trace.Span) func(ctx context.Context) error {
+	if w.timeout == nil {
+		return next
+	}
+
+	return func(ctx context.Context) error {
+		span.AddEvent("timeout.start", trace.WithAttributes(
+			attribute.String("component", "timeout"),
+			attribute.String("duration", w.timeout.Duration().String()),
+		))
+		err := w.timeout.Do(ctx, next)
+		if err != nil {
+			span.AddEvent("timeout.error", trace.WithAttributes(
+				attribute.String("error", err.Error()),
+			))
+		}
+		return err
+	}
+}
+
+func (w *resilienceWrapper) wrapRetry(next func(ctx context.Context) error, span trace.Span) func(ctx context.Context) error {
+	if w.retrier == nil {
+		return next
+	}
+
+	return func(ctx context.Context) error {
+		span.AddEvent("retry.start", trace.WithAttributes(
+			attribute.String("component", "retry"),
+			attribute.String("retrier", w.retrier.Name()),
+		))
+		err := w.retrier.Do(ctx, next)
+		if err != nil {
+			span.AddEvent("retry.exhausted", trace.WithAttributes(
+				attribute.String("error", err.Error()),
+			))
+		}
+		return err
+	}
+}
+
+func (w *resilienceWrapper) wrapCircuitBreaker(name string, next func(ctx context.Context) error, span trace.Span) func(ctx context.Context) error {
+	if w.cbFactory == nil {
+		return next
+	}
+
+	cb := w.cbFactory(name)
+	return func(ctx context.Context) error {
+		span.AddEvent("circuit_breaker.check", trace.WithAttributes(
+			attribute.String("component", "circuit_breaker"),
+			attribute.String("name", cb.Name()),
+			attribute.String("state", string(cb.State())),
+		))
+		_, err := cb.Execute(ctx, func() (any, error) {
+			return nil, next(ctx)
+		})
+		if err != nil {
+			span.AddEvent("circuit_breaker.error", trace.WithAttributes(
+				attribute.String("error", err.Error()),
+				attribute.String("state", string(cb.State())),
+			))
+		}
+		return err
+	}
+}
+
+func (w *resilienceWrapper) wrapBulkhead(next func(ctx context.Context) error, span trace.Span) func(ctx context.Context) error {
+	if w.bulkhead == nil {
+		return next
+	}
+
+	return func(ctx context.Context) error {
+		span.AddEvent("bulkhead.acquire", trace.WithAttributes(
+			attribute.String("component", "bulkhead"),
+			attribute.String("name", w.bulkhead.Name()),
+			attribute.Int("active_count", w.bulkhead.ActiveCount()),
+			attribute.Int("waiting_count", w.bulkhead.WaitingCount()),
+		))
+		err := w.bulkhead.Do(ctx, next)
+		if err != nil {
+			span.AddEvent("bulkhead.error", trace.WithAttributes(
+				attribute.String("error", err.Error()),
+			))
+		}
+		return err
+	}
+}
+
+func (w *resilienceWrapper) recordResult(span trace.Span, name string, err error, duration time.Duration) {
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		span.SetAttributes(
@@ -273,8 +299,6 @@ func (w *resilienceWrapper) Execute(ctx context.Context, name string, fn func(ct
 			"duration_ms", duration.Milliseconds(),
 		)
 	}
-
-	return err
 }
 
 // errorType returns a string categorizing the error type for metrics/tracing.

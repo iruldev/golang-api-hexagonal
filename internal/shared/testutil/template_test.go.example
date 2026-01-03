@@ -1,0 +1,196 @@
+// Package testutil provides test utilities and templates for the project.
+//
+// This file serves as a template for writing consistent, well-structured tests.
+// Copy and adapt this template when creating new test files.
+//
+// Usage:
+//   1. Copy this file to your package
+//   2. Rename from template_test.go.example to {component}_{category}_test.go
+//   3. Update package name
+//   4. Replace placeholder functions with your tests
+//
+// Categories (use in filename):
+//   - unit:        Basic unit tests for logic
+//   - integration: Tests requiring external resources (use build tag)
+//   - bench:       Benchmark tests
+//   - concurrent:  Concurrency/stress tests
+//   - edge:        Edge cases and error handling
+//   - {feature}:   Domain-specific (e.g., jwt, create, backoff)
+package testutil
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// loadFixture loads a test fixture from the testdata directory.
+// Place test fixtures (JSON files, etc.) in a testdata/ subdirectory.
+func loadFixture(t *testing.T, name string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("testdata", name))
+	require.NoError(t, err, "Failed to load fixture %s", name)
+	return data
+}
+
+// TestExample_TableDriven demonstrates the table-driven test pattern.
+// Use this structure for testing multiple scenarios of the same function.
+func TestExample_TableDriven(t *testing.T) {
+	tests := []struct {
+		name    string           // descriptive test case name
+		input   string           // input to the function
+		want    string           // expected output
+		wantErr error            // expected error (nil if no error expected)
+		setup   func()           // optional setup before test
+		cleanup func()           // optional cleanup after test
+	}{
+		{
+			name:  "valid input returns expected output",
+			input: "valid",
+			want:  "expected",
+		},
+		{
+			name:    "empty input returns error",
+			input:   "",
+			wantErr: assert.AnError, // replace with actual expected error
+		},
+		{
+			name:  "special characters are handled",
+			input: "test@example.com",
+			want:  "processed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup
+			if tt.setup != nil {
+				tt.setup()
+			}
+			if tt.cleanup != nil {
+				defer tt.cleanup()
+			}
+
+			// Execute - replace with actual function call
+			// got, err := YourFunction(tt.input)
+
+			// For template demonstration
+			var got string
+			var err error
+			if tt.input == "" {
+				err = assert.AnError
+			} else if tt.input == "valid" {
+				got = "expected"
+			} else {
+				got = "processed"
+			}
+
+			// Verify
+			if tt.wantErr != nil {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// TestExample_Subtests demonstrates using t.Run for grouped tests.
+// Use when tests share setup but verify different behaviors.
+func TestExample_Subtests(t *testing.T) {
+	// Shared setup
+	// svc := NewService(mockDep)
+
+	t.Run("success cases", func(t *testing.T) {
+		t.Run("with valid input", func(t *testing.T) {
+			// Test implementation
+			assert.True(t, true)
+		})
+
+		t.Run("with edge case input", func(t *testing.T) {
+			// Test implementation
+			assert.True(t, true)
+		})
+	})
+
+	t.Run("error cases", func(t *testing.T) {
+		t.Run("returns error for invalid input", func(t *testing.T) {
+			// Test implementation
+			assert.True(t, true)
+		})
+
+		t.Run("returns error for missing dependency", func(t *testing.T) {
+			// Test implementation
+			assert.True(t, true)
+		})
+	})
+}
+
+// TestExample_Parallel demonstrates parallel test execution.
+// Use t.Parallel() for tests that don't share mutable state.
+func TestExample_Parallel(t *testing.T) {
+	tests := []struct {
+		name  string
+		input int
+		want  int
+	}{
+		{"positive", 5, 25},
+		{"zero", 0, 0},
+		{"negative", -3, 9},
+	}
+
+	for _, tt := range tests {
+		tt := tt // capture range variable for parallel execution
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// got := Square(tt.input)
+			got := tt.input * tt.input
+
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// BenchmarkExample demonstrates benchmark test structure.
+// Run with: go test -bench=. -benchmem
+func BenchmarkExample(b *testing.B) {
+	// Setup outside the timing loop
+	input := "benchmark input"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// YourFunction(input)
+		_ = len(input)
+	}
+}
+
+// BenchmarkExample_Parallel demonstrates parallel benchmarking.
+func BenchmarkExample_Parallel(b *testing.B) {
+	input := "parallel input"
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			// YourFunction(input)
+			_ = len(input)
+		}
+	})
+}
+
+// Example mock structure - define in helpers_test.go for shared use
+// type MockRepository struct {
+// 	mock.Mock
+// }
+//
+// func (m *MockRepository) FindByID(ctx context.Context, id string) (*Entity, error) {
+// 	args := m.Called(ctx, id)
+// 	if args.Get(0) == nil {
+// 		return nil, args.Error(1)
+// 	}
+// 	return args.Get(0).(*Entity), args.Error(1)
+// }

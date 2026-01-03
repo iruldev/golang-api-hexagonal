@@ -29,11 +29,19 @@ linters:
   enable:
     - depguard
     - errcheck
+    - funlen
     - govet
     - ineffassign
     - staticcheck
     - unused
   settings:
+    funlen:
+      # Maximum lines per function (excluding comments and blank lines)
+      lines: 100
+      # Maximum statements per function
+      statements: 60
+      # Ignore comments when counting lines
+      ignore-comments: true
     depguard:
       rules:
         # =============================================================
@@ -369,6 +377,9 @@ linters:
       - linters:
           - staticcheck
         text: "SA1019.*NewNoopTracerProvider"
+      - path: '.*_test\.go'
+        linters:
+          - funlen
 
 formatters:
   enable:

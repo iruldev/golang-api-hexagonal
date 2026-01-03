@@ -170,6 +170,7 @@ func Load() (*Config, error) {
 	return &cfg, nil
 }
 
+//nolint:funlen
 func (c *Config) Validate() error {
 	if strings.TrimSpace(c.DatabaseURL) == "" {
 		return fmt.Errorf("DATABASE_URL is required and cannot be empty")

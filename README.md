@@ -245,6 +245,8 @@ make test
 go test -v ./internal/transport/http/handler/...
 ```
 
+For detailed testing conventions, patterns, and best practices, see [Testing Patterns](docs/testing-patterns.md).
+
 ### Coverage
 
 Coverage is enforced at **≥80%** for `internal/domain/...` and `internal/app/...` packages.
