@@ -255,14 +255,17 @@ test-race-selective:
 .PHONY: coverage
 coverage:
 	@echo "📊 Running tests with coverage (domain+app)..."
-	$(GOTEST) -race -coverprofile=coverage.out -covermode=atomic \
+	$(GOTEST) -race -coverprofile=coverage-domain.out -covermode=atomic \
 		./internal/domain/... \
 		./internal/app/...
 	@echo ""
 	@echo "📈 Coverage report:"
-	@go tool cover -func=coverage.out | tail -1
+	@go tool cover -func=coverage-domain.out | tail -1
+	@echo ""
+	@echo "📦 Per-package coverage:"
+	@go tool cover -func=coverage-domain.out | grep -E '^[a-zA-Z]' | awk -F: '{split($$1,a,"/"); pkg=a[length(a)-1]"/"a[length(a)]; coverage[pkg]=$$NF} END {for(p in coverage) print "  " p ": " coverage[p]}' | sort | head -20
 	@THRESHOLD="$(COVERAGE_THRESHOLD)"; \
-	COVERAGE=$$(go tool cover -func=coverage.out | tail -1 | awk '{gsub(/%/,"",$$3); print $$3}'); \
+	COVERAGE=$$(go tool cover -func=coverage-domain.out | tail -1 | awk '{gsub(/%/,"",$$3); print $$3}'); \
 	if awk 'BEGIN {exit !('"$$COVERAGE"' < '"$$THRESHOLD"')}'; then \
 		echo ""; \
 		echo "❌ Coverage $$COVERAGE% is below $$THRESHOLD% threshold"; \
@@ -271,6 +274,64 @@ coverage:
 		echo ""; \
 		echo "✅ Coverage $$COVERAGE% meets $$THRESHOLD% threshold"; \
 	fi
+
+## coverage-html: Generate HTML coverage report for visual review (domain+app only)
+.PHONY: coverage-html
+coverage-html:
+	@if [ ! -f coverage-domain.out ]; then \
+		echo "📊 No coverage-domain.out found, running coverage check first..."; \
+		$(MAKE) coverage; \
+	fi
+	@echo "📊 Generating HTML coverage report (domain+app)..."
+	go tool cover -html=coverage-domain.out -o coverage.html
+	@echo "✅ HTML coverage report generated: coverage.html"
+	@echo "   Open in browser: open coverage.html (macOS) or xdg-open coverage.html (Linux)"
+
+## coverage-report: Show detailed per-package coverage breakdown (domain+app only)
+.PHONY: coverage-report
+coverage-report:
+	@if [ ! -f coverage-domain.out ]; then \
+		echo "📊 No coverage-domain.out found, running coverage check first..."; \
+		$(MAKE) coverage; \
+	fi
+	@echo "📊 Per-package coverage breakdown (domain+app):"
+	@echo ""
+	@go tool cover -func=coverage-domain.out | grep -E '^[a-zA-Z]' | \
+		awk -F'[:/\t ]+' '{ \
+			file=$$0; \
+			gsub(/[[:space:]]+[0-9.]+%$$/, "", file); \
+			n=split(file, parts, "/"); \
+			pkg=parts[n-1]"/"parts[n]; \
+			pct=$$NF; \
+			gsub(/%/, "", pct); \
+			sum[pkg]+=pct; count[pkg]++ \
+		} END { \
+			for(p in sum) { \
+				avg=sum[p]/count[p]; \
+				printf "  %-50s %6.1f%%\n", p, avg \
+			} \
+		}' | sort -t: -k2 -rn
+	@echo ""
+	@echo "📈 Total coverage (domain+app):"
+	@go tool cover -func=coverage-domain.out | tail -1
+
+## coverage-detail: Show uncovered lines for PR diff review (domain+app only)
+.PHONY: coverage-detail
+coverage-detail:
+	@if [ ! -f coverage-domain.out ]; then \
+		echo "📊 No coverage-domain.out found, running coverage check first..."; \
+		$(MAKE) coverage; \
+	fi
+	@echo "📊 Uncovered code sections in domain+app (functions < 100%):"
+	@echo ""
+	@UNCOVERED=$$(go tool cover -func=coverage-domain.out | grep -v "100.0%" | grep -v "total:" | head -50); \
+	if [ -n "$$UNCOVERED" ]; then \
+		echo "$$UNCOVERED"; \
+	else \
+		echo "  ✅ All domain/app functions have 100% coverage!"; \
+	fi
+	@echo ""
+	@echo "💡 Tip: Run 'make coverage-html' for detailed line-by-line view"
 
 ## lint: Run linter
 .PHONY: lint

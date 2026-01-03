@@ -96,7 +96,55 @@ jobs:
       # Coverage enforcement: domain+app packages must maintain ≥80% coverage
       # Uses Makefile target which implements threshold check
       - name: Check coverage threshold
-        run: make coverage
+        id: coverage
+        run: |
+          # Run coverage and capture output
+          make coverage 2>&1 | tee coverage-output.txt
+          
+          # Extract coverage percentage for badge generation
+          COVERAGE=$(go tool cover -func=coverage-domain.out | tail -1 | awk '{gsub(/%/,"",$$3); print $$3}')
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+          echo "Coverage: $COVERAGE%"
+
+      # Create coverage badge (requires GIST_SECRET and GIST_ID)
+      # Documentation: https://github.com/schneegans/dynamic-badges-action
+      - name: Create coverage badge
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        if: github.ref == 'refs/heads/main' && secrets.GIST_SECRET != '' && secrets.GIST_ID != ''
+        continue-on-error: true
+        env:
+          GIST_SECRET: ${{ secrets.GIST_SECRET }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+        with:
+          auth: ${{ env.GIST_SECRET }}
+          gistID: ${{ env.GIST_ID }}
+          filename: coverage.json
+          label: coverage
+          message: ${{ steps.coverage.outputs.coverage }}%
+          valColorRange: ${{ steps.coverage.outputs.coverage }}
+          maxColorRange: 100
+          minColorRange: 0
+          namedLogo: go
+
+      # Generate and upload HTML coverage report for visual review
+      - name: Generate HTML coverage report
+        if: always()
+        run: make coverage-html
+
+      - name: Upload HTML coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-html-report
+          path: coverage.html
+          retention-days: 30
+
+      # Show uncovered functions on failure for easy debugging
+      - name: Show uncovered code sections
+        if: failure()
+        run: |
+          echo "📊 Uncovered code sections:"
+          make coverage-detail || true
 
       # Story 2.3: Verify all generated code (mocks) is up-to-date
       # Runs 'go generate' and checks for uncommitted changes

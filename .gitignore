@@ -4,6 +4,8 @@
 # Build artifacts
 /api
 coverage.out
+coverage-domain.out
+coverage.html
 
 # IDE/Editor
 .idea/

@@ -1,5 +1,11 @@
 # golang-api-hexagonal
 
+[![CI](https://github.com/iruldev/golang-api-hexagonal/actions/workflows/ci.yml/badge.svg)](https://github.com/iruldev/golang-api-hexagonal/actions/workflows/ci.yml)
+<!-- Badge updates automatically after CI runs with GIST_SECRET/GIST_ID configured -->
+<!-- Coverage badge (requires setup, see CI workflow) -->
+[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/iruldev/GIST_ID/raw/coverage.json)](https://github.com/iruldev/golang-api-hexagonal/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/iruldev/golang-api-hexagonal)](https://goreportcard.com/report/github.com/iruldev/golang-api-hexagonal)
+
 A production-ready Go API built with hexagonal architecture, featuring comprehensive observability, security, and developer experience.
 
 ## 🚀 Quick Start
@@ -235,12 +241,39 @@ DROP TABLE ...;
 # Run all tests
 make test
 
-# Run tests with coverage
-go test -cover ./...
-
 # Run specific package tests
 go test -v ./internal/transport/http/handler/...
 ```
+
+### Coverage
+
+Coverage is enforced at **≥80%** for `internal/domain/...` and `internal/app/...` packages.
+
+```bash
+# Check coverage meets threshold (fails if < 80%)
+make coverage
+
+# Generate HTML coverage report for visual review
+make coverage-html
+open coverage.html  # macOS
+
+# Show per-package coverage breakdown
+make coverage-report
+
+# Show uncovered functions for PR review
+make coverage-detail
+```
+
+**Coverage Targets:**
+| Target | Description |
+|--------|-------------|
+| `make coverage` | Check 80% threshold (fails CI if below) |
+| `make coverage-html` | Generate HTML report |
+| `make coverage-report` | Per-package breakdown |
+| `make coverage-detail` | Show uncovered functions |
+
+> **Note:** Only domain and app layers are subject to coverage requirements. Infrastructure and transport layers are tested via integration tests.
+
 
 ## 📁 Project Structure
 
