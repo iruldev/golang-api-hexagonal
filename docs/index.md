@@ -48,6 +48,7 @@
 |------|-----------|--------|
 | [architecture.md](./architecture.md) | Arsitektur hexagonal, layer rules, gap analysis | Updated |
 | [patterns.md](./patterns.md) | Copy-paste code patterns untuk semua layers | New |
+| [adr/](./adr/index.md) | Architecture Decision Records (ADRs) | New |
 | [source-tree-analysis.md](./source-tree-analysis.md) | Struktur direktori dengan anotasi lengkap | Updated |
 | [local-development.md](./local-development.md) | Setup development environment | Complete |
 | [observability.md](./observability.md) | Metrics, tracing, logging setup | Complete |

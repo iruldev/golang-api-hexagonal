@@ -282,6 +282,8 @@ For detailed testing conventions, patterns, and best practices, see [Testing Pat
 
 For copy-paste friendly code templates, see [Code Patterns](docs/patterns.md) and [Copy-Paste Kit](docs/copy-paste-kit/README.md).
 
+For architectural decisions and their rationale, see [Architecture Decision Records](docs/adr/index.md).
+
 ### Coverage
 
 Coverage is enforced at **≥80%** for `internal/domain/...` and `internal/app/...` packages.
