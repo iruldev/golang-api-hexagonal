@@ -17,13 +17,43 @@ DOCKER_VOLUME_PGDATA ?= golang-api-hexagonal-pgdata
 INFRA_TIMEOUT ?= 60
 INFRA_CONFIRM ?=
 
-## help: Show this help message
+## help: Show this help message with grouped categories
 .PHONY: help
 help:
+	@echo ""
+	@echo "╔════════════════════════════════════════════════════════════════════════════╗"
+	@echo "║                     golang-api-hexagonal Makefile                          ║"
+	@echo "╚════════════════════════════════════════════════════════════════════════════╝"
+	@echo ""
 	@echo "Usage: make [target]"
 	@echo ""
-	@echo "Targets:"
-	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/## /  /'
+	@awk '\
+		/^# =+$$/ { in_section = 1; next } \
+		in_section && /^# [A-Za-z]/ { \
+			gsub(/^# /, ""); \
+			printf "\n\033[1;34m📦 %s\033[0m\n", $$0; \
+			printf "   ─────────────────────────────────────────\n"; \
+			in_section = 0; \
+			next \
+		} \
+		/^## [a-z].*:/ { \
+			sub(/^## /, ""); \
+			idx = index($$0, ": "); \
+			if (idx > 0) { \
+				target = substr($$0, 1, idx-1); \
+				desc = substr($$0, idx+2); \
+				printf "   \033[32m%-25s\033[0m %s\n", target, desc \
+			} \
+		} \
+	' $(MAKEFILE_LIST)
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "💡 Quick Reference:"
+	@echo "   First time setup:  make quick-start"
+	@echo "   Run all tests:     make test-all"
+	@echo "   Start server:      make run"
+	@echo "   Full CI check:     make ci"
+	@echo ""
 
 # =============================================================================
 # Quick Start (Story 6.1: One-Command Setup)
@@ -274,12 +304,24 @@ generate:
 	sqlc generate
 	@echo "✅ Code generation complete"
 
-## mocks: Generate all mocks using mockgen (Story 1.2)
+## mocks: Generate all mocks from domain interfaces using mockgen
 .PHONY: mocks
 mocks:
-	@echo "🔧 Generating mocks..."
+	@echo "🔧 Generating mocks from domain interfaces..."
+	@echo ""
 	@which mockgen > /dev/null || (echo "❌ mockgen not found. Run 'go install go.uber.org/mock/mockgen@latest'" && exit 1)
+	@echo "   Scanning for //go:generate directives in internal/domain/..."
+	@grep -r "//go:generate mockgen" internal/domain 2>/dev/null | while read line; do \
+		file=$$(echo "$$line" | cut -d: -f1); \
+		iface=$$(echo "$$line" | grep -oE '[A-Z][a-zA-Z]+$$'); \
+		echo "   → Generating mock for: $$iface (from $$file)"; \
+	done
+	@echo ""
 	go generate ./internal/domain/...
+	@echo ""
+	@echo "📁 Generated mock files:"
+	@ls -la internal/testutil/mocks/*.go 2>/dev/null | awk '{print "   " $$NF}' || echo "   No mock files found"
+	@echo ""
 	@echo "✅ Mocks generated in internal/testutil/mocks/"
 
 ## build: Build the application
@@ -296,13 +338,16 @@ run:
 		$(GOCMD) run ./cmd/api; \
 	fi
 
+# =============================================================================
+# Testing
+# =============================================================================
+
 ## test: Run all tests (usage: make test ARGS="-run TestName")
 .PHONY: test
 test:
 	$(GOTEST) -v -race -coverprofile=coverage.out -covermode=atomic -shuffle=on ./... $(ARGS)
 
 ## test-integration: Run integration tests (requires DATABASE_URL with *_test database)
-# Story 6.3: Integration tests require a test database to be running
 .PHONY: test-integration
 test-integration:
 	@echo "🧪 Running integration tests..."
@@ -352,6 +397,48 @@ test-contract: test-contract-consumer
 	@echo "   1. Start the server: make run"
 	@echo "   2. In another terminal: make test-contract-provider"
 
+## test-all: Run all tests (unit + integration + contract) - FR48
+.NOTPARALLEL: test-all
+.PHONY: test-all
+test-all:
+	@echo ""
+	@echo "🧪 Running All Tests"
+	@echo "==================="
+	@echo ""
+	@# Step 1: Unit tests
+	@echo "📋 Step 1/3: Running unit tests..."
+	@$(MAKE) test --no-print-directory
+	@echo ""
+	@echo "✅ Unit tests complete"
+	@echo ""
+	@# Step 2: Integration tests (graceful skip if DATABASE_URL not set)
+	@echo "📋 Step 2/3: Running integration tests..."
+	@if [ -z "$$DATABASE_URL" ]; then \
+		echo "   ⚠️  DATABASE_URL not set - skipping integration tests"; \
+		echo "   💡 To run integration tests, set DATABASE_URL to a test database:"; \
+		echo "      export DATABASE_URL=\"postgres://postgres:postgres@localhost:5432/golang_api_hexagonal_test?sslmode=disable\""; \
+	else \
+		$(MAKE) test-integration --no-print-directory && echo "" && echo "✅ Integration tests complete" || (echo "❌ Integration tests failed" && exit 1); \
+	fi
+	@echo ""
+	@# Step 3: Contract tests
+	@echo "📋 Step 3/3: Running contract tests (consumer only)..."
+	@$(MAKE) test-contract-consumer --no-print-directory
+	@echo ""
+	@echo "==================="
+	@echo "🎉 All Tests Complete!"
+	@echo "==================="
+	@echo ""
+	@echo "Summary:"
+	@echo "   ✅ Unit tests:        PASSED"
+	@if [ -z "$$DATABASE_URL" ]; then \
+		echo "   ⚠️  Integration tests: SKIPPED (DATABASE_URL not set)"; \
+	else \
+		echo "   ✅ Integration tests: PASSED"; \
+	fi
+	@echo "   ✅ Contract tests:    PASSED"
+	@echo ""
+
 ## pact-install: Install Pact FFI native library (required for contract tests)
 .PHONY: pact-install
 pact-install:
@@ -368,7 +455,7 @@ gremlins-install:
 	@echo "✅ Gremlins installed"
 
 ## test-mutation: Run mutation tests on domain and app layers (NFR-MAINT-2: ≥60% kill rate)
-# Using integration mode (-i) to run full test suite for proper cross-package coverage
+#   Note: Uses integration mode (-i) for proper cross-package coverage
 .PHONY: test-mutation
 test-mutation:
 	@echo "🧟 Running mutation tests on domain and app layers..."
@@ -703,7 +790,7 @@ infra-status:
 # Database Migrations
 # =============================================================================
 
-# Helper to check prerequisites
+#   Internal helpers for checking prerequisites
 .PHONY: _check-goose _check-db-url
 
 _check-goose:

@@ -21,7 +21,6 @@ import (
 type MockAuditEventRepository struct {
 	ctrl     *gomock.Controller
 	recorder *MockAuditEventRepositoryMockRecorder
-	isgomock struct{}
 }
 
 // MockAuditEventRepositoryMockRecorder is the mock recorder for MockAuditEventRepository.
@@ -42,23 +41,23 @@ func (m *MockAuditEventRepository) EXPECT() *MockAuditEventRepositoryMockRecorde
 }
 
 // Create mocks base method.
-func (m *MockAuditEventRepository) Create(ctx context.Context, q domain.Querier, event *domain.AuditEvent) error {
+func (m *MockAuditEventRepository) Create(arg0 context.Context, arg1 domain.Querier, arg2 *domain.AuditEvent) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Create", ctx, q, event)
+	ret := m.ctrl.Call(m, "Create", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockAuditEventRepositoryMockRecorder) Create(ctx, q, event any) *gomock.Call {
+func (mr *MockAuditEventRepositoryMockRecorder) Create(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockAuditEventRepository)(nil).Create), ctx, q, event)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockAuditEventRepository)(nil).Create), arg0, arg1, arg2)
 }
 
 // ListByEntityID mocks base method.
-func (m *MockAuditEventRepository) ListByEntityID(ctx context.Context, q domain.Querier, entityType string, entityID domain.ID, params domain.ListParams) ([]domain.AuditEvent, int, error) {
+func (m *MockAuditEventRepository) ListByEntityID(arg0 context.Context, arg1 domain.Querier, arg2 string, arg3 domain.ID, arg4 domain.ListParams) ([]domain.AuditEvent, int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListByEntityID", ctx, q, entityType, entityID, params)
+	ret := m.ctrl.Call(m, "ListByEntityID", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].([]domain.AuditEvent)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(error)
@@ -66,7 +65,7 @@ func (m *MockAuditEventRepository) ListByEntityID(ctx context.Context, q domain.
 }
 
 // ListByEntityID indicates an expected call of ListByEntityID.
-func (mr *MockAuditEventRepositoryMockRecorder) ListByEntityID(ctx, q, entityType, entityID, params any) *gomock.Call {
+func (mr *MockAuditEventRepositoryMockRecorder) ListByEntityID(arg0, arg1, arg2, arg3, arg4 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByEntityID", reflect.TypeOf((*MockAuditEventRepository)(nil).ListByEntityID), ctx, q, entityType, entityID, params)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByEntityID", reflect.TypeOf((*MockAuditEventRepository)(nil).ListByEntityID), arg0, arg1, arg2, arg3, arg4)
 }

@@ -21,7 +21,6 @@ import (
 type MockUserRepository struct {
 	ctrl     *gomock.Controller
 	recorder *MockUserRepositoryMockRecorder
-	isgomock struct{}
 }
 
 // MockUserRepositoryMockRecorder is the mock recorder for MockUserRepository.
@@ -42,38 +41,38 @@ func (m *MockUserRepository) EXPECT() *MockUserRepositoryMockRecorder {
 }
 
 // Create mocks base method.
-func (m *MockUserRepository) Create(ctx context.Context, q domain.Querier, user *domain.User) error {
+func (m *MockUserRepository) Create(arg0 context.Context, arg1 domain.Querier, arg2 *domain.User) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Create", ctx, q, user)
+	ret := m.ctrl.Call(m, "Create", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockUserRepositoryMockRecorder) Create(ctx, q, user any) *gomock.Call {
+func (mr *MockUserRepositoryMockRecorder) Create(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockUserRepository)(nil).Create), ctx, q, user)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockUserRepository)(nil).Create), arg0, arg1, arg2)
 }
 
 // GetByID mocks base method.
-func (m *MockUserRepository) GetByID(ctx context.Context, q domain.Querier, id domain.ID) (*domain.User, error) {
+func (m *MockUserRepository) GetByID(arg0 context.Context, arg1 domain.Querier, arg2 domain.ID) (*domain.User, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetByID", ctx, q, id)
+	ret := m.ctrl.Call(m, "GetByID", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*domain.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetByID indicates an expected call of GetByID.
-func (mr *MockUserRepositoryMockRecorder) GetByID(ctx, q, id any) *gomock.Call {
+func (mr *MockUserRepositoryMockRecorder) GetByID(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByID", reflect.TypeOf((*MockUserRepository)(nil).GetByID), ctx, q, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByID", reflect.TypeOf((*MockUserRepository)(nil).GetByID), arg0, arg1, arg2)
 }
 
 // List mocks base method.
-func (m *MockUserRepository) List(ctx context.Context, q domain.Querier, params domain.ListParams) ([]domain.User, int, error) {
+func (m *MockUserRepository) List(arg0 context.Context, arg1 domain.Querier, arg2 domain.ListParams) ([]domain.User, int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "List", ctx, q, params)
+	ret := m.ctrl.Call(m, "List", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]domain.User)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(error)
@@ -81,7 +80,7 @@ func (m *MockUserRepository) List(ctx context.Context, q domain.Querier, params 
 }
 
 // List indicates an expected call of List.
-func (mr *MockUserRepositoryMockRecorder) List(ctx, q, params any) *gomock.Call {
+func (mr *MockUserRepositoryMockRecorder) List(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockUserRepository)(nil).List), ctx, q, params)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockUserRepository)(nil).List), arg0, arg1, arg2)
 }
