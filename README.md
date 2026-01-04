@@ -286,6 +286,8 @@ For architectural decisions and their rationale, see [Architecture Decision Reco
 
 For operational incident response procedures, see [Operational Runbooks](docs/runbooks/index.md).
 
+For new developers joining the project, see [Adoption Guide](docs/adoption-guide.md).
+
 ### Coverage
 
 Coverage is enforced at **≥80%** for `internal/domain/...` and `internal/app/...` packages.

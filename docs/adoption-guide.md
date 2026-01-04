@@ -1,591 +1,820 @@
-# Adoption Guide
+# Adoption Guide for New Developers
 
-This guide helps teams adopt the production-grade testing patterns and error handling from this boilerplate into their existing Go services.
-
-**Estimated time:** 4-6 hours for full integration
+**Last Updated:** 2026-01-04  
+**Estimated Total Read Time:** ~80 minutes
 
 ---
+
+Welcome to the golang-api-hexagonal project! This comprehensive guide will help you become productive quickly by understanding the architecture, implementing your first feature, and following best practices.
 
 ## Table of Contents
 
-1. [Prerequisites](#prerequisites)
-2. [Quick Start (30 min)](#quick-start-30-min)
-3. [Full Integration](#full-integration)
-4. [Brownfield Migration](#brownfield-migration)
-5. [Copy-Paste Kit](#copy-paste-kit)
-6. [Adoption Checklist](#adoption-checklist)
-7. [Troubleshooting](#troubleshooting)
+1. [Project Overview](#project-overview) (~5 min)
+2. [Architecture Deep Dive](#architecture-deep-dive) (~15 min)
+3. [Local Development Setup](#local-development-setup) (~10 min hands-on)
+4. [Your First Feature Tutorial](#your-first-feature-tutorial) (~30 min hands-on)
+5. [Testing Guide](#testing-guide) (~10 min)
+6. [Code Review Checklist](#code-review-checklist) (~5 min)
+7. [FAQ and Troubleshooting](#faq-and-troubleshooting) (~5 min)
 
 ---
 
-## Prerequisites
+## Project Overview
 
-Before starting, ensure you have:
+**Estimated reading time: ~5 minutes**
 
-- [ ] Go 1.21 or later
-- [ ] Docker installed and running (for testcontainers)
-- [ ] PostgreSQL knowledge (for database tests)
-- [ ] Familiarity with your project's test structure
+### What is This Project?
+
+The **golang-api-hexagonal** project is a production-ready Go API that demonstrates **Hexagonal Architecture** (also known as Ports and Adapters). It's designed as a battle-tested boilerplate for building scalable, maintainable, and testable Go services.
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Hexagonal Architecture** | Clear separation between business logic and infrastructure |
+| **Layer Enforcement** | CI-enforced boundaries via golangci-lint depguard |
+| **Dependency Injection** | Uber Fx for clean, testable wiring |
+| **Comprehensive Testing** | Unit, integration, and contract tests with 80% coverage |
+| **Observability** | OpenTelemetry tracing, Prometheus metrics, structured logging |
+| **Security** | JWT authentication, rate limiting, security headers |
+| **Cloud-Native** | Health probes, graceful shutdown, Kubernetes-ready |
+
+### Technology Stack
+
+| Category | Technology | Version |
+|----------|------------|---------|
+| Language | Go | 1.25.5 |
+| Router | Chi | v5.2.3 |
+| Database | PostgreSQL + pgx | v5.7.6 |
+| DI | Uber Fx | v1.24.0 |
+| Tracing | OpenTelemetry | v1.39.0 |
+| Metrics | Prometheus | v1.23.2 |
+| Linting | golangci-lint | v1.64.8 |
+
+### Quick Reference
+
+```bash
+make setup       # First-time setup
+make run         # Start server
+make test        # Run unit tests
+make lint        # Run linter
+make ci          # Full CI pipeline
+```
+
+> 📚 **Learn More:** See [README.md](../README.md) for detailed setup instructions.
 
 ---
 
-## Quick Start (30 min)
+## Architecture Deep Dive
 
-Get up and running with the core testing utilities in 30 minutes.
+**Estimated reading time: ~15 minutes**
 
-### Step 1: Copy Test Utilities (10 min)
+This section explains the Hexagonal Architecture pattern used in this project and how to work within its constraints.
 
-Copy the `internal/testutil/` directory to your project:
+### The Hexagonal Model
 
-```bash
-# From this boilerplate
-cp -r internal/testutil/ /your-project/internal/testutil/
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        transport/http                           │
+│                      (Inbound Adapters)                         │
+│            handler/ │ middleware/ │ contract/                   │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                             app/                                │
+│                      (Application Layer)                        │
+│                user/ │ audit/ │ auth.go                         │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                           domain/                               │
+│                       (Business Core)                           │
+│       User │ Audit │ ID │ Pagination │ Querier │ TxManager      │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                            infra/                               │
+│                      (Outbound Adapters)                        │
+│          postgres/ │ config/ │ observability/ │ fx/             │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-Update the import paths in all copied files to match your module.
+### Layer Responsibilities
 
-### Step 2: Add Makefile Targets (5 min)
+#### 🔴 Domain Layer (`internal/domain/`)
 
-Add these targets to your Makefile:
+The **core business logic** - pure Go with zero external dependencies.
 
-```makefile
-# Run unit tests with goleak
-.PHONY: test
-test:
-	go test -v -race -count=1 ./...
+**Contains:**
+- Entities (User, Audit, etc.)
+- Value Objects (ID, Pagination)
+- Repository Interfaces (Ports)
+- Domain Errors
 
-# Run tests with shuffle for determinism
-.PHONY: test-shuffle
-test-shuffle:
-	go test -v -race -count=1 -shuffle=on ./...
-
-# Run integration tests
-.PHONY: test-integration
-test-integration:
-	go test -v -race -count=1 -tags=integration ./...
-
-# Run all tests
-.PHONY: test-all
-test-all: test test-integration
-```
-
-### Step 3: Add TestMain with goleak (10 min)
-
-Create `internal/testutil/testutil.go`:
-
+**Example - Domain Entity:**
 ```go
-package testutil
+// internal/domain/user.go
+package domain
 
-import (
-	"os"
-	"testing"
+import "time"
 
-	"go.uber.org/goleak"
-)
-
-// TestMain runs all tests with goleak for goroutine leak detection.
-func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
+// User represents the core user entity.
+// Note: NO JSON tags - transport layer handles serialization.
+type User struct {
+    ID        string
+    Email     string
+    FirstName string
+    LastName  string
+    CreatedAt time.Time
+    UpdatedAt time.Time
 }
 ```
 
-In each package with tests, create `main_test.go`:
-
+**Example - Repository Port:**
 ```go
-package yourpackage
+// internal/domain/user.go
+package domain
 
-import (
-	"os"
-	"testing"
+import "context"
 
-	"go.uber.org/goleak"
-)
-
-func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
+// UserRepository defines the contract for user persistence.
+type UserRepository interface {
+    Create(ctx context.Context, user *User) error
+    GetByID(ctx context.Context, id string) (*User, error)
+    GetByEmail(ctx context.Context, email string) (*User, error)
+    List(ctx context.Context, params ListParams) ([]*User, error)
 }
 ```
 
-### Step 4: Verify Setup (5 min)
+#### 🟡 Application Layer (`internal/app/`)
 
-Run your tests:
+**Use cases and orchestration** - implements business logic without knowing about HTTP or databases.
+
+**Contains:**
+- Use Cases (CreateUser, GetUser, ListUsers)
+- Application Services
+- Input/Output DTOs for use cases
+
+**Example - Use Case:**
+```go
+// internal/app/user/create_user.go
+package user
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/iruldev/golang-api-hexagonal/internal/domain"
+)
+
+type CreateUserUseCase struct {
+    repo  domain.UserRepository
+    audit AuditService
+}
+
+func NewCreateUserUseCase(repo domain.UserRepository, audit AuditService) *CreateUserUseCase {
+    return &CreateUserUseCase{repo: repo, audit: audit}
+}
+
+func (uc *CreateUserUseCase) Execute(ctx context.Context, input CreateUserInput) (*domain.User, error) {
+    user := &domain.User{
+        Email:     input.Email,
+        FirstName: input.FirstName,
+        LastName:  input.LastName,
+    }
+    
+    if err := uc.repo.Create(ctx, user); err != nil {
+        return nil, fmt.Errorf("create user in repository: %w", err)
+    }
+    
+    return user, nil
+}
+```
+
+#### 🔵 Transport Layer (`internal/transport/http/`)
+
+**Inbound adapters** - handles HTTP requests and translates to/from domain objects.
+
+**Contains:**
+- HTTP Handlers
+- Middleware (auth, logging, metrics)
+- Request/Response DTOs with JSON tags
+- Contract definitions
+
+**Example - Handler:**
+```go
+// internal/transport/http/handler/user_handler.go
+package handler
+
+import (
+    "encoding/json"
+    "net/http"
+
+    "github.com/iruldev/golang-api-hexagonal/internal/app/user"
+)
+
+type UserHandler struct {
+    createUseCase *user.CreateUserUseCase
+}
+
+func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
+    var req CreateUserRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        // Handle error
+        return
+    }
+    
+    result, err := h.createUseCase.Execute(r.Context(), user.CreateUserInput{
+        Email:     req.Email,
+        FirstName: req.FirstName,
+        LastName:  req.LastName,
+    })
+    if err != nil {
+        // Handle error
+        return
+    }
+    
+    json.NewEncoder(w).Encode(toUserResponse(result))
+}
+```
+
+#### 🟢 Infrastructure Layer (`internal/infra/`)
+
+**Outbound adapters** - implements repository interfaces and external integrations.
+
+**Contains:**
+- Database repositories (PostgreSQL)
+- Configuration loading
+- Observability setup (logging, metrics, tracing)
+- Fx modules for dependency injection
+
+**Example - Repository Implementation:**
+```go
+// internal/infra/postgres/user_repo.go
+package postgres
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/iruldev/golang-api-hexagonal/internal/domain"
+    "github.com/iruldev/golang-api-hexagonal/internal/infra/postgres/sqlcgen"
+)
+
+type userRepository struct {
+    queries *sqlcgen.Queries
+}
+
+func NewUserRepository(queries *sqlcgen.Queries) domain.UserRepository {
+    return &userRepository{queries: queries}
+}
+
+func (r *userRepository) Create(ctx context.Context, user *domain.User) error {
+    _, err := r.queries.CreateUser(ctx, sqlcgen.CreateUserParams{
+        Email:     user.Email,
+        FirstName: user.FirstName,
+        LastName:  user.LastName,
+    })
+    if err != nil {
+        return fmt.Errorf("insert user: %w", err)
+    }
+    return nil
+}
+```
+
+### Layer Boundary Rules
+
+> ⚠️ **CRITICAL:** These rules are enforced by depguard in CI. Violations will fail the build.
+
+| Layer | CAN Import | CANNOT Import |
+|-------|------------|---------------|
+| `domain/` | stdlib ONLY | slog, otel, uuid, http, pgx, app, transport, infra |
+| `app/` | domain | slog, otel, uuid, http, pgx, transport, infra |
+| `transport/` | domain, app, chi, jwt, validator | pgx, infra |
+| `infra/` | domain, shared, pgx, otel | transport |
+| `infra/fx/` | ALL internal packages | (wiring layer exception) |
+
+### Key Architecture Rules
+
+1. **Domain entities have NO JSON tags** - Transport layer adds serialization
+2. **App services do NOT log** - Return errors, let callers handle logging
+3. **Transport handlers do NOT call database** - Use app layer use cases
+4. **Infra repositories do NOT return HTTP errors** - Return domain errors
+
+> 📚 **Learn More:** See [ADR-001: Hexagonal Architecture](adr/ADR-001-hexagonal-architecture.md) and [ADR-002: Layer Boundary Enforcement](adr/ADR-002-layer-boundary-enforcement.md)
+
+---
+
+## Local Development Setup
+
+**Estimated time: ~10 minutes (hands-on)**
+
+### Prerequisites
+
+- [ ] Go 1.25.5 or later
+- [ ] Docker and Docker Compose
+- [ ] PostgreSQL client (optional, for debugging)
+
+### Quick Start
 
 ```bash
+# 1. Clone and enter the project
+git clone <repository-url>
+cd golang-api-hexagonal
+
+# 2. Run the quick-start setup
+make quick-start
+
+# 3. Verify the API is running
+curl http://localhost:8080/healthz
+```
+
+### Step-by-Step Setup
+
+If you prefer manual setup:
+
+```bash
+# 1. Copy environment file
+cp .env.example .env.local
+
+# 2. Start PostgreSQL
+make infra-up
+
+# 3. Run database migrations
+make migrate-up
+
+# 4. Start the server
+make run
+```
+
+### Verify Setup
+
+```bash
+# Health check
+curl http://localhost:8080/healthz
+
+# Create a test user (requires JWT - see README)
+curl -X POST http://localhost:8080/api/v1/users \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <your-jwt>" \
+  -d '{"email": "test@example.com", "first_name": "Test", "last_name": "User"}'
+```
+
+> 📚 **Detailed Setup:** See the [README.md Quick Start section](../README.md#quick-start)
+
+---
+
+## Your First Feature Tutorial
+
+**Estimated time: ~30 minutes (hands-on)**
+
+This tutorial walks you through adding a new feature following the Hexagonal Architecture pattern. We'll add a simple endpoint to get system information.
+
+### What We'll Build
+
+A new endpoint: `GET /api/v1/system/info` that returns system information.
+
+### Step 1: Define the Domain (~5 min)
+
+First, define the domain entity and repository interface.
+
+**Create `internal/domain/system.go`:**
+
+```go
+package domain
+
+import "context"
+
+// SystemInfo represents system information.
+type SystemInfo struct {
+    Version   string
+    GoVersion string
+    BuildTime string
+}
+
+// SystemInfoProvider defines the contract for system info retrieval.
+type SystemInfoProvider interface {
+    GetInfo(ctx context.Context) (*SystemInfo, error)
+}
+```
+
+> 💡 **Note:** Domain layer uses stdlib only - no external imports!
+
+### Step 2: Create the Application Use Case (~5 min)
+
+Create the use case that orchestrates the business logic.
+
+**Create `internal/app/system/get_info.go`:**
+
+```go
+package system
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/iruldev/golang-api-hexagonal/internal/domain"
+)
+
+// GetInfoUseCase retrieves system information.
+type GetInfoUseCase struct {
+    provider domain.SystemInfoProvider
+}
+
+// NewGetInfoUseCase creates a new GetInfoUseCase.
+func NewGetInfoUseCase(provider domain.SystemInfoProvider) *GetInfoUseCase {
+    return &GetInfoUseCase{provider: provider}
+}
+
+// Execute retrieves system information.
+func (uc *GetInfoUseCase) Execute(ctx context.Context) (*domain.SystemInfo, error) {
+    info, err := uc.provider.GetInfo(ctx)
+    if err != nil {
+        return nil, fmt.Errorf("get system info: %w", err)
+    }
+    return info, nil
+}
+```
+
+### Step 3: Implement the Infrastructure Adapter (~5 min)
+
+Implement the `SystemInfoProvider` interface in the infrastructure layer.
+
+**Create `internal/infra/system/provider.go`:**
+
+```go
+package system
+
+import (
+    "context"
+    "runtime"
+
+    "github.com/iruldev/golang-api-hexagonal/internal/domain"
+)
+
+// Version information (set at build time)
+var (
+    Version   = "dev"
+    BuildTime = "unknown"
+)
+
+type infoProvider struct{}
+
+// NewInfoProvider creates a new SystemInfoProvider.
+func NewInfoProvider() domain.SystemInfoProvider {
+    return &infoProvider{}
+}
+
+func (p *infoProvider) GetInfo(ctx context.Context) (*domain.SystemInfo, error) {
+    return &domain.SystemInfo{
+        Version:   Version,
+        GoVersion: runtime.Version(),
+        BuildTime: BuildTime,
+    }, nil
+}
+```
+
+### Step 4: Create the HTTP Handler (~5 min)
+
+Create the handler with request/response DTOs.
+
+**Create `internal/transport/http/handler/system_handler.go`:**
+
+```go
+package handler
+
+import (
+    "encoding/json"
+    "net/http"
+
+    "github.com/iruldev/golang-api-hexagonal/internal/app/system"
+)
+
+// SystemInfoResponse is the API response for system info.
+type SystemInfoResponse struct {
+    Version   string `json:"version"`
+    GoVersion string `json:"go_version"`
+    BuildTime string `json:"build_time"`
+}
+
+// SystemHandler handles system-related HTTP endpoints.
+type SystemHandler struct {
+    getInfoUseCase *system.GetInfoUseCase
+}
+
+// NewSystemHandler creates a new SystemHandler.
+func NewSystemHandler(getInfoUseCase *system.GetInfoUseCase) *SystemHandler {
+    return &SystemHandler{getInfoUseCase: getInfoUseCase}
+}
+
+// GetInfo handles GET /api/v1/system/info.
+func (h *SystemHandler) GetInfo(w http.ResponseWriter, r *http.Request) {
+    info, err := h.getInfoUseCase.Execute(r.Context())
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(SystemInfoResponse{
+        Version:   info.Version,
+        GoVersion: info.GoVersion,
+        BuildTime: info.BuildTime,
+    })
+}
+```
+
+### Step 5: Wire with Uber Fx (~5 min)
+
+Register the new components with the dependency injection container.
+
+**Update `internal/infra/fx/module.go`:**
+
+```go
+// Add these imports
+import (
+    systemapp "github.com/iruldev/golang-api-hexagonal/internal/app/system"
+    systeminfra "github.com/iruldev/golang-api-hexagonal/internal/infra/system"
+    "github.com/iruldev/golang-api-hexagonal/internal/transport/http/handler"
+)
+
+// Add to the Module
+var Module = fx.Options(
+    // ... existing providers ...
+    
+    // System feature
+    fx.Provide(systeminfra.NewInfoProvider),
+    fx.Provide(systemapp.NewGetInfoUseCase),
+    fx.Provide(handler.NewSystemHandler),
+)
+```
+
+**Update `internal/transport/http/router.go`:**
+
+```go
+// Add route registration
+r.Route("/api/v1/system", func(r chi.Router) {
+    r.Get("/info", systemHandler.GetInfo)
+})
+```
+
+### Step 6: Write Tests (~5 min)
+
+Create unit tests using table-driven patterns.
+
+**Create `internal/app/system/get_info_test.go`:**
+
+```go
+package system_test
+
+import (
+    "context"
+    "errors"
+    "testing"
+
+    "github.com/iruldev/golang-api-hexagonal/internal/app/system"
+    "github.com/iruldev/golang-api-hexagonal/internal/domain"
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
+)
+
+// Note: In a real workflow, generate mocks with `make mocks` instead of writing manual structs.
+// See docs/testing-guide.md for details.
+type mockProvider struct {
+    info *domain.SystemInfo
+    err  error
+}
+
+func (m *mockProvider) GetInfo(ctx context.Context) (*domain.SystemInfo, error) {
+    return m.info, m.err
+}
+
+func TestGetInfoUseCase_Execute(t *testing.T) {
+    tests := []struct {
+        name      string
+        provider  *mockProvider
+        wantInfo  *domain.SystemInfo
+        wantErr   bool
+    }{
+        {
+            name: "success",
+            provider: &mockProvider{
+                info: &domain.SystemInfo{
+                    Version:   "1.0.0",
+                    GoVersion: "go1.25.5",
+                    BuildTime: "2026-01-04",
+                },
+            },
+            wantInfo: &domain.SystemInfo{
+                Version:   "1.0.0",
+                GoVersion: "go1.25.5",
+                BuildTime: "2026-01-04",
+            },
+        },
+        {
+            name: "error",
+            provider: &mockProvider{
+                err: errors.New("provider error"),
+            },
+            wantErr: true,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            uc := system.NewGetInfoUseCase(tt.provider)
+            got, err := uc.Execute(context.Background())
+
+            if tt.wantErr {
+                require.Error(t, err)
+                return
+            }
+
+            require.NoError(t, err)
+            assert.Equal(t, tt.wantInfo, got)
+        })
+    }
+}
+```
+
+### Step 7: Verify Your Feature
+
+```bash
+# Run linter (checks layer boundaries)
+make lint
+
+# Run tests
 make test
+
+# Start server and test endpoint
+make run
+
+# In another terminal
+curl http://localhost:8080/api/v1/system/info
 ```
+
+> 📚 **More Patterns:** See [docs/patterns.md](patterns.md) and [docs/copy-paste-kit/](copy-paste-kit/) for additional templates.
 
 ---
 
-## Full Integration
+## Testing Guide
 
-Complete integration takes 4-6 hours and includes all patterns.
+**Estimated reading time: ~10 minutes**
 
-### Phase 1: Test Utilities (1 hour)
+### Test Types
 
-| Component | Time | Description |
-|-----------|------|-------------|
-| `testutil.go` | 15 min | goleak TestMain wrapper |
-| `main_test.go` per package | 45 min | Add to all test packages |
+| Type | File Pattern | Command | Purpose |
+|------|--------------|---------|---------|
+| Unit | `*_test.go` | `make test` | Fast, isolated tests |
+| Integration | `*_integration_test.go` | `make test-integration` | Tests with real dependencies |
+| All | - | `make test-all` | Complete test suite |
 
-### Phase 2: Container Helpers (1.5 hours)
+### Required Patterns
 
-| Component | Time | Description |
-|-----------|------|-------------|
-| `containers/postgres.go` | 30 min | PostgreSQL container startup |
-| `containers/migrate.go` | 30 min | Database migration helpers |
-| `containers/tx.go` | 15 min | Transaction test wrappers |
-| `containers/truncate.go` | 15 min | Table truncation helpers |
+**Table-Driven Tests (Required):**
 
-### Phase 3: Error Handling (1 hour)
+```go
+func TestSomething(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   SomeInput
+        want    SomeOutput
+        wantErr bool
+    }{
+        {name: "success", input: validInput, want: expectedOutput},
+        {name: "error case", input: invalidInput, wantErr: true},
+    }
 
-| Component | Time | Description |
-|-----------|------|-------------|
-| `domain/errors/errors.go` | 30 min | DomainError type |
-| `domain/errors/codes.go` | 30 min | Stable error codes |
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            // test implementation
+        })
+    }
+}
+```
 
-### Phase 4: Error Mapping (30 min)
+**Coverage Requirements:**
 
-| Component | Time | Description |
-|-----------|------|-------------|
-| RFC 7807 response handling | 30 min | HTTP error mapping |
+- Domain + App layers: **80% minimum** (enforced by CI)
+- New features: Must include unit tests
 
-### Phase 5: CI Workflows (1 hour)
+### Running Tests
 
-| Component | Time | Description |
-|-----------|------|-------------|
-| PR CI workflow | 30 min | Quality gates on PRs |
-| Nightly CI workflow | 30 min | Race detection, integration |
+```bash
+# Run all unit tests
+make test
+
+# Run with race detection
+make test-shuffle
+
+# Run integration tests (requires Docker)
+make test-integration
+
+# Check coverage
+make test-coverage
+```
+
+> 📚 **Detailed Guide:** See [docs/testing-guide.md](testing-guide.md) for comprehensive testing patterns.
 
 ---
 
-## Brownfield Migration
+## Code Review Checklist
 
-For projects with existing tests, follow this incremental approach.
+**Estimated time: ~5 minutes per review**
 
-### Assessment (15 min)
+Use this checklist when submitting or reviewing PRs.
 
-1. **Inventory current tests:**
-   ```bash
-   find . -name "*_test.go" | wc -l
-   ```
+### ✅ Layer Boundaries
 
-2. **Check for TestMain usage:**
-   ```bash
-   grep -r "func TestMain" --include="*_test.go" .
-   ```
+- [ ] Domain layer imports **stdlib only** (no external packages)
+- [ ] App layer does NOT import transport or infra
+- [ ] Transport layer does NOT import infra (except fx)
+- [ ] `make lint` passes with **0 errors**
 
-3. **Identify database tests:**
-   ```bash
-   grep -r "sql\.Open\|pgx\." --include="*_test.go" .
-   ```
+### ✅ Error Handling
 
-### Incremental Adoption Strategy
+- [ ] Errors wrapped with context: `fmt.Errorf("context: %w", err)`
+- [ ] Domain errors use error codes (e.g., `USR-001`)
+- [ ] No bare `return err` without context
+- [ ] Panics are NOT used for error handling
 
-**Phase 1: New tests only (Week 1)**
-- Add testutil to new test files
-- Use containers for new database tests
-- Don't modify existing tests yet
+### ✅ Context Propagation
 
-**Phase 2: Low-risk migration (Week 2)**
-- Add TestMain with goleak to packages with few tests
-- Convert database tests one package at a time
-- Run full test suite after each package
+- [ ] `context.Context` is **first parameter** in all functions
+- [ ] Context is NOT stored in structs
+- [ ] External calls use `context.WithTimeout`
 
-**Phase 3: Full migration (Week 3+)**
-- Migrate remaining packages
-- Update CI workflows
-- Remove old test infrastructure
+### ✅ Testing
 
-### Migration Steps for Existing Tests
+- [ ] **Table-driven tests** used for all test cases
+- [ ] Coverage ≥80% for domain and app layers
+- [ ] New features include unit tests
+- [ ] Edge cases and error paths tested
 
-1. **Add goleak TestMain:**
-   ```go
-   // Create main_test.go in each package
-   func TestMain(m *testing.M) {
-       goleak.VerifyTestMain(m)
-   }
-   ```
+### ✅ Code Quality
 
-2. **Convert database tests:**
-   ```go
-   // Before (global database)
-   func TestUserRepo(t *testing.T) {
-       db := globalTestDB
-       // ... test logic
-   }
+- [ ] Functions are ≤100 lines where possible
+- [ ] Cyclomatic complexity ≤15 per function
+- [ ] No commented-out code
+- [ ] Magic numbers are named constants
 
-   // After (container-based)
-   func TestUserRepo(t *testing.T) {
-       pool := containers.NewPostgres(t)
-       containers.Migrate(t, pool, "../../migrations")
-       // ... test logic
-   }
-   ```
+### ✅ Documentation
 
-3. **Add error types:**
-   ```go
-   // Before (string errors)
-   return errors.New("user not found")
+- [ ] Exported functions have **godoc comments**
+- [ ] Complex logic has inline comments
+- [ ] README updated if adding new features
 
-   // After (domain errors)
-   return domainerrors.ErrUserNotFound
-   ```
+### Quick Reference Table
 
-### Rollback Strategy
-
-If issues arise during migration:
-
-1. **Immediate rollback:** Revert the last commit
-2. **Partial rollback:** Remove TestMain from problematic packages
-3. **Investigate:** Check for goroutine leaks using `-v` flag
+| Check | Command | Expected |
+|-------|---------|----------|
+| Linting | `make lint` | 0 errors |
+| Tests | `make test` | All pass |
+| Coverage | `make test-coverage` | ≥80% domain+app |
+| Full CI | `make ci` | All pass |
 
 ---
 
-## Copy-Paste Kit
+## FAQ and Troubleshooting
 
-Ready-to-use code snippets for each component.
+**Estimated reading time: ~5 minutes**
 
-### TestMain with goleak
+### Common Questions
 
-```go
-// internal/testutil/testutil.go
-package testutil
+#### Q: Where do I add a new entity?
 
-import (
-	"os"
-	"testing"
+**A:** Create it in `internal/domain/`. Remember: no JSON tags, stdlib only.
 
-	"go.uber.org/goleak"
-)
+#### Q: Where do I add a new API endpoint?
 
-// TestMain provides a package-level test main with goleak.
-func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
-}
+**A:** Follow the [Your First Feature Tutorial](#your-first-feature-tutorial):
+1. Domain entity in `internal/domain/`
+2. Use case in `internal/app/`
+3. Handler in `internal/transport/http/handler/`
+4. Wire in `internal/infra/fx/`
+
+#### Q: Why is my import failing linting?
+
+**A:** You're probably violating layer boundaries. Check the [Layer Boundary Rules](#layer-boundary-rules) section.
+
+#### Q: How do I add a new external dependency?
+
+**A:** Add it to `go.mod` and update `.golangci.yml` if it needs to be allowed in specific layers.
+
+### Common Issues
+
+#### "depguard: import not allowed" Error
+
+```
+internal/domain/user.go:5:2: import 'github.com/google/uuid' is not allowed
 ```
 
-### PostgreSQL Container
+**Solution:** Domain layer cannot import external packages. Move the UUID logic to the infrastructure layer.
 
-```go
-// internal/testutil/containers/postgres.go
-package containers
-
-import (
-	"context"
-	"testing"
-
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
-)
-
-// NewPostgres creates a PostgreSQL container for testing.
-func NewPostgres(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	ctx := context.Background()
-
-	container, err := postgres.Run(ctx,
-		"postgres:16-alpine",
-		postgres.WithDatabase("testdb"),
-		postgres.WithUsername("test"),
-		postgres.WithPassword("test"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2),
-		),
-	)
-	if err != nil {
-		t.Fatalf("failed to start postgres: %v", err)
-	}
-
-	t.Cleanup(func() {
-		if err := container.Terminate(ctx); err != nil {
-			t.Logf("failed to terminate postgres: %v", err)
-		}
-	})
-
-	connStr, err := container.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		t.Fatalf("failed to get connection string: %v", err)
-	}
-
-	pool, err := pgxpool.New(ctx, connStr)
-	if err != nil {
-		t.Fatalf("failed to create pool: %v", err)
-	}
-
-	t.Cleanup(func() {
-		pool.Close()
-	})
-
-	return pool
-}
-```
-
-### Database Migration Helper
-
-```go
-// internal/testutil/containers/migrate.go
-package containers
-
-import (
-	"testing"
-
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
-)
-
-// Migrate runs database migrations.
-func Migrate(t *testing.T, pool *pgxpool.Pool, migrationsPath string) {
-	t.Helper()
-
-	db := stdlib.OpenDBFromPool(pool)
-	defer db.Close()
-
-	if err := goose.SetDialect("postgres"); err != nil {
-		t.Fatalf("failed to set dialect: %v", err)
-	}
-
-	if err := goose.Up(db, migrationsPath); err != nil {
-		t.Fatalf("failed to migrate: %v", err)
-	}
-}
-```
-
-### Transaction Test Wrapper
-
-```go
-// internal/testutil/containers/tx.go
-package containers
-
-import (
-	"context"
-	"testing"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-)
-
-// WithTx executes fn within a transaction that is rolled back after the test.
-func WithTx(t *testing.T, pool *pgxpool.Pool, fn func(tx pgx.Tx)) {
-	t.Helper()
-	ctx := context.Background()
-
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		t.Fatalf("failed to begin tx: %v", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	fn(tx)
-}
-```
-
-### Table Truncation Helper
-
-```go
-// internal/testutil/containers/truncate.go
-package containers
-
-import (
-	"context"
-	"fmt"
-	"strings"
-	"testing"
-
-	"github.com/jackc/pgx/v5/pgxpool"
-)
-
-// Truncate truncates the specified tables with CASCADE.
-func Truncate(t testing.TB, pool *pgxpool.Pool, tables ...string) {
-	t.Helper()
-	ctx := context.Background()
-
-	if len(tables) == 0 {
-		return
-	}
-
-	quotedTables := make([]string, len(tables))
-	for i, table := range tables {
-		quotedTables[i] = fmt.Sprintf("%q", table)
-	}
-
-	query := fmt.Sprintf("TRUNCATE TABLE %s CASCADE", strings.Join(quotedTables, ", "))
-	if _, err := pool.Exec(ctx, query); err != nil {
-		t.Fatalf("failed to truncate tables %v: %v", tables, err)
-	}
-}
-```
-
-### Domain Error Types
-
-```go
-// internal/domain/errors/errors.go
-package errors
-
-import "errors"
-
-// ErrorCode is a stable error code type.
-type ErrorCode string
-
-// DomainError represents a domain-level error with stable code.
-type DomainError struct {
-	Code    ErrorCode
-	Message string
-	Err     error
-}
-
-func (e *DomainError) Error() string {
-	if e == nil {
-		return ""
-	}
-	if e.Err != nil {
-		return e.Message + ": " + e.Err.Error()
-	}
-	return e.Message
-}
-
-func (e *DomainError) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return e.Err
-}
-
-func (e *DomainError) Is(target error) bool {
-	var t *DomainError
-	if errors.As(target, &t) {
-		return e.Code == t.Code
-	}
-	return false
-}
-
-// New creates a new DomainError.
-func New(code ErrorCode, message string) error {
-	return &DomainError{Code: code, Message: message}
-}
-
-// Wrap creates a new DomainError wrapping an existing error.
-func Wrap(code ErrorCode, message string, err error) error {
-	return &DomainError{Code: code, Message: message, Err: err}
-}
-```
-
-### Makefile Snippets
-
-```makefile
-# Testing targets
-.PHONY: test test-shuffle test-integration test-all gencheck
-
-test:
-	go test -v -race -count=1 ./...
-
-test-shuffle:
-	go test -v -race -count=1 -shuffle=on ./...
-
-test-integration:
-	go test -v -race -count=1 -tags=integration ./...
-
-test-all: test test-integration
-
-# Generation check
-gencheck:
-	go generate ./...
-	@if [ -n "$$(git status --porcelain)" ]; then \
-		echo "Generated files are out of date"; \
-		git diff; \
-		exit 1; \
-	fi
-```
-
-### GitHub Actions CI Workflow
-
-```yaml
-# .github/workflows/ci.yml
-name: CI
-
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.21'
-
-      - name: Unit Tests
-        run: make test-shuffle
-
-      - name: Generation Check
-        run: make gencheck
-
-  integration:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.21'
-
-      - name: Integration Tests
-        run: make test-integration
-```
-
----
-
-## Adoption Checklist
-
-Use this checklist to track your adoption progress.
-
-### Core Setup
-- [ ] Go 1.21+ installed
-- [ ] Docker running
-- [ ] `go.uber.org/goleak` added to go.mod
-- [ ] `github.com/testcontainers/testcontainers-go` added
-
-### Test Utilities
-- [ ] `internal/testutil/testutil.go` created
-- [ ] TestMain with goleak in all test packages
-- [ ] Tests pass with `go test -race ./...`
-
-### Container Helpers
-- [ ] `internal/testutil/containers/` directory created
-- [ ] `postgres.go` - NewPostgres helper
-- [ ] `migrate.go` - Migrate helper
-- [ ] `tx.go` - WithTx helper
-- [ ] Integration tests use containers
-
-### Error Handling
-- [ ] `internal/domain/errors/` created
-- [ ] DomainError type implemented
-- [ ] Stable error codes defined
-- [ ] HTTP error mapping implemented
-
-### Makefile
-- [ ] `test` target added
-- [ ] `test-shuffle` target added
-- [ ] `test-integration` target added
-- [ ] `gencheck` target added
-
-### CI Workflows
-- [ ] `.github/workflows/ci.yml` created
-- [ ] PR checks enabled
-- [ ] Race detection enabled
-- [ ] Integration tests in CI
-
----
-
-## Troubleshooting
-
-### "goleak: leaked goroutine" Error
+#### "goleak: leaked goroutine" Error
 
 ```
 goleak: Leaked goroutine: goroutine 42 [running]:
@@ -596,47 +825,46 @@ goleak: Leaked goroutine: goroutine 42 [running]:
 - HTTP clients without timeout
 - Channels not drained
 
-### "Container failed to start"
+#### Tests Pass Locally, Fail in CI
+
+**Common causes:**
+1. **Race conditions:** Run `make test-shuffle` locally
+2. **Time-dependent tests:** Use proper synchronization
+3. **Container startup:** Check Docker is running
+
+#### Container Failed to Start
 
 ```
 failed to start postgres: Cannot connect to Docker daemon
 ```
 
 **Solution:**
-1. Ensure Docker is running
+1. Ensure Docker is running: `docker ps`
 2. Check Docker permissions
 3. For macOS: Restart Docker Desktop
-
-### "Migration failed"
-
-```
-failed to migrate: SQLSTATE 42P01: relation "users" does not exist
-```
-
-**Solution:**
-1. Check migration path
-2. Verify migration files exist
-3. Check migration file naming (e.g., `001_create_users.sql`)
-
-### Tests Pass Locally, Fail in CI
-
-**Common causes:**
-1. **Race conditions:** Add `-race` flag locally
-2. **Time-dependent tests:** Use channel synchronization
-3. **Container startup:** Increase wait timeouts
 
 ---
 
 ## Next Steps
 
-After completing adoption:
+After completing this guide:
 
-1. **Run full test suite:** `make test-all`
-2. **Check CI:** Verify workflows pass
-3. **Train team:** Share this guide
-4. **Iterate:** Add more patterns as needed
+1. ✅ Run the full CI pipeline: `make ci`
+2. ✅ Review the [Architecture Documentation](architecture.md)
+3. ✅ Explore [Copy-Paste Patterns](patterns.md) for common use cases
+4. ✅ Read the [ADRs](adr/index.md) for architectural decisions
+5. ✅ Check the [Runbooks](runbooks/index.md) for operational scenarios
 
-For questions or issues, refer to:
-- [Testing Guide](testing-guide.md)
-- [Testing Quickstart](testing-quickstart.md)
-- [Architecture](architecture.md)
+### Additional Resources
+
+| Resource | Description |
+|----------|-------------|
+| [README.md](../README.md) | Quick start and project overview |
+| [patterns.md](patterns.md) | Copy-paste code patterns |
+| [testing-guide.md](testing-guide.md) | Comprehensive testing guide |
+| [adr/index.md](adr/index.md) | Architecture Decision Records |
+| [runbooks/index.md](runbooks/index.md) | Operational runbooks |
+
+---
+
+*Welcome to the team! If you have questions not covered here, check the FAQ or ask in your team's communication channel.*
