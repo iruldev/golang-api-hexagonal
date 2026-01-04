@@ -26,8 +26,178 @@ help:
 	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/## /  /'
 
 # =============================================================================
+# Quick Start (Story 6.1: One-Command Setup)
+# =============================================================================
+
+## quick-start: Complete setup from clone to running API (⏱️ ~10 minutes)
+.NOTPARALLEL: quick-start
+.PHONY: quick-start
+quick-start:
+	@echo ""
+	@echo "🚀 Quick Start - Complete Development Environment Setup"
+	@echo "========================================================"
+	@echo ""
+	@echo "This will: install tools → start database → run migrations → verify API"
+	@echo ""
+	@# Step 1: Prerequisites check
+	@echo "📋 Step 1/5: Checking prerequisites..."
+	@if ! command -v go >/dev/null 2>&1; then \
+		echo "❌ Go is not installed. Please install Go 1.24+ first."; \
+		echo "   Download: https://go.dev/dl/"; \
+		exit 1; \
+	fi
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo "❌ Docker is not installed. Please install Docker first."; \
+		echo "   Download: https://www.docker.com/products/docker-desktop/"; \
+		exit 1; \
+	fi
+	@if ! docker info >/dev/null 2>&1; then \
+		echo "❌ Docker is not running. Please start Docker Desktop first."; \
+		exit 1; \
+	fi
+	@echo "   ✅ Go installed: $$(go version | awk '{print $$3}')"
+	@echo "   ✅ Docker running"
+	@echo ""
+	@# Step 2: Setup (tools + modules)
+	@echo "📦 Step 2/5: Installing tools and dependencies..."
+	@$(MAKE) setup --no-print-directory
+	@echo ""
+	@# Step 3: Start infrastructure
+	@echo "🐘 Step 3/5: Starting PostgreSQL..."
+	@$(MAKE) infra-up --no-print-directory
+	@echo ""
+	@# Step 4: Run migrations
+	@echo "🔄 Step 4/5: Running database migrations..."
+	@if [ -f .env.local ]; then \
+		export $$(grep -v '^#' .env.local | xargs) && $(MAKE) migrate-up --no-print-directory; \
+	else \
+		echo "⚠️  .env.local not found, using default DATABASE_URL"; \
+		export DATABASE_URL="postgres://postgres:postgres@localhost:5432/golang_api_hexagonal?sslmode=disable" && $(MAKE) migrate-up --no-print-directory; \
+	fi
+	@echo ""
+	@# Step 5: Verify setup
+	@echo "✅ Step 5/5: Verifying setup..."
+	@$(MAKE) verify-setup --no-print-directory
+	@echo ""
+	@echo "========================================================"
+	@echo "🎉 Quick Start Complete!"
+	@echo "========================================================"
+	@echo ""
+	@echo "Your development environment is ready. Next steps:"
+	@echo ""
+	@echo "  1. Run the API server:"
+	@echo "     $$ make run"
+	@echo ""
+	@echo "  2. In another terminal, test the health endpoint:"
+	@echo "     $$ curl http://localhost:8080/health"
+	@echo ""
+	@echo "  3. Create your first user:"
+	@echo "     $$ curl -X POST http://localhost:8080/api/v1/users \\"
+	@echo "          -H \"Content-Type: application/json\" \\"
+	@echo "          -d '{\"email\":\"john@example.com\",\"firstName\":\"John\",\"lastName\":\"Doe\"}'"
+	@echo ""
+	@echo "📚 Run 'make help' to see all available commands."
+	@echo ""
+
+## verify-setup: Verify development environment is correctly configured
+.PHONY: verify-setup
+verify-setup:
+	@echo "🔍 Verifying development environment..."
+	@echo ""
+	@PASS=true; \
+	echo "  Checking Go..."; \
+	if command -v go >/dev/null 2>&1; then \
+		echo "    ✅ Go: $$(go version | awk '{print $$3}')"; \
+	else \
+		echo "    ❌ Go not found"; \
+		PASS=false; \
+	fi; \
+	echo "  Checking Docker..."; \
+	if docker info >/dev/null 2>&1; then \
+		echo "    ✅ Docker running"; \
+	else \
+		echo "    ❌ Docker not running"; \
+		PASS=false; \
+	fi; \
+	echo "  Checking PostgreSQL..."; \
+	if docker compose ps postgres 2>/dev/null | grep -q "running"; then \
+		echo "    ✅ PostgreSQL container running"; \
+	else \
+		echo "    ❌ PostgreSQL container not running (run 'make infra-up')"; \
+		PASS=false; \
+	fi; \
+	echo "  Checking goose..."; \
+	if command -v goose >/dev/null 2>&1; then \
+		echo "    ✅ goose: $$(goose --version 2>&1 | head -1)"; \
+	else \
+		echo "    ❌ goose not found (run 'make setup')"; \
+		PASS=false; \
+	fi; \
+	echo "  Checking golangci-lint..."; \
+	if command -v golangci-lint >/dev/null 2>&1; then \
+		echo "    ✅ golangci-lint: $$(golangci-lint --version 2>&1 | head -1 | awk '{print $$4}')"; \
+	else \
+		echo "    ⚠️  golangci-lint not found (optional, run 'make setup')"; \
+	fi; \
+	echo ""; \
+	if [ "$$PASS" = "true" ]; then \
+		echo "✅ All checks passed - environment is ready!"; \
+	else \
+		echo "❌ Some checks failed - see above for details"; \
+		exit 1; \
+	fi
+
+# =============================================================================
 # Development
 # =============================================================================
+
+## check-prereqs: Check if all prerequisites are installed (Go, Docker)
+.PHONY: check-prereqs
+check-prereqs:
+	@echo "📋 Checking prerequisites..."
+	@echo ""
+	@PASS=true; \
+	echo "  Go:"; \
+	if command -v go >/dev/null 2>&1; then \
+		GO_VERSION=$$(go version | awk '{print $$3}' | sed 's/go//'); \
+		echo "    ✅ Installed: $$GO_VERSION"; \
+		echo "    ℹ️  Required: 1.24+"; \
+	else \
+		echo "    ❌ Not installed"; \
+		echo "    📥 Download: https://go.dev/dl/"; \
+		PASS=false; \
+	fi; \
+	echo ""; \
+	echo "  Docker:"; \
+	if command -v docker >/dev/null 2>&1; then \
+		echo "    ✅ Installed: $$(docker --version | awk '{print $$3}' | tr -d ',')"; \
+		if docker info >/dev/null 2>&1; then \
+			echo "    ✅ Docker daemon running"; \
+		else \
+			echo "    ❌ Docker daemon not running - start Docker Desktop"; \
+			PASS=false; \
+		fi; \
+	else \
+		echo "    ❌ Not installed"; \
+		echo "    📥 Download: https://www.docker.com/products/docker-desktop/"; \
+		PASS=false; \
+	fi; \
+	echo ""; \
+	echo "  Make:"; \
+	if command -v make >/dev/null 2>&1; then \
+		echo "    ✅ Installed: $$(make --version | head -1)"; \
+	else \
+		echo "    ❌ Not installed"; \
+		PASS=false; \
+	fi; \
+	echo ""; \
+	if [ "$$PASS" = "true" ]; then \
+		echo "✅ All prerequisites met!"; \
+		echo "   Run 'make quick-start' to set up your development environment."; \
+	else \
+		echo "❌ Some prerequisites are missing. Please install them first."; \
+		exit 1; \
+	fi
 
 ## bootstrap: Install all development tools with pinned versions (run once after clone)
 .PHONY: bootstrap
@@ -120,7 +290,11 @@ build:
 ## run: Run the application
 .PHONY: run
 run:
-	$(GOCMD) run ./cmd/api
+	@if [ -f .env.local ]; then \
+		export $$(grep -v '^#' .env.local | xargs) && $(GOCMD) run ./cmd/api; \
+	else \
+		$(GOCMD) run ./cmd/api; \
+	fi
 
 ## test: Run all tests (usage: make test ARGS="-run TestName")
 .PHONY: test

@@ -10,7 +10,27 @@ A production-ready Go API built with hexagonal architecture, featuring comprehen
 
 ## 🚀 Quick Start
 
-⏱️ **Estimated time: ~15 minutes**
+⏱️ **Time to first API call: ~10 minutes**
+
+### Option 1: One-Command Setup (Recommended)
+
+```bash
+# Clone and run quick-start
+git clone https://github.com/iruldev/golang-api-hexagonal.git
+cd golang-api-hexagonal
+make quick-start
+```
+
+This command will automatically:
+1. ✅ Check prerequisites (Go, Docker)
+2. ✅ Install development tools
+3. ✅ Start PostgreSQL
+4. ✅ Run database migrations
+5. ✅ Verify everything works
+
+After completion, run `make run` to start the API server.
+
+### Option 2: Step-by-Step Setup
 
 ```bash
 # 1. Clone and bootstrap
@@ -59,15 +79,28 @@ curl http://localhost:8080/api/v1/users
 # Expected: {"data":[...],"pagination":{"page":1,"pageSize":20,...}}
 ```
 
-## 📋 Requirements
+## 📋 Prerequisites
 
-- **Go** 1.24+
-- **Docker** & Docker Compose
-- **Make**
+Before you begin, ensure you have the following installed:
+
+| Tool | Version | Check Command | Download |
+|------|---------|---------------|----------|
+| **Go** | 1.24+ | `go version` | [go.dev/dl](https://go.dev/dl/) |
+| **Docker** | Latest | `docker --version` | [docker.com](https://www.docker.com/products/docker-desktop/) |
+| **Make** | Any | `make --version` | Usually pre-installed |
+
+**Quick check:** Run `make check-prereqs` to verify all prerequisites are met.
 
 ## 🛠️ Make Targets
 
 Run `make help` to see all available targets:
+
+### Quick Start & Verification
+| Target | Description |
+|--------|-------------|
+| `make quick-start` | Complete setup from clone to running API (~10 min) |
+| `make check-prereqs` | Verify all prerequisites are installed |
+| `make verify-setup` | Check if environment is correctly configured |
 
 ### Development
 | Target | Description |
@@ -295,6 +328,77 @@ make coverage-detail
 ├── .env.example            # Environment template
 └── go.mod                  # Go modules
 ```
+
+## 🔧 Troubleshooting
+
+### Docker Issues
+
+**❌ Error: "Docker is not running"**
+```
+❌ Docker daemon not running - start Docker Desktop
+```
+**Solution:** Start Docker Desktop application and wait for it to fully initialize.
+
+**❌ Error: "Port 5432 already in use"**
+```
+Error response from daemon: Ports are not available: exposing port TCP 0.0.0.0:5432
+```
+**Solution:** Stop the conflicting service or change the port:
+```bash
+# Find what's using port 5432
+lsof -i :5432
+
+# Stop local PostgreSQL if running
+brew services stop postgresql  # macOS
+sudo systemctl stop postgresql  # Linux
+```
+
+### Database Issues
+
+**❌ Error: "DATABASE_URL not set"**
+```
+❌ DATABASE_URL is not set.
+```
+**Solution:** Export the variable before running migrations:
+```bash
+export DATABASE_URL="postgres://postgres:postgres@localhost:5432/golang_api_hexagonal?sslmode=disable"
+make migrate-up
+```
+
+**❌ Error: "Connection refused"**
+```
+dial tcp 127.0.0.1:5432: connect: connection refused
+```
+**Solution:** Ensure PostgreSQL is running:
+```bash
+make infra-up
+make infra-status  # Should show "running"
+```
+
+### Go Issues
+
+**❌ Error: "Go version mismatch"**
+```
+go: go.mod requires go >= 1.24
+```
+**Solution:** Update Go to version 1.24 or higher:
+```bash
+# Check current version
+go version
+
+# Download latest from: https://go.dev/dl/
+```
+
+### Verification Commands
+
+Use these commands to diagnose issues:
+
+| Command | Purpose |
+|---------|---------|
+| `make check-prereqs` | Verify all prerequisites are installed |
+| `make verify-setup` | Check if development environment is ready |
+| `make infra-status` | Show PostgreSQL container status |
+| `make infra-logs` | View PostgreSQL container logs |
 
 ## 📝 License
 
