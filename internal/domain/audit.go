@@ -69,15 +69,15 @@ import (
 // Examples: "user.created", "order.placed", "payment.completed".
 const (
 	// EventUserCreated is recorded when a new user is created.
-	// Used in: CreateUserUseCase
+	// Used in: CreateUserUseCase.
 	EventUserCreated = "user.created"
 
 	// EventUserUpdated is recorded when a user is updated.
-	// Used in: UpdateUserUseCase
+	// Used in: UpdateUserUseCase.
 	EventUserUpdated = "user.updated"
 
 	// EventUserDeleted is recorded when a user is deleted.
-	// Used in: DeleteUserUseCase
+	// Used in: DeleteUserUseCase.
 	EventUserDeleted = "user.deleted"
 )
 

@@ -8,7 +8,7 @@ package errors
 //
 // Format: ERR_{DOMAIN}_{CODE}
 
-// User domain error codes
+// User domain error codes.
 const (
 	// ErrCodeUserNotFound indicates that a requested user was not found.
 	ErrCodeUserNotFound ErrorCode = "ERR_USER_NOT_FOUND"
@@ -26,7 +26,7 @@ const (
 	ErrCodeInvalidLastName ErrorCode = "ERR_USER_INVALID_LAST_NAME"
 )
 
-// Audit domain error codes
+// Audit domain error codes.
 const (
 	// ErrCodeAuditNotFound indicates that an audit event was not found.
 	ErrCodeAuditNotFound ErrorCode = "ERR_AUDIT_NOT_FOUND"
@@ -53,7 +53,7 @@ const (
 	ErrCodeInvalidRequestID ErrorCode = "ERR_AUDIT_INVALID_REQUEST_ID"
 )
 
-// General error codes
+// General error codes.
 const (
 	// ErrCodeInternal indicates an internal server error.
 	ErrCodeInternal ErrorCode = "ERR_INTERNAL"

@@ -124,7 +124,7 @@ func classifyJSONError(err error) *JSONDecodeError {
 }
 
 // extractFieldFromUnknownFieldError extracts the field name from the error message.
-// Example input: "json: unknown field \"usernmae\""
+// Example input: "json: unknown field \"usernmae\"".
 func extractFieldFromUnknownFieldError(errMsg string) string {
 	// Find the quote-delimited field name
 	start := strings.Index(errMsg, "\"")
@@ -140,11 +140,5 @@ func extractFieldFromUnknownFieldError(errMsg string) string {
 
 // isType is a helper to check if err is of a specific type.
 func isType[T error](err error, target *T) bool {
-	var t T
-	if as, ok := err.(T); ok {
-		*target = as
-		return true
-	}
-	_ = t // silence unused variable warning
-	return false
+	return errors.As(err, target)
 }

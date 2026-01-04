@@ -9,28 +9,28 @@ import (
 
 // Default values for resilience configuration.
 const (
-	// Circuit Breaker defaults
+	// Circuit Breaker defaults.
 	DefaultCBMaxRequests      = 3
 	DefaultCBInterval         = 10 * time.Second
 	DefaultCBTimeout          = 30 * time.Second
 	DefaultCBFailureThreshold = 5
 
-	// Retry defaults
+	// Retry defaults.
 	DefaultRetryMaxAttempts  = 3
 	DefaultRetryInitialDelay = 100 * time.Millisecond
 	DefaultRetryMaxDelay     = 5 * time.Second
 	DefaultRetryMultiplier   = 2.0
 
-	// Timeout defaults
+	// Timeout defaults.
 	DefaultTimeoutDefault     = 30 * time.Second
 	DefaultTimeoutDatabase    = 5 * time.Second
 	DefaultTimeoutExternalAPI = 10 * time.Second
 
-	// Bulkhead defaults
+	// Bulkhead defaults.
 	DefaultBulkheadMaxConcurrent = 10
 	DefaultBulkheadMaxWaiting    = 100
 
-	// Shutdown defaults (Story 1.6)
+	// Shutdown defaults (Story 1.6).
 	DefaultShutdownDrainPeriod = 30 * time.Second
 	DefaultShutdownGracePeriod = 5 * time.Second
 )

@@ -224,13 +224,13 @@ type temporaryError interface {
 
 // DefaultIsRetryable returns true if the error should be retried.
 // It checks for:
-// - context.DeadlineExceeded (temporary timeout)
+// - context.DeadlineExceeded (temporary timeout).
 // - errors implementing Retryable() bool
 // - errors implementing Temporary() bool
-// - net.Error with Timeout() (network timeouts are retryable)
+// - net.Error with Timeout() (network timeouts are retryable).
 // It returns false for:
-// - context.Canceled (user cancelled)
-// - nil errors
+// - context.Canceled (user cancelled).
+// - nil errors.
 func DefaultIsRetryable(err error) bool {
 	if err == nil {
 		return false

@@ -8,14 +8,14 @@ import "github.com/iruldev/golang-api-hexagonal/internal/domain/errors"
 // Package errors aliases
 // Use aliases to maintain backward compatibility while switching to the new structured error types.
 var (
-	// User domain errors
+	// User domain errors.
 	ErrUserNotFound       = errors.ErrUserNotFound
 	ErrEmailAlreadyExists = errors.ErrEmailExists
 	ErrInvalidEmail       = errors.ErrInvalidEmail
 	ErrInvalidFirstName   = errors.ErrInvalidFirstName
 	ErrInvalidLastName    = errors.ErrInvalidLastName
 
-	// Audit domain errors
+	// Audit domain errors.
 	ErrAuditEventNotFound = errors.ErrAuditNotFound
 	ErrInvalidEventType   = errors.ErrInvalidEventType
 	ErrInvalidEntityType  = errors.ErrInvalidEntityType

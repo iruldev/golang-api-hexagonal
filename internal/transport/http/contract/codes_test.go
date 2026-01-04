@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// codeFormatRegex validates the new taxonomy format: {CATEGORY}-{NNN}
+// codeFormatRegex validates the new taxonomy format: {CATEGORY}-{NNN}.
 var codeFormatRegex = regexp.MustCompile(`^[A-Z]+-\d{3}$`)
 
 // TestAllCodesHaveValidFormat verifies all defined codes follow {CATEGORY}-{NNN} format.

@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// mockPool implements the Pooler interface for testing
+// mockPool implements the Pooler interface for testing.
 type mockPool struct {
 	pingErr     error
 	closeCalled bool
@@ -110,7 +110,7 @@ func TestResilientPool_PoolGetter(t *testing.T) {
 	})
 }
 
-// TestResilientPool_LazyConnection checks the lazy connection logic
+// TestResilientPool_LazyConnection checks the lazy connection logic.
 func TestResilientPool_LazyConnection(t *testing.T) {
 	t.Run("Ping creates pool if nil", func(t *testing.T) {
 		mock := &mockPool{}

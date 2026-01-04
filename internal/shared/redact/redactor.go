@@ -13,14 +13,14 @@ import (
 // RedactedValue is the placeholder for fully redacted PII fields.
 const RedactedValue = "[REDACTED]"
 
-// PII Field Patterns
+// PII Field Patterns.
 const (
-	// ContainsMatchFields are redacted if they appear anywhere in the key (case-insensitive)
+	// ContainsMatchFields are redacted if they appear anywhere in the key (case-insensitive).
 	fieldPassword      = "password"
 	fieldCreditCard    = "creditcard"
 	fieldCreditCardAlt = "credit_card"
 
-	// SmartMatchFields are redacted if they match as a whole word (snake_case, camelCase, or exact)
+	// SmartMatchFields are redacted if they match as a whole word (snake_case, camelCase, or exact).
 	fieldToken         = "token"
 	fieldSecret        = "secret"
 	fieldAuthorization = "authorization"
@@ -283,7 +283,7 @@ func (r *PIIRedactor) redactPIIValue(lowerKey string, value any) any {
 
 // partialRedactEmail applies partial masking to an email address.
 // Shows first 2 characters (or fewer if email local part is shorter) + domain.
-// Example: "john.doe@example.com" -> "jo***@example.com"
+// Example: "john.doe@example.com" -> "jo***@example.com".
 func (r *PIIRedactor) partialRedactEmail(email string) string {
 	// Use Index (first @) instead of LastIndex for safer parsing
 	atIndex := strings.Index(email, "@")
@@ -372,5 +372,5 @@ func RedactAndMarshal(redactor domain.Redactor, data any) ([]byte, error) {
 	return result, nil
 }
 
-// Compile-time interface check
+// Compile-time interface check.
 var _ domain.Redactor = (*PIIRedactor)(nil)

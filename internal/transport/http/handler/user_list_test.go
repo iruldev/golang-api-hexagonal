@@ -172,7 +172,7 @@ func TestUserHandler_ListUsers_InvalidPageSize(t *testing.T) {
 	assert.Equal(t, contract.CodeValOutOfRange, problemResp.ValidationErrors[0].Code)
 }
 
-// Added for strict verification of defaults
+// Added for strict verification of defaults.
 func TestUserHandler_ListUsers_ExplicitDefaultPagination(t *testing.T) {
 	mockCreateUC := new(MockCreateUserUseCase)
 	mockGetUC := new(MockGetUserUseCase)

@@ -9,7 +9,7 @@ import (
 
 // BenchmarkCircuitBreaker_Execute_Closed measures the overhead of executing
 // an operation through a closed circuit breaker.
-// Target: <1μs overhead per operation
+// Target: <1μs overhead per operation.
 func BenchmarkCircuitBreaker_Execute_Closed(b *testing.B) {
 	cb := NewCircuitBreaker("bench", DefaultCircuitBreakerConfig())
 	ctx := context.Background()

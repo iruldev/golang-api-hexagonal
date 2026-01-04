@@ -33,7 +33,7 @@ import (
 )
 
 // ErrorCode represents a stable, documented error code.
-// Error codes follow the format: ERR_{DOMAIN}_{CODE}
+// Error codes follow the format: ERR_{DOMAIN}_{CODE}.
 type ErrorCode string
 
 // String returns the string representation of the error code.

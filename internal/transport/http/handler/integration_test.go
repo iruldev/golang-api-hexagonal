@@ -278,7 +278,7 @@ func TestMetricsEndpoint(t *testing.T) {
 }
 
 // TestIntegration_CreateUser_LocationHeader verifies that the Location header is correctly set
-// when creating a user, using the full router stack. (Story 4.6)
+// when creating a user, using the full router stack. (Story 4.6).
 func TestIntegration_CreateUser_LocationHeader(t *testing.T) {
 	// 1. Setup Dependencies
 	mockCreateUC := new(MockCreateUserUseCase)

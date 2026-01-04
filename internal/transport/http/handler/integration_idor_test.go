@@ -20,7 +20,7 @@ import (
 	httpTransport "github.com/iruldev/golang-api-hexagonal/internal/transport/http"
 )
 
-// mockRepoForIDOR is a minimal mock repository for IDOR testing
+// mockRepoForIDOR is a minimal mock repository for IDOR testing.
 type mockRepoForIDOR struct {
 	mock.Mock
 }

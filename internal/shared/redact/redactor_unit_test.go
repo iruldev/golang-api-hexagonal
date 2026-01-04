@@ -200,7 +200,7 @@ func TestPIIRedactor_RedactMap_EmailNonStringValue(t *testing.T) {
 	}
 }
 
-// TestRedactedValue verifies the constant is exported correctly
+// TestRedactedValue verifies the constant is exported correctly.
 func TestRedactedValue(t *testing.T) {
 	assert.Equal(t, "[REDACTED]", redact.RedactedValue)
 }

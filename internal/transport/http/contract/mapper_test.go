@@ -11,7 +11,7 @@ import (
 	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
 )
 
-// mockCodeError implements codeGetter interface for testing
+// mockCodeError implements codeGetter interface for testing.
 type mockCodeError struct {
 	code string
 }

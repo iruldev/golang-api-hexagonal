@@ -310,7 +310,7 @@ func TestDefaultRetryConfig(t *testing.T) {
 	assert.Equal(t, DefaultRetryMultiplier, cfg.Multiplier)
 }
 
-// Custom retryable error for testing
+// Custom retryable error for testing.
 type retryableErr struct {
 	retryable bool
 	msg       string
@@ -336,7 +336,7 @@ func TestDefaultIsRetryable_RetryableInterface(t *testing.T) {
 	})
 }
 
-// Custom temporary error for testing
+// Custom temporary error for testing.
 type tempErr struct {
 	temp bool
 	msg  string

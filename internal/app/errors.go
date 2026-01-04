@@ -15,11 +15,11 @@ import (
 // IMPORTANT: These codes are STABLE and must not be changed once published.
 // They are used in API responses and client integrations.
 const (
-	// User domain codes
+	// User domain codes.
 	CodeUserNotFound = string(domainerrors.ErrCodeUserNotFound) // "ERR_USER_NOT_FOUND"
 	CodeEmailExists  = string(domainerrors.ErrCodeEmailExists)  // "ERR_USER_EMAIL_EXISTS"
 
-	// General codes
+	// General codes.
 	CodeValidationError   = string(domainerrors.ErrCodeValidation)   // "ERR_VALIDATION"
 	CodeUnauthorized      = string(domainerrors.ErrCodeUnauthorized) // "ERR_UNAUTHORIZED"
 	CodeForbidden         = string(domainerrors.ErrCodeForbidden)    // "ERR_FORBIDDEN"

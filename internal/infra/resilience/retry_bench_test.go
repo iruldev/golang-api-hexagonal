@@ -8,7 +8,7 @@ import (
 )
 
 // BenchmarkRetrier_Setup measures the overhead of creating a new retrier.
-// Target: <10ns per setup (though this is the setup creation, not the backoff setup)
+// Target: <10ns per setup (though this is the setup creation, not the backoff setup).
 func BenchmarkRetrier_Setup(b *testing.B) {
 	cfg := DefaultRetryConfig()
 

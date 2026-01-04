@@ -262,7 +262,7 @@ func TestLoad_AuditRedactEmailDefault(t *testing.T) {
 // Story 2.3: Production Guard Tests
 // =============================================================================
 
-// TestLoad_ProductionRequiresJWTEnabled tests AC #1, #2: production requires JWT_ENABLED=true
+// TestLoad_ProductionRequiresJWTEnabled tests AC #1, #2: production requires JWT_ENABLED=true.
 func TestLoad_ProductionRequiresJWTEnabled(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 	t.Setenv("ENV", "production")
@@ -276,7 +276,7 @@ func TestLoad_ProductionRequiresJWTEnabled(t *testing.T) {
 	assert.Contains(t, err.Error(), "ENV=production requires JWT_ENABLED=true")
 }
 
-// TestLoad_ProductionRequiresJWTSecret tests AC #1: production requires JWT_SECRET
+// TestLoad_ProductionRequiresJWTSecret tests AC #1: production requires JWT_SECRET.
 func TestLoad_ProductionRequiresJWTSecret(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 	t.Setenv("ENV", "production")
@@ -290,7 +290,7 @@ func TestLoad_ProductionRequiresJWTSecret(t *testing.T) {
 	assert.Contains(t, err.Error(), "ENV=production requires JWT_SECRET to be set")
 }
 
-// TestLoad_ProductionWithValidJWT tests AC #2: production with valid JWT passes
+// TestLoad_ProductionWithValidJWT tests AC #2: production with valid JWT passes.
 func TestLoad_ProductionWithValidJWT(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 	t.Setenv("ENV", "production")
@@ -305,7 +305,7 @@ func TestLoad_ProductionWithValidJWT(t *testing.T) {
 	assert.True(t, cfg.JWTEnabled)
 }
 
-// TestLoad_DevelopmentAllowsNoJWT tests development can run without JWT
+// TestLoad_DevelopmentAllowsNoJWT tests development can run without JWT.
 func TestLoad_DevelopmentAllowsNoJWT(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 	t.Setenv("ENV", "development")
@@ -324,7 +324,7 @@ func TestLoad_DevelopmentAllowsNoJWT(t *testing.T) {
 // Story 2.4: JWT Secret Length Tests
 // =============================================================================
 
-// TestLoad_JWTSecretTooShort tests AC #1: JWT secret < 32 bytes fails
+// TestLoad_JWTSecretTooShort tests AC #1: JWT secret < 32 bytes fails.
 func TestLoad_JWTSecretTooShort(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 	t.Setenv("JWT_ENABLED", "true")
@@ -337,7 +337,7 @@ func TestLoad_JWTSecretTooShort(t *testing.T) {
 	assert.Contains(t, err.Error(), "at least 32 bytes")
 }
 
-// TestLoad_JWTSecretExactly32Bytes tests boundary: 32 bytes is valid
+// TestLoad_JWTSecretExactly32Bytes tests boundary: 32 bytes is valid.
 func TestLoad_JWTSecretExactly32Bytes(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 	t.Setenv("JWT_ENABLED", "true")
@@ -350,7 +350,7 @@ func TestLoad_JWTSecretExactly32Bytes(t *testing.T) {
 	assert.True(t, cfg.JWTEnabled)
 }
 
-// TestLoad_JWTSecretOver32Bytes tests JWT secret > 32 bytes is valid
+// TestLoad_JWTSecretOver32Bytes tests JWT secret > 32 bytes is valid.
 func TestLoad_JWTSecretOver32Bytes(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 	t.Setenv("JWT_ENABLED", "true")
@@ -363,7 +363,7 @@ func TestLoad_JWTSecretOver32Bytes(t *testing.T) {
 	assert.True(t, cfg.JWTEnabled)
 }
 
-// TestLoad_JWTSecretNormalization tests that whitespace is trimmed from secret
+// TestLoad_JWTSecretNormalization tests that whitespace is trimmed from secret.
 func TestLoad_JWTSecretNormalization(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 	t.Setenv("JWT_ENABLED", "true")
@@ -378,7 +378,7 @@ func TestLoad_JWTSecretNormalization(t *testing.T) {
 	assert.Len(t, cfg.JWTSecret, 32)
 }
 
-// TestConfig_Redacted tests that sensitive fields are redacted
+// TestConfig_Redacted tests that sensitive fields are redacted.
 func TestConfig_Redacted(t *testing.T) {
 	cfg := &Config{
 		DatabaseURL: "postgres://user:pass@localhost:5432/secret_db",
@@ -399,7 +399,7 @@ func TestConfig_Redacted(t *testing.T) {
 // Story 2.5a: InternalPort Tests
 // =============================================================================
 
-// TestLoad_InternalPortDefault tests default value is 8081
+// TestLoad_InternalPortDefault tests default value is 8081.
 func TestLoad_InternalPortDefault(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 
@@ -410,7 +410,7 @@ func TestLoad_InternalPortDefault(t *testing.T) {
 	assert.Equal(t, "127.0.0.1", cfg.InternalBindAddress, "INTERNAL_BIND_ADDRESS should default to 127.0.0.1")
 }
 
-// TestLoad_InternalPortCustom tests custom value works
+// TestLoad_InternalPortCustom tests custom value works.
 func TestLoad_InternalPortCustom(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 	t.Setenv("INTERNAL_PORT", "9091")
@@ -423,7 +423,7 @@ func TestLoad_InternalPortCustom(t *testing.T) {
 	assert.Equal(t, "0.0.0.0", cfg.InternalBindAddress)
 }
 
-// TestLoad_InternalPortCollision tests collision with PORT fails
+// TestLoad_InternalPortCollision tests collision with PORT fails.
 func TestLoad_InternalPortCollision(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 	t.Setenv("PORT", "8080")
@@ -436,7 +436,7 @@ func TestLoad_InternalPortCollision(t *testing.T) {
 	assert.Contains(t, err.Error(), "INTERNAL_PORT must differ from PORT")
 }
 
-// TestLoad_InternalPortInvalidRange tests invalid port range
+// TestLoad_InternalPortInvalidRange tests invalid port range.
 func TestLoad_InternalPortInvalidRange(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 	t.Setenv("INTERNAL_PORT", "-1")
@@ -448,7 +448,7 @@ func TestLoad_InternalPortInvalidRange(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid INTERNAL_PORT")
 }
 
-// TestLoad_DynamicPorts tests that port 0 is allowed (Story 2.5a Review Fix)
+// TestLoad_DynamicPorts tests that port 0 is allowed (Story 2.5a Review Fix).)
 func TestLoad_DynamicPorts(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 	t.Setenv("PORT", "0")
@@ -462,7 +462,7 @@ func TestLoad_DynamicPorts(t *testing.T) {
 	// No collision error because both are 0
 }
 
-// TestLoad_InternalBindAddressEmpty tests validation
+// TestLoad_InternalBindAddressEmpty tests validation.
 func TestLoad_InternalBindAddressEmpty(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 	t.Setenv("INTERNAL_BIND_ADDRESS", "")
@@ -478,7 +478,7 @@ func TestLoad_InternalBindAddressEmpty(t *testing.T) {
 // Story 4.4: HTTP Timeout Configuration Tests
 // =============================================================================
 
-// TestLoad_HTTPTimeouts_Defaults tests AC #1, #2: defaults for ReadHeaderTimeout and MaxHeaderBytes
+// TestLoad_HTTPTimeouts_Defaults tests AC #1, #2: defaults for ReadHeaderTimeout and MaxHeaderBytes.
 func TestLoad_HTTPTimeouts_Defaults(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 
@@ -491,7 +491,7 @@ func TestLoad_HTTPTimeouts_Defaults(t *testing.T) {
 	assert.Equal(t, 1048576, cfg.HTTPMaxHeaderBytes, "HTTP_MAX_HEADER_BYTES should default to 1MB")
 }
 
-// TestLoad_HTTPTimeouts_Custom tests AC #3: custom values for ReadHeaderTimeout and MaxHeaderBytes
+// TestLoad_HTTPTimeouts_Custom tests AC #3: custom values for ReadHeaderTimeout and MaxHeaderBytes.
 func TestLoad_HTTPTimeouts_Custom(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 	t.Setenv("HTTP_READ_HEADER_TIMEOUT", "5s")
@@ -508,7 +508,7 @@ func TestLoad_HTTPTimeouts_Custom(t *testing.T) {
 // Story 5.1: Database Pool Configuration Tests
 // =============================================================================
 
-// TestLoad_DBPool_Defaults tests AC #2: defaults for pool configuration
+// TestLoad_DBPool_Defaults tests AC #2: defaults for pool configuration.
 func TestLoad_DBPool_Defaults(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 
@@ -520,7 +520,7 @@ func TestLoad_DBPool_Defaults(t *testing.T) {
 	assert.Equal(t, time.Hour, cfg.DBPoolMaxLifetime, "DB_POOL_MAX_LIFETIME should default to 1h")
 }
 
-// TestLoad_DBPool_Custom tests AC #1: custom values for pool configuration
+// TestLoad_DBPool_Custom tests AC #1: custom values for pool configuration.
 func TestLoad_DBPool_Custom(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb")
 	t.Setenv("DB_POOL_MAX_CONNS", "50")

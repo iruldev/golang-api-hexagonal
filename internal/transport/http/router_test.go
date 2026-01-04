@@ -220,7 +220,7 @@ func TestNewRouter_LivenessCheck_NoAuth(t *testing.T) {
 // Story 2.5b: Internal Router Tests
 // =============================================================================
 
-// TestNewRouter_MetricsNotExposed tests that /metrics returns 404 on public router
+// TestNewRouter_MetricsNotExposed tests that /metrics returns 404 on public router.
 func TestNewRouter_MetricsNotExposed(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	metricsReg := prometheus.NewRegistry()
@@ -260,7 +260,7 @@ func TestNewRouter_MetricsNotExposed(t *testing.T) {
 	assert.Equal(t, stdhttp.StatusNotFound, w.Code, "/metrics should not be exposed on public router")
 }
 
-// TestNewInternalRouter_MetricsAvailable tests that /metrics returns 200 on internal router
+// TestNewInternalRouter_MetricsAvailable tests that /metrics returns 200 on internal router.
 func TestNewInternalRouter_MetricsAvailable(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	metricsReg := prometheus.NewRegistry()
@@ -284,7 +284,7 @@ func TestNewInternalRouter_MetricsAvailable(t *testing.T) {
 // Story 2.6: TRUST_PROXY-Aware RealIP Tests
 // =============================================================================
 
-// TestNewRouter_TrustProxyFalse_IgnoresXFF tests that X-Forwarded-For is ignored when TrustProxy=false
+// TestNewRouter_TrustProxyFalse_IgnoresXFF tests that X-Forwarded-For is ignored when TrustProxy=false.
 func TestNewRouter_TrustProxyFalse_IgnoresXFF(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	metricsReg := prometheus.NewRegistry()
@@ -336,7 +336,7 @@ func TestNewRouter_TrustProxyFalse_IgnoresXFF(t *testing.T) {
 	assert.NotContains(t, w.Body.String(), "203.0.113.50", "X-Forwarded-For should be ignored when TrustProxy=false")
 }
 
-// TestNewRouter_TrustProxyTrue_UsesXFF tests that X-Forwarded-For is used when TrustProxy=true
+// TestNewRouter_TrustProxyTrue_UsesXFF tests that X-Forwarded-For is used when TrustProxy=true.
 func TestNewRouter_TrustProxyTrue_UsesXFF(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	metricsReg := prometheus.NewRegistry()

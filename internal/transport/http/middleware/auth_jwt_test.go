@@ -19,7 +19,7 @@ import (
 
 // JWT token validation tests - token format, parsing, algorithm, and signature validation.
 
-// TestJWTAuth_MissingHeader tests AC #1: missing Authorization header returns 401
+// TestJWTAuth_MissingHeader tests AC #1: missing Authorization header returns 401.
 func TestJWTAuth_MissingHeader(t *testing.T) {
 	handlerCalled := false
 	handler := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
@@ -45,7 +45,7 @@ func TestJWTAuth_MissingHeader(t *testing.T) {
 	assert.Equal(t, 401, problem.Status)
 }
 
-// TestJWTAuth_MalformedToken tests AC #2: malformed token returns 401
+// TestJWTAuth_MalformedToken tests AC #2: malformed token returns 401.
 func TestJWTAuth_MalformedToken(t *testing.T) {
 	handlerCalled := false
 	handler := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
@@ -70,7 +70,7 @@ func TestJWTAuth_MalformedToken(t *testing.T) {
 	assert.Equal(t, contract.CodeAuthExpiredToken, problem.Code) // Story 2.3: New taxonomy
 }
 
-// TestJWTAuth_InvalidSignature tests AC #2: wrong signature returns 401
+// TestJWTAuth_InvalidSignature tests AC #2: wrong signature returns 401.
 func TestJWTAuth_InvalidSignature(t *testing.T) {
 	handlerCalled := false
 	handler := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
@@ -101,7 +101,7 @@ func TestJWTAuth_InvalidSignature(t *testing.T) {
 	assert.False(t, handlerCalled, "handler should not be called for invalid signature")
 }
 
-// TestJWTAuth_ExpiredToken tests AC #3, #4: expired token returns 401 using injected time
+// TestJWTAuth_ExpiredToken tests AC #3, #4: expired token returns 401 using injected time.
 func TestJWTAuth_ExpiredToken(t *testing.T) {
 	handlerCalled := false
 	handler := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
@@ -124,7 +124,7 @@ func TestJWTAuth_ExpiredToken(t *testing.T) {
 	assert.False(t, handlerCalled, "handler should not be called for expired token")
 }
 
-// TestJWTAuth_ValidToken tests AC #5: valid token passes and claims are in context
+// TestJWTAuth_ValidToken tests AC #5: valid token passes and claims are in context.
 func TestJWTAuth_ValidToken(t *testing.T) {
 	var gotClaims *ctxutil.Claims
 	handlerCalled := false

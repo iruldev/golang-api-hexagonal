@@ -20,7 +20,7 @@ import (
 
 // Claims validation tests - issuer, audience, missing exp, and clock skew.
 
-// TestJWTAuth_MissingExp tests AC #1: token without exp claim returns 401
+// TestJWTAuth_MissingExp tests AC #1: token without exp claim returns 401.
 func TestJWTAuth_MissingExp(t *testing.T) {
 	handlerCalled := false
 	handler := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
@@ -51,7 +51,7 @@ func TestJWTAuth_MissingExp(t *testing.T) {
 	assert.False(t, handlerCalled, "handler should not be called for token without exp")
 }
 
-// TestJWTAuth_WrongIssuer tests AC #2: token with wrong issuer returns 401
+// TestJWTAuth_WrongIssuer tests AC #2: token with wrong issuer returns 401.
 func TestJWTAuth_WrongIssuer(t *testing.T) {
 	handlerCalled := false
 	handler := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
@@ -85,7 +85,7 @@ func TestJWTAuth_WrongIssuer(t *testing.T) {
 	assert.False(t, handlerCalled, "handler should not be called for wrong issuer")
 }
 
-// TestJWTAuth_WrongAudience tests AC #2: token with wrong audience returns 401
+// TestJWTAuth_WrongAudience tests AC #2: token with wrong audience returns 401.
 func TestJWTAuth_WrongAudience(t *testing.T) {
 	handlerCalled := false
 	handler := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
@@ -119,7 +119,7 @@ func TestJWTAuth_WrongAudience(t *testing.T) {
 	assert.False(t, handlerCalled, "handler should not be called for wrong audience")
 }
 
-// TestJWTAuth_ClockSkew tests AC #3: expired token within skew tolerance passes
+// TestJWTAuth_ClockSkew tests AC #3: expired token within skew tolerance passes.
 func TestJWTAuth_ClockSkew(t *testing.T) {
 	t.Run("expired within skew passes", func(t *testing.T) {
 		handlerCalled := false
@@ -187,7 +187,7 @@ func TestJWTAuth_ClockSkew(t *testing.T) {
 	})
 }
 
-// TestJWTAuth_CorrectIssuerPasses verifies correct issuer allows access
+// TestJWTAuth_CorrectIssuerPasses verifies correct issuer allows access.
 func TestJWTAuth_CorrectIssuerPasses(t *testing.T) {
 	handlerCalled := false
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

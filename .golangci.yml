@@ -34,6 +34,8 @@ linters:
     - ineffassign
     - staticcheck
     - unused
+    - godot
+    - copyloopvar
   settings:
     funlen:
       # Maximum lines per function (excluding comments and blank lines)

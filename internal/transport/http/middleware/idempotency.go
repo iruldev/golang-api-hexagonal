@@ -23,7 +23,7 @@ const IdempotencyKeyHeader = "Idempotency-Key"
 // IdempotencyStatusHeader is the HTTP header name for idempotency status.
 const IdempotencyStatusHeader = "Idempotency-Status"
 
-// IdempotencyStatus values
+// IdempotencyStatus values.
 const (
 	// IdempotencyStatusStored indicates the response was stored for the first time.
 	IdempotencyStatusStored = "stored"

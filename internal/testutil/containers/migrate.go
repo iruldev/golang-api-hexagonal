@@ -62,5 +62,5 @@ func MigrateWithPath(t testing.TB, pool *pgxpool.Pool, migrationsPath string) {
 	}
 }
 
-// Ensure sql import is used
+// Ensure sql import is used.
 var _ sql.DB

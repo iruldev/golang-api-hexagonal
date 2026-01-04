@@ -333,7 +333,7 @@ func BenchmarkResolveClientIP(b *testing.B) {
 }
 
 // TestRateLimitHeaders tests that X-RateLimit-* headers are set on all responses.
-// Story 2.6: Rate Limit Headers Enhancement
+// Story 2.6: Rate Limit Headers Enhancement.
 func TestRateLimitHeaders(t *testing.T) {
 	t.Run("headers present on successful requests", func(t *testing.T) {
 		// AC #1: Response includes X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset

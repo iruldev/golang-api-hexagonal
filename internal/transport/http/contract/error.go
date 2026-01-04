@@ -105,7 +105,14 @@ func safeValidationMessage(appErr *app.AppError) string {
 	return message
 }
 
-// WriteProblemJSON writes an RFC 7807 error response.
+// WriteProblemJSON writes an RFC 7807 error response by converting the error to a Problem.
+//
+// It handles error mapping in the following priority:
+//  1. DomainError: Converted via FromDomainError (preserves domain codes)
+//  2. AppError: Converted via FromAppError (maps app codes to problem details)
+//  3. Unknown error: Mapped to a generic 500 Internal Server Error (details hidden)
+//
+// This ensures all errors are standardized as application/problem+json responses.
 func WriteProblemJSON(w http.ResponseWriter, r *http.Request, err error) {
 	// Priority 1: Check for DomainError (Story 3.2)
 	var domainErr *domainerrors.DomainError
@@ -147,7 +154,10 @@ func NewValidationProblem(r *http.Request, validationErrors []ValidationError) *
 	return NewFieldValidationProblem(r, fieldErrors)
 }
 
-// WriteValidationError writes a validation error response.
+// WriteValidationError writes a validation error response using the field error format.
+//
+// It wraps legacy ValidationError items into a Problem detail with the
+// "validation-error" type and appropriate 400 Bad Request status.
 func WriteValidationError(w http.ResponseWriter, r *http.Request, validationErrors []ValidationError) {
 	problem := NewValidationProblem(r, validationErrors)
 	WriteProblem(w, problem)

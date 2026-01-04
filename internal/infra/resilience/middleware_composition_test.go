@@ -9,7 +9,7 @@ import (
 
 // Middleware chain composition tests.
 
-// mockCircuitBreaker implements CircuitBreaker for testing
+// mockCircuitBreaker implements CircuitBreaker for testing.
 type mockCircuitBreaker struct {
 	name        string
 	state       State
@@ -35,7 +35,7 @@ func (m *mockCircuitBreaker) Name() string {
 	return m.name
 }
 
-// mockRetrier implements Retrier for testing
+// mockRetrier implements Retrier for testing.
 type mockRetrier struct {
 	name     string
 	doFn     func(ctx context.Context, fn func(ctx context.Context) error) error
@@ -54,7 +54,7 @@ func (m *mockRetrier) Name() string {
 	return m.name
 }
 
-// mockTimeout implements Timeout for testing
+// mockTimeout implements Timeout for testing.
 type mockTimeout struct {
 	name     string
 	duration time.Duration
@@ -78,7 +78,7 @@ func (m *mockTimeout) Duration() time.Duration {
 	return m.duration
 }
 
-// mockBulkhead implements Bulkhead for testing
+// mockBulkhead implements Bulkhead for testing.
 type mockBulkhead struct {
 	name          string
 	activeCount   int

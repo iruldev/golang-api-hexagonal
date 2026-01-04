@@ -93,7 +93,7 @@ func (m *CircuitBreakerMetrics) RecordTransition(name, from, to string) {
 }
 
 // RecordOperationDuration records the duration of an operation and its result.
-// result should be one of: "success", "failure", "rejected"
+// result should be one of: "success", "failure", "rejected".
 func (m *CircuitBreakerMetrics) RecordOperationDuration(name, result string, durationSeconds float64) {
 	m.operationDuration.WithLabelValues(name, result).Observe(durationSeconds)
 }
@@ -171,7 +171,7 @@ func NewRetryMetrics(registry *prometheus.Registry) *RetryMetrics {
 }
 
 // RecordOperation records a retry operation completion.
-// result should be one of: "success", "failure", "exhausted"
+// result should be one of: "success", "failure", "exhausted".
 func (m *RetryMetrics) RecordOperation(name, result string, attempts int, durationSeconds float64) {
 	m.attemptTotal.WithLabelValues(name, result).Inc()
 	m.operationTotal.WithLabelValues(name, itoa(attempts)).Inc()
@@ -250,7 +250,7 @@ func NewTimeoutMetrics(registry *prometheus.Registry) *TimeoutMetrics {
 }
 
 // RecordOperation records a timeout operation completion.
-// result should be one of: "success", "timeout", "error"
+// result should be one of: "success", "timeout", "error".
 func (m *TimeoutMetrics) RecordOperation(name, result string, durationSeconds float64) {
 	m.operationTotal.WithLabelValues(name, result).Inc()
 	m.durationSeconds.WithLabelValues(name, result).Observe(durationSeconds)
@@ -351,7 +351,7 @@ func (m *BulkheadMetrics) SetWaiting(name string, count int) {
 }
 
 // RecordOperation records a bulkhead operation completion.
-// result should be one of: "success", "error", "rejected", "cancelled"
+// result should be one of: "success", "error", "rejected", "cancelled".
 func (m *BulkheadMetrics) RecordOperation(name, result string) {
 	m.operationTotal.WithLabelValues(name, result).Inc()
 }
@@ -463,7 +463,7 @@ func (m *ShutdownMetrics) RecordRejection() {
 }
 
 // RecordShutdownDuration records the total shutdown duration.
-// status should be one of: "success", "timeout"
+// status should be one of: "success", "timeout".
 func (m *ShutdownMetrics) RecordShutdownDuration(duration time.Duration, status string) {
 	m.durationSeconds.WithLabelValues(status).Observe(duration.Seconds())
 }

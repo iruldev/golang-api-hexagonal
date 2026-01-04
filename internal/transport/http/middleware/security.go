@@ -82,8 +82,8 @@ func SecureHeaders(next http.Handler) http.Handler {
 }
 
 // shouldAddHSTS determines whether to add HSTS header. Order:
-// 1) Explicit env override via HSTS_ENABLED (true/false)
-// 2) HTTPS detection (TLS, forwarded proto, or URL scheme)
+// 1) Explicit env override via HSTS_ENABLED (true/false).
+// 2) HTTPS detection (TLS, forwarded proto, or URL scheme).
 func shouldAddHSTS(r *http.Request) bool {
 	if val, ok := os.LookupEnv(envHSTSEnabled); ok {
 		if parseBool(val) {

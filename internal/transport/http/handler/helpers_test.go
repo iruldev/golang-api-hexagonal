@@ -41,7 +41,7 @@ func (m *MockListUsersUseCase) Execute(ctx context.Context, req user.ListUsersRe
 	return args.Get(0).(user.ListUsersResponse), args.Error(1)
 }
 
-// Helpers for creating test users
+// Helpers for creating test users.
 var testUserResourcePath = httpTransport.BasePath + "/users"
 
 func createTestUser() domain.User {
