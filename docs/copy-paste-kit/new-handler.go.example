@@ -1,0 +1,234 @@
+// Package handler contains HTTP handler templates.
+// Copy this file and replace {Entity}, {entity}, and placeholders.
+//
+// Usage:
+//   1. Copy to internal/transport/http/handler/{entity}.go
+//   2. Replace {Entity} with your entity name (PascalCase, e.g., Product)
+//   3. Replace {entity} with lowercase name (e.g., product)
+//   4. Update import paths for your use case package
+//   5. Add routes in router/router.go
+
+package handler
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+
+	"github.com/iruldev/golang-api-hexagonal/internal/app"
+	"github.com/iruldev/golang-api-hexagonal/internal/app/{entity}"
+	"github.com/iruldev/golang-api-hexagonal/internal/domain"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/contract"
+	"github.com/iruldev/golang-api-hexagonal/internal/transport/http/ctxutil"
+)
+
+// ========================================================================
+// INTERFACES (for testability and dependency injection)
+// ========================================================================
+
+type create{Entity}Executor interface {
+	Execute(ctx context.Context, req {entity}.Create{Entity}Request) ({entity}.Create{Entity}Response, error)
+}
+
+type get{Entity}Executor interface {
+	Execute(ctx context.Context, req {entity}.Get{Entity}Request) ({entity}.Get{Entity}Response, error)
+}
+
+type list{Entity}sExecutor interface {
+	Execute(ctx context.Context, req {entity}.List{Entity}sRequest) ({entity}.List{Entity}sResponse, error)
+}
+
+// ========================================================================
+// HANDLER STRUCT
+// ========================================================================
+
+// {Entity}Handler handles {entity}-related HTTP requests.
+type {Entity}Handler struct {
+	createUC     create{Entity}Executor
+	getUC        get{Entity}Executor
+	listUC       list{Entity}sExecutor
+	resourcePath string
+}
+
+// New{Entity}Handler creates a new {Entity}Handler.
+func New{Entity}Handler(
+	createUC create{Entity}Executor,
+	getUC get{Entity}Executor,
+	listUC list{Entity}sExecutor,
+	resourcePath string,
+) *{Entity}Handler {
+	return &{Entity}Handler{
+		createUC:     createUC,
+		getUC:        getUC,
+		listUC:       listUC,
+		resourcePath: resourcePath,
+	}
+}
+
+// ========================================================================
+// CREATE HANDLER - POST /api/v1/{entity}s
+// ========================================================================
+
+// Create{Entity} handles POST /api/v1/{entity}s.
+func (h *{Entity}Handler) Create{Entity}(w http.ResponseWriter, r *http.Request) {
+	// 1. Decode and validate request body
+	var req contract.Create{Entity}Request
+	if errs := contract.ValidateRequestBody(r, &req); len(errs) > 0 {
+		contract.WriteValidationError(w, r, errs)
+		return
+	}
+
+	// 2. Generate UUID v7 at transport boundary
+	id, err := uuid.NewV7()
+	if err != nil {
+		contract.WriteProblemJSON(w, r, &app.AppError{
+			Op:      "Create{Entity}",
+			Code:    app.CodeInternalError,
+			Message: "Failed to generate ID",
+			Err:     err,
+		})
+		return
+	}
+
+	// 3. Extract context values for audit trail
+	reqID := ctxutil.GetRequestID(r.Context())
+	var actorID domain.ID
+	if authCtx := app.GetAuthContext(r.Context()); authCtx != nil {
+		actorID = domain.ID(authCtx.SubjectID)
+	}
+
+	// 4. Map to app layer request
+	appReq := {entity}.Create{Entity}Request{
+		ID:        domain.ID(id.String()),
+		Name:      req.Name, // TODO: Map all request fields
+		RequestID: reqID,
+		ActorID:   actorID,
+	}
+
+	// 5. Execute use case
+	resp, err := h.createUC.Execute(r.Context(), appReq)
+	if err != nil {
+		contract.WriteProblemJSON(w, r, err)
+		return
+	}
+
+	// 6. Map to response DTO
+	{entity}Resp := contract.To{Entity}Response(resp.{Entity})
+
+	// 7. Set Location header for 201 Created (before writing body)
+	location := fmt.Sprintf("%s/%s", h.resourcePath, resp.{Entity}.ID)
+	w.Header().Set("Location", location)
+
+	// 8. Write response
+	_ = contract.WriteJSON(w, http.StatusCreated, contract.DataResponse[contract.{Entity}Response]{Data: {entity}Resp})
+}
+
+// ========================================================================
+// GET HANDLER - GET /api/v1/{entity}s/{id}
+// ========================================================================
+
+// Get{Entity} handles GET /api/v1/{entity}s/{id}.
+func (h *{Entity}Handler) Get{Entity}(w http.ResponseWriter, r *http.Request) {
+	// 1. Extract ID from URL
+	idParam := chi.URLParam(r, "id")
+
+	// 2. Validate UUID format and version
+	parsedID, err := uuid.Parse(idParam)
+	if err != nil {
+		contract.WriteValidationError(w, r, []contract.ValidationError{
+			{Field: "id", Message: "must be a valid UUID"},
+		})
+		return
+	}
+	if parsedID.Version() != 7 {
+		contract.WriteValidationError(w, r, []contract.ValidationError{
+			{Field: "id", Message: "must be UUID v7 (time-ordered)"},
+		})
+		return
+	}
+
+	// 3. Execute use case
+	resp, err := h.getUC.Execute(r.Context(), {entity}.Get{Entity}Request{ID: domain.ID(parsedID.String())})
+	if err != nil {
+		contract.WriteProblemJSON(w, r, err)
+		return
+	}
+
+	// 4. Map to response and write
+	{entity}Resp := contract.To{Entity}Response(resp.{Entity})
+	_ = contract.WriteJSON(w, http.StatusOK, contract.DataResponse[contract.{Entity}Response]{Data: {entity}Resp})
+}
+
+// ========================================================================
+// LIST HANDLER - GET /api/v1/{entity}s
+// ========================================================================
+
+// List{Entity}s handles GET /api/v1/{entity}s.
+func (h *{Entity}Handler) List{Entity}s(w http.ResponseWriter, r *http.Request) {
+	// 1. Parse pagination params with defaults
+	pageStr := r.URL.Query().Get("page")
+	pageSizeStr := r.URL.Query().Get("pageSize")
+
+	page := 1
+	pageSize := 20
+
+	// 2. Validate page parameter
+	if pageStr != "" {
+		p, err := strconv.Atoi(pageStr)
+		if err != nil || p < 1 {
+			contract.WriteValidationError(w, r, []contract.ValidationError{
+				{Field: "page", Message: "must be a positive integer", Code: contract.CodeValOutOfRange},
+			})
+			return
+		}
+		page = p
+	}
+
+	// 3. Validate pageSize parameter
+	if pageSizeStr != "" {
+		ps, err := strconv.Atoi(pageSizeStr)
+		if err != nil || ps < 1 {
+			contract.WriteValidationError(w, r, []contract.ValidationError{
+				{Field: "pageSize", Message: "must be a positive integer", Code: contract.CodeValOutOfRange},
+			})
+			return
+		}
+		if ps > 100 {
+			ps = 100 // Cap at maximum
+		}
+		pageSize = ps
+	}
+
+	// 4. Build request and execute
+	req := {entity}.List{Entity}sRequest{
+		Page:     page,
+		PageSize: pageSize,
+	}
+
+	resp, err := h.listUC.Execute(r.Context(), req)
+	if err != nil {
+		contract.WriteProblemJSON(w, r, err)
+		return
+	}
+
+	// 5. Build paginated response
+	listResp := contract.NewList{Entity}sResponse(resp.{Entity}s, page, pageSize, resp.TotalCount)
+	_ = contract.WriteJSON(w, http.StatusOK, listResp)
+}
+
+// ========================================================================
+// ROUTER REGISTRATION (add this to internal/transport/http/router/router.go)
+// ========================================================================
+//
+// In your router setup:
+//
+// r.Route("/api/v1/{entity}s", func(r chi.Router) {
+//     r.Use(authMiddleware.Authenticate)
+//     r.Post("/", {entity}Handler.Create{Entity})
+//     r.Get("/", {entity}Handler.List{Entity}s)
+//     r.Get("/{id}", {entity}Handler.Get{Entity})
+// })

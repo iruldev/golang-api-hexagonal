@@ -280,6 +280,8 @@ go test -v ./internal/transport/http/handler/...
 
 For detailed testing conventions, patterns, and best practices, see [Testing Patterns](docs/testing-patterns.md).
 
+For copy-paste friendly code templates, see [Code Patterns](docs/patterns.md) and [Copy-Paste Kit](docs/copy-paste-kit/README.md).
+
 ### Coverage
 
 Coverage is enforced at **≥80%** for `internal/domain/...` and `internal/app/...` packages.

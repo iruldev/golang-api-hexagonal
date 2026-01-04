@@ -1,0 +1,274 @@
+// Package {entity} contains use case templates for creating new use cases.
+// Copy this file and replace {Entity}, {entity}, and placeholders.
+//
+// Usage:
+//   1. Create directory internal/app/{entity}/
+//   2. Copy to internal/app/{entity}/create_{entity}.go
+//   3. Replace {Entity} with your entity name (PascalCase, e.g., Product)
+//   4. Replace {entity} with lowercase name (e.g., product)
+//   5. Add your request/response fields
+//   6. Implement business logic
+
+package {entity}
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/iruldev/golang-api-hexagonal/internal/app"
+	"github.com/iruldev/golang-api-hexagonal/internal/app/audit"
+	"github.com/iruldev/golang-api-hexagonal/internal/domain"
+)
+
+// ========================================================================
+// REQUEST/RESPONSE DTOs
+// ========================================================================
+
+// Create{Entity}Request represents the input data for creating a new {entity}.
+type Create{Entity}Request struct {
+	ID   domain.ID // Usually generated, but can be provided for idempotency
+	Name string    // TODO: Add your request fields
+
+	// RequestID correlates this operation with the HTTP request.
+	// Transport layer extracts from X-Request-ID header.
+	RequestID string
+
+	// ActorID identifies who is performing this action.
+	// Transport layer extracts from JWT claims.
+	ActorID domain.ID
+}
+
+// Create{Entity}Response represents the result of creating a new {entity}.
+type Create{Entity}Response struct {
+	{Entity} domain.{Entity}
+}
+
+// ========================================================================
+// USE CASE
+// ========================================================================
+
+// Create{Entity}UseCase handles the business logic for creating a new {entity}.
+type Create{Entity}UseCase struct {
+	{entity}Repo domain.{Entity}Repository
+	auditService *audit.AuditService
+	idGen        domain.IDGenerator
+	txManager    domain.TxManager
+	db           domain.Querier
+}
+
+// NewCreate{Entity}UseCase creates a new instance of Create{Entity}UseCase.
+// All dependencies are injected via constructor (Uber Fx pattern).
+func NewCreate{Entity}UseCase(
+	{entity}Repo domain.{Entity}Repository,
+	auditService *audit.AuditService,
+	idGen domain.IDGenerator,
+	txManager domain.TxManager,
+	db domain.Querier,
+) *Create{Entity}UseCase {
+	return &Create{Entity}UseCase{
+		{entity}Repo: {entity}Repo,
+		auditService: auditService,
+		idGen:        idGen,
+		txManager:    txManager,
+		db:           db,
+	}
+}
+
+// Execute processes the create {entity} request.
+// It validates the input, creates the entity in a transaction, and records audit.
+// Returns AppError with appropriate Code for domain/infrastructure errors.
+func (uc *Create{Entity}UseCase) Execute(ctx context.Context, req Create{Entity}Request) (Create{Entity}Response, error) {
+	// ========================================
+	// 1. CREATE DOMAIN ENTITY
+	// ========================================
+	id := req.ID
+	if id.IsEmpty() {
+		id = uc.idGen.NewID()
+	}
+	now := time.Now().UTC()
+
+	entity := &domain.{Entity}{
+		ID:        id,
+		Name:      req.Name, // TODO: Map request fields
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	// ========================================
+	// 2. VALIDATE USING DOMAIN RULES
+	// ========================================
+	if err := entity.Validate(); err != nil {
+		return Create{Entity}Response{}, &app.AppError{
+			Op:      "Create{Entity}",
+			Code:    app.CodeValidationError,
+			Message: "Validation failed",
+			Err:     err,
+		}
+	}
+
+	// ========================================
+	// 3. EXECUTE IN TRANSACTION
+	// ========================================
+	if err := uc.txManager.WithTx(ctx, func(tx domain.Querier) error {
+		// Create the entity in repository
+		if err := uc.{entity}Repo.Create(ctx, tx, entity); err != nil {
+			// Handle specific domain errors
+			if errors.Is(err, domain.Err{Entity}AlreadyExists) {
+				return &app.AppError{
+					Op:      "Create{Entity}",
+					Code:    app.CodeConflict,
+					Message: "{Entity} already exists",
+					Err:     err,
+				}
+			}
+			// Generic infrastructure error
+			return &app.AppError{
+				Op:      "Create{Entity}",
+				Code:    app.CodeInternalError,
+				Message: "Failed to create {entity}",
+				Err:     err,
+			}
+		}
+
+		// Record audit event (same transaction for consistency)
+		auditInput := audit.AuditEventInput{
+			EventType:  domain.Event{Entity}Created,
+			ActorID:    req.ActorID,
+			EntityType: "{entity}",
+			EntityID:   entity.ID,
+			Payload:    entity,
+			RequestID:  req.RequestID,
+		}
+
+		if err := uc.auditService.Record(ctx, tx, auditInput); err != nil {
+			return &app.AppError{
+				Op:      "Create{Entity}",
+				Code:    app.CodeInternalError,
+				Message: "Failed to record audit event",
+				Err:     err,
+			}
+		}
+
+		// Return nil = commit transaction
+		return nil
+	}); err != nil {
+		// Error returned = rollback transaction
+		return Create{Entity}Response{}, err
+	}
+
+	// ========================================
+	// 4. RETURN SUCCESS RESPONSE
+	// ========================================
+	return Create{Entity}Response{{Entity}: *entity}, nil
+}
+
+// ========================================================================
+// GET USE CASE (Simpler, no transaction needed for read)
+// ========================================================================
+
+// Get{Entity}Request represents the input for getting a {entity}.
+type Get{Entity}Request struct {
+	ID domain.ID
+}
+
+// Get{Entity}Response represents the result.
+type Get{Entity}Response struct {
+	{Entity} domain.{Entity}
+}
+
+// Get{Entity}UseCase handles retrieving a single {entity}.
+type Get{Entity}UseCase struct {
+	{entity}Repo domain.{Entity}Repository
+	db           domain.Querier
+}
+
+// NewGet{Entity}UseCase creates a new Get{Entity}UseCase.
+func NewGet{Entity}UseCase(
+	{entity}Repo domain.{Entity}Repository,
+	db domain.Querier,
+) *Get{Entity}UseCase {
+	return &Get{Entity}UseCase{
+		{entity}Repo: {entity}Repo,
+		db:           db,
+	}
+}
+
+// Execute retrieves a {entity} by ID.
+func (uc *Get{Entity}UseCase) Execute(ctx context.Context, req Get{Entity}Request) (Get{Entity}Response, error) {
+	entity, err := uc.{entity}Repo.GetByID(ctx, uc.db, req.ID)
+	if err != nil {
+		if errors.Is(err, domain.Err{Entity}NotFound) {
+			return Get{Entity}Response{}, &app.AppError{
+				Op:      "Get{Entity}",
+				Code:    app.CodeNotFound,
+				Message: "{Entity} not found",
+				Err:     err,
+			}
+		}
+		return Get{Entity}Response{}, &app.AppError{
+			Op:      "Get{Entity}",
+			Code:    app.CodeInternalError,
+			Message: "Failed to retrieve {entity}",
+			Err:     err,
+		}
+	}
+
+	return Get{Entity}Response{{Entity}: *entity}, nil
+}
+
+// ========================================================================
+// LIST USE CASE
+// ========================================================================
+
+// List{Entity}sRequest represents pagination parameters.
+type List{Entity}sRequest struct {
+	Page     int
+	PageSize int
+}
+
+// List{Entity}sResponse includes paginated results.
+type List{Entity}sResponse struct {
+	{Entity}s  []domain.{Entity}
+	TotalCount int
+}
+
+// List{Entity}sUseCase handles listing {entity}s with pagination.
+type List{Entity}sUseCase struct {
+	{entity}Repo domain.{Entity}Repository
+	db           domain.Querier
+}
+
+// NewList{Entity}sUseCase creates a new List{Entity}sUseCase.
+func NewList{Entity}sUseCase(
+	{entity}Repo domain.{Entity}Repository,
+	db domain.Querier,
+) *List{Entity}sUseCase {
+	return &List{Entity}sUseCase{
+		{entity}Repo: {entity}Repo,
+		db:           db,
+	}
+}
+
+// Execute retrieves paginated list of {entity}s.
+func (uc *List{Entity}sUseCase) Execute(ctx context.Context, req List{Entity}sRequest) (List{Entity}sResponse, error) {
+	params := domain.ListParams{
+		Page:     req.Page,
+		PageSize: req.PageSize,
+	}
+
+	entities, count, err := uc.{entity}Repo.List(ctx, uc.db, params)
+	if err != nil {
+		return List{Entity}sResponse{}, &app.AppError{
+			Op:      "List{Entity}s",
+			Code:    app.CodeInternalError,
+			Message: "Failed to list {entity}s",
+			Err:     err,
+		}
+	}
+
+	return List{Entity}sResponse{
+		{Entity}s:  entities,
+		TotalCount: count,
+	}, nil
+}

@@ -47,11 +47,14 @@
 | File | Deskripsi | Status |
 |------|-----------|--------|
 | [architecture.md](./architecture.md) | Arsitektur hexagonal, layer rules, gap analysis | Updated |
+| [patterns.md](./patterns.md) | Copy-paste code patterns untuk semua layers | New |
 | [source-tree-analysis.md](./source-tree-analysis.md) | Struktur direktori dengan anotasi lengkap | Updated |
 | [local-development.md](./local-development.md) | Setup development environment | Complete |
 | [observability.md](./observability.md) | Metrics, tracing, logging setup | Complete |
 | [testing-guide.md](./testing-guide.md) | Strategi testing dan coverage | Complete |
+| [testing-patterns.md](./testing-patterns.md) | Testing conventions dan best practices | Complete |
 | [adoption-guide.md](./adoption-guide.md) | Panduan adopsi untuk tim baru | Complete |
+| [copy-paste-kit/](./copy-paste-kit/README.md) | Template files siap pakai | New |
 
 ### API & OpenAPI
 | File | Deskripsi |

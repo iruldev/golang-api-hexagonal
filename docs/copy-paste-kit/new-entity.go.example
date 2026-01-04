@@ -1,0 +1,108 @@
+// Package domain contains entity templates for creating new domain entities.
+// Copy this file and replace {Entity}, {entity}, and placeholders.
+//
+// Usage:
+//   1. Copy to internal/domain/{entity}.go
+//   2. Replace {Entity} with your entity name (PascalCase, e.g., Product)
+//   3. Replace {entity} with lowercase name (e.g., product)
+//   4. Add your entity fields
+//   5. Implement validation logic
+//   6. Run `make mocks` to generate mock
+
+package domain
+
+import (
+	"context"
+	"strings"
+	"time"
+)
+
+// ========================================================================
+// ENTITY DEFINITION
+// ========================================================================
+
+// {Entity} represents a domain entity for {entity} data.
+// This entity follows hexagonal architecture principles - no external dependencies.
+//
+// Example fields to add:
+//   - Name      string
+//   - Email     string
+//   - Status    {Entity}Status
+//   - Metadata  map[string]string
+type {Entity} struct {
+	ID        ID
+	Name      string // TODO: Replace with your fields
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// Validate checks if the {Entity} entity has valid required fields.
+// Returns a domain error if validation fails.
+// Validation order should be consistent for predictable behavior.
+func (e {Entity}) Validate() error {
+	if strings.TrimSpace(e.Name) == "" {
+		return ErrInvalidName // TODO: Use appropriate error
+	}
+	// TODO: Add more validation rules
+	// if e.Status == "" {
+	//     return ErrInvalid{Entity}Status
+	// }
+	return nil
+}
+
+// ========================================================================
+// DOMAIN ERRORS
+// ========================================================================
+
+// Add these errors to internal/domain/errors.go:
+//
+// var (
+//     Err{Entity}NotFound      = errors.New("{entity} not found")
+//     Err{Entity}AlreadyExists = errors.New("{entity} already exists")
+//     ErrInvalid{Field}        = errors.New("invalid {field}")
+// )
+
+// ========================================================================
+// REPOSITORY INTERFACE
+// ========================================================================
+
+// {Entity}Repository defines the interface for {entity} persistence operations.
+// This interface is defined in the domain layer and implemented by the infrastructure layer.
+// All methods accept a Querier to support both connection pool and transaction usage.
+//
+// To generate mock, update the import path and run `make mocks`:
+//
+//go:generate mockgen -destination=../testutil/mocks/{entity}_repository_mock.go -package=mocks github.com/iruldev/golang-api-hexagonal/internal/domain {Entity}Repository
+type {Entity}Repository interface {
+	// Create stores a new {entity}.
+	// Returns Err{Entity}AlreadyExists if entity with same unique constraint exists.
+	Create(ctx context.Context, q Querier, entity *{Entity}) error
+
+	// GetByID retrieves a {entity} by its ID.
+	// Returns Err{Entity}NotFound if no entity exists.
+	GetByID(ctx context.Context, q Querier, id ID) (*{Entity}, error)
+
+	// List retrieves {entity}s with pagination.
+	// Returns the slice of entities, total count, and any error.
+	List(ctx context.Context, q Querier, params ListParams) ([]{Entity}, int, error)
+
+	// Update modifies an existing {entity}.
+	// Returns Err{Entity}NotFound if entity doesn't exist.
+	Update(ctx context.Context, q Querier, entity *{Entity}) error
+
+	// Delete removes a {entity} by ID.
+	// Returns Err{Entity}NotFound if entity doesn't exist.
+	Delete(ctx context.Context, q Querier, id ID) error
+}
+
+// ========================================================================
+// AUDIT EVENT TYPES (add to internal/domain/audit.go)
+// ========================================================================
+
+// Add these event types:
+//
+// const (
+//     Event{Entity}Created EventType = "{entity}.created"
+//     Event{Entity}Updated EventType = "{entity}.updated"
+//     Event{Entity}Deleted EventType = "{entity}.deleted"
+// )

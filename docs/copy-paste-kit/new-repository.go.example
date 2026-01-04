@@ -1,0 +1,321 @@
+// Package postgres contains repository implementation templates.
+// Copy this file and replace {Entity}, {entity}, and placeholders.
+//
+// Usage:
+//   1. Copy to internal/infra/postgres/{entity}_repo.go
+//   2. Replace {Entity} with your entity name (PascalCase, e.g., Product)
+//   3. Replace {entity} with lowercase name (e.g., product)
+//   4. Add sqlc queries in queries/{entity}.sql
+//   5. Run `make sqlc` to generate code
+//   6. Implement the mapping between domain and sqlc types
+
+package postgres
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/iruldev/golang-api-hexagonal/internal/domain"
+	"github.com/iruldev/golang-api-hexagonal/internal/infra/postgres/sqlcgen"
+)
+
+const (
+	// pgUniqueViolation is the PostgreSQL error code for unique constraint violations.
+	pgUniqueViolation = "23505"
+)
+
+// ========================================================================
+// REPOSITORY STRUCT
+// ========================================================================
+
+// {Entity}Repo implements domain.{Entity}Repository for PostgreSQL.
+type {Entity}Repo struct{}
+
+// New{Entity}Repo creates a new {Entity}Repo instance.
+func New{Entity}Repo() *{Entity}Repo {
+	return &{Entity}Repo{}
+}
+
+// ========================================================================
+// CREATE
+// ========================================================================
+
+// Create stores a new {entity} in the database.
+// Returns domain.Err{Entity}AlreadyExists if unique constraint is violated.
+func (r *{Entity}Repo) Create(ctx context.Context, q domain.Querier, entity *domain.{Entity}) error {
+	const op = "{entity}Repo.Create"
+
+	// Get underlying pgx interface from domain.Querier
+	dbtx, err := getDBTX(q)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	queries := sqlcgen.New(dbtx)
+
+	// Parse domain.ID to uuid
+	uid, err := uuid.Parse(string(entity.ID))
+	if err != nil {
+		return fmt.Errorf("%s: parse ID: %w", op, err)
+	}
+
+	// TODO: Prepare params for your sqlc generated query
+	params := sqlcgen.Create{Entity}Params{
+		ID:        pgtype.UUID{Bytes: uid, Valid: true},
+		Name:      entity.Name,
+		CreatedAt: pgtype.Timestamptz{Time: entity.CreatedAt, Valid: true},
+		UpdatedAt: pgtype.Timestamptz{Time: entity.UpdatedAt, Valid: true},
+	}
+
+	if err := queries.Create{Entity}(ctx, params); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
+			// TODO: Check constraint name for specific error
+			if pgErr.ConstraintName == "uniq_{entity}s_name" {
+				return fmt.Errorf("%s: %w", op, domain.Err{Entity}AlreadyExists)
+			}
+		}
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+// ========================================================================
+// GET BY ID
+// ========================================================================
+
+// GetByID retrieves a {entity} by its ID.
+// Returns domain.Err{Entity}NotFound if no entity exists.
+func (r *{Entity}Repo) GetByID(ctx context.Context, q domain.Querier, id domain.ID) (*domain.{Entity}, error) {
+	const op = "{entity}Repo.GetByID"
+
+	dbtx, err := getDBTX(q)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+	queries := sqlcgen.New(dbtx)
+
+	uid, err := uuid.Parse(string(id))
+	if err != nil {
+		return nil, fmt.Errorf("%s: parse ID: %w", op, err)
+	}
+
+	dbEntity, err := queries.Get{Entity}ByID(ctx, pgtype.UUID{Bytes: uid, Valid: true})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("%s: %w", op, domain.Err{Entity}NotFound)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	// Map DB entity to domain entity
+	return r.toDomain(dbEntity)
+}
+
+// ========================================================================
+// LIST WITH PAGINATION
+// ========================================================================
+
+// List retrieves {entity}s with pagination.
+// Returns the slice of entities, total count, and any error.
+func (r *{Entity}Repo) List(ctx context.Context, q domain.Querier, params domain.ListParams) ([]domain.{Entity}, int, error) {
+	const op = "{entity}Repo.List"
+
+	dbtx, err := getDBTX(q)
+	if err != nil {
+		return nil, 0, fmt.Errorf("%s: %w", op, err)
+	}
+	queries := sqlcgen.New(dbtx)
+
+	// Get total count first
+	count, err := queries.Count{Entity}s(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("%s: count: %w", op, err)
+	}
+
+	if count == 0 {
+		return []domain.{Entity}{}, 0, nil
+	}
+
+	// Get paginated results
+	listParams := sqlcgen.List{Entity}sParams{
+		Limit:  int32(params.Limit()),
+		Offset: int32(params.Offset()),
+	}
+
+	dbEntities, err := queries.List{Entity}s(ctx, listParams)
+	if err != nil {
+		return nil, 0, fmt.Errorf("%s: list: %w", op, err)
+	}
+
+	// Map to domain entities
+	entities := make([]domain.{Entity}, len(dbEntities))
+	for i, e := range dbEntities {
+		domainEntity, err := r.toDomainFromRow(e)
+		if err != nil {
+			return nil, 0, fmt.Errorf("%s: %w", op, err)
+		}
+		entities[i] = *domainEntity
+	}
+
+	return entities, int(count), nil
+}
+
+// ========================================================================
+// UPDATE
+// ========================================================================
+
+// Update modifies an existing {entity}.
+// Returns domain.Err{Entity}NotFound if entity doesn't exist.
+func (r *{Entity}Repo) Update(ctx context.Context, q domain.Querier, entity *domain.{Entity}) error {
+	const op = "{entity}Repo.Update"
+
+	dbtx, err := getDBTX(q)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	queries := sqlcgen.New(dbtx)
+
+	uid, err := uuid.Parse(string(entity.ID))
+	if err != nil {
+		return fmt.Errorf("%s: parse ID: %w", op, err)
+	}
+
+	// TODO: Prepare params
+	params := sqlcgen.Update{Entity}Params{
+		ID:        pgtype.UUID{Bytes: uid, Valid: true},
+		Name:      entity.Name,
+		UpdatedAt: pgtype.Timestamptz{Time: entity.UpdatedAt, Valid: true},
+	}
+
+	rowsAffected, err := queries.Update{Entity}(ctx, params)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("%s: %w", op, domain.Err{Entity}NotFound)
+	}
+
+	return nil
+}
+
+// ========================================================================
+// DELETE
+// ========================================================================
+
+// Delete removes a {entity} by ID.
+// Returns domain.Err{Entity}NotFound if entity doesn't exist.
+func (r *{Entity}Repo) Delete(ctx context.Context, q domain.Querier, id domain.ID) error {
+	const op = "{entity}Repo.Delete"
+
+	dbtx, err := getDBTX(q)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	queries := sqlcgen.New(dbtx)
+
+	uid, err := uuid.Parse(string(id))
+	if err != nil {
+		return fmt.Errorf("%s: parse ID: %w", op, err)
+	}
+
+	rowsAffected, err := queries.Delete{Entity}(ctx, pgtype.UUID{Bytes: uid, Valid: true})
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("%s: %w", op, domain.Err{Entity}NotFound)
+	}
+
+	return nil
+}
+
+// ========================================================================
+// MAPPING HELPERS
+// ========================================================================
+
+// toDomain converts a sqlc generated struct to domain entity.
+func (r *{Entity}Repo) toDomain(e sqlcgen.{Entity}) (*domain.{Entity}, error) {
+	uuidVal, err := uuid.FromBytes(e.ID.Bytes[:])
+	if err != nil {
+		return nil, fmt.Errorf("invalid uuid from db: %w", err)
+	}
+
+	return &domain.{Entity}{
+		ID:        domain.ID(uuidVal.String()),
+		Name:      e.Name,
+		CreatedAt: e.CreatedAt.Time,
+		UpdatedAt: e.UpdatedAt.Time,
+	}, nil
+}
+
+// toDomainFromRow is used when scanning from List query.
+func (r *{Entity}Repo) toDomainFromRow(e sqlcgen.List{Entity}sRow) (*domain.{Entity}, error) {
+	uuidVal, err := uuid.FromBytes(e.ID.Bytes[:])
+	if err != nil {
+		return nil, fmt.Errorf("invalid uuid from db: %w", err)
+	}
+
+	return &domain.{Entity}{
+		ID:        domain.ID(uuidVal.String()),
+		Name:      e.Name,
+		CreatedAt: e.CreatedAt.Time,
+		UpdatedAt: e.UpdatedAt.Time,
+	}, nil
+}
+
+// ========================================================================
+// COMPILE-TIME INTERFACE CHECK
+// ========================================================================
+
+// Ensure {Entity}Repo implements domain.{Entity}Repository at compile time.
+var _ domain.{Entity}Repository = (*{Entity}Repo)(nil)
+
+// ========================================================================
+// SQL QUERIES (add to queries/{entity}.sql)
+// ========================================================================
+//
+// -- name: Create{Entity} :exec
+// INSERT INTO {entity}s (id, name, created_at, updated_at)
+// VALUES ($1, $2, $3, $4);
+//
+// -- name: Get{Entity}ByID :one
+// SELECT id, name, created_at, updated_at
+// FROM {entity}s
+// WHERE id = $1;
+//
+// -- name: List{Entity}s :many
+// SELECT id, name, created_at, updated_at
+// FROM {entity}s
+// ORDER BY created_at DESC, id DESC
+// LIMIT $1 OFFSET $2;
+//
+// -- name: Count{Entity}s :one
+// SELECT COUNT(*) FROM {entity}s;
+//
+// -- name: Update{Entity} :execrows
+// UPDATE {entity}s
+// SET name = $2, updated_at = $3
+// WHERE id = $1;
+//
+// -- name: Delete{Entity} :execrows
+// DELETE FROM {entity}s WHERE id = $1;
+
+// ========================================================================
+// MIGRATION (add to migrations/{version}_add_{entity}s.up.sql)
+// ========================================================================
+//
+// CREATE TABLE IF NOT EXISTS {entity}s (
+//     id UUID PRIMARY KEY,
+//     name VARCHAR(255) NOT NULL,
+//     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+//     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+// );
+//
+// CREATE INDEX IF NOT EXISTS idx_{entity}s_created_at ON {entity}s(created_at DESC);
