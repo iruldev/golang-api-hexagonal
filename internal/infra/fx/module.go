@@ -238,6 +238,7 @@ var PostgresModule = fx.Options(
 	fx.Provide(provideIdempotencyRepo),
 	fx.Provide(provideIdempotencyStore),
 	fx.Invoke(startIdempotencyCleaner),
+	fx.Invoke(registerDBMetrics),
 )
 
 func providePoolConfig(cfg *config.Config) postgres.PoolConfig {
@@ -462,4 +463,17 @@ func registerStartupHook(
 			return nil
 		},
 	})
+}
+
+func registerDBMetrics(
+	lc fx.Lifecycle,
+	pool postgres.Pooler,
+	registry *prometheus.Registry,
+	logger *slog.Logger,
+) {
+	collector := postgres.NewDBMetrics(pool, logger)
+	if err := registry.Register(collector); err != nil {
+		logger.Error("failed to register database metrics", slog.Any("err", err))
+		// Don't fail startup for metrics
+	}
 }

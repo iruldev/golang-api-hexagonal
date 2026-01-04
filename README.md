@@ -284,6 +284,8 @@ For copy-paste friendly code templates, see [Code Patterns](docs/patterns.md) an
 
 For architectural decisions and their rationale, see [Architecture Decision Records](docs/adr/index.md).
 
+For operational incident response procedures, see [Operational Runbooks](docs/runbooks/index.md).
+
 ### Coverage
 
 Coverage is enforced at **≥80%** for `internal/domain/...` and `internal/app/...` packages.

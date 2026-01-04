@@ -338,6 +338,13 @@ run:
 		$(GOCMD) run ./cmd/api; \
 	fi
 
+## health-check: Check the health of the running API
+.PHONY: health-check
+health-check:
+	@echo "🏥 Checking API health..."
+	@curl -v http://localhost:8080/healthz || echo "❌ API not reachable"
+
+
 # =============================================================================
 # Testing
 # =============================================================================
